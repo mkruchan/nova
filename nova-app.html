@@ -296,12 +296,11 @@
 
 <script>
 /* ======================================================================
-https://ludrrfjcvwsmwwxvnhym.supabase.co
-sb_publishable_u2TjrNeiLxvfzMrpmDLsnA_fPyryQel
+   CONFIG — paste your Supabase project details here (Settings -> API)
    ====================================================================== */
 const CONFIG = {
-  SUPABASE_URL: 'YOUR_SUPABASE_URL',
-  SUPABASE_ANON_KEY: 'YOUR_SUPABASE_ANON_KEY'
+  SUPABASE_URL: 'https://ludrrfjcvwsmwwxvnhym.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_u2TjrNeiLxvfzMrpmDLsnA_fPyryQel'
 };
 /* ====================================================================== */
 
@@ -311,7 +310,7 @@ const CATEGORY_ICON = {
 };
 const DONUT_COLORS = ['#5B8CFF', '#8FB2FF', '#C3D3FF', '#2A3A66', '#4A5A8A', '#7A8CC9'];
 
-let supabase = null;
+let supabaseClient = null;
 let currentUser = null;
 let accounts = [];
 let transactions = [];
@@ -332,26 +331,43 @@ function show(id){
 async function init(){
   if(!isConfigured()){ show('setupScreen'); return; }
 
-  supabase = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+  try{
+    if(typeof window.supabase === 'undefined' || !window.supabase.createClient){
+      throw new Error('Supabase library failed to load — check your internet connection and reload.');
+    }
 
-  const { data: { session } } = await supabase.auth.getSession();
-  if(session){
-    currentUser = session.user;
-    await enterApp();
-  } else {
-    show('authScreen');
-  }
+    supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    if(event === 'SIGNED_IN' && session){
+    const { data: { session }, error: sessionError } = await supabaseClient.auth.getSession();
+    if(sessionError) throw sessionError;
+
+    if(session){
       currentUser = session.user;
       await enterApp();
-    }
-    if(event === 'SIGNED_OUT'){
-      currentUser = null;
+    } else {
       show('authScreen');
     }
-  });
+
+    supabaseClient.auth.onAuthStateChange(async (event, session) => {
+      if(event === 'SIGNED_IN' && session){
+        currentUser = session.user;
+        await enterApp();
+      }
+      if(event === 'SIGNED_OUT'){
+        currentUser = null;
+        show('authScreen');
+      }
+    });
+  } catch(err){
+    document.getElementById('loadingScreen').innerHTML = `
+      <div class="brand-lockup"><div class="brand-mark-lg">N</div><div class="brand-name-lg">Nova</div></div>
+      <div class="setup-box" style="border-color: rgba(251,113,133,0.4);">
+        <p style="margin:0 0 8px;"><b style="color:#FB7185;">Something went wrong on startup:</b></p>
+        <p style="margin:0; color:#F3F5FC;">${(err && err.message) ? err.message : String(err)}</p>
+      </div>
+      <button class="btn-secondary" onclick="location.reload()">Reload</button>
+    `;
+  }
 }
 
 document.getElementById('authSendBtn').addEventListener('click', async function(){
@@ -361,7 +377,7 @@ document.getElementById('authSendBtn').addEventListener('click', async function(
   this.disabled = true;
   statusEl.textContent = 'Sending…';
   statusEl.classList.remove('error');
-  const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+  const { error } = await supabaseClient.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
   this.disabled = false;
   if(error){
     statusEl.textContent = error.message;
@@ -372,22 +388,33 @@ document.getElementById('authSendBtn').addEventListener('click', async function(
 });
 
 document.getElementById('signOutBtn').addEventListener('click', async function(){
-  await supabase.auth.signOut();
+  await supabaseClient.auth.signOut();
 });
 
 async function enterApp(){
   show(null);
-  await loadData();
-  renderView('finance');
+  try{
+    await loadData();
+    renderView('finance');
+  } catch(err){
+    document.getElementById('mainContent').innerHTML = `
+      <div class="placeholder-screen">
+        <h2 style="color:#FB7185;">Couldn't load your data</h2>
+        <p>${(err && err.message) ? err.message : String(err)}</p>
+        <p style="margin-top:8px;">Check that the schema (accounts/transactions tables) was run in your Supabase project.</p>
+      </div>`;
+  }
 }
 
 async function loadData(){
-  const [{ data: accs }, { data: txs }] = await Promise.all([
-    supabase.from('accounts').select('*').order('created_at', { ascending: true }),
-    supabase.from('transactions').select('*').order('occurred_at', { ascending: false })
+  const [accResult, txResult] = await Promise.all([
+    supabaseClient.from('accounts').select('*').order('created_at', { ascending: true }),
+    supabaseClient.from('transactions').select('*').order('occurred_at', { ascending: false })
   ]);
-  accounts = accs || [];
-  transactions = txs || [];
+  if(accResult.error) throw accResult.error;
+  if(txResult.error) throw txResult.error;
+  accounts = accResult.data || [];
+  transactions = txResult.data || [];
 }
 
 /* ---------- Navigation ---------- */
@@ -596,7 +623,7 @@ async function saveTransaction(){
   const occurred_at = document.getElementById('txDate').value;
   if(!name || isNaN(amount) || !occurred_at) return;
 
-  const { error } = await supabase.from('transactions').insert({
+  const { error } = await supabaseClient.from('transactions').insert({
     user_id: currentUser.id, name, category, amount, account_id, occurred_at
   });
   if(error){ alert(error.message); return; }
@@ -605,7 +632,7 @@ async function saveTransaction(){
     const acct = accounts.find(function(a){ return a.id === account_id; });
     if(acct){
       const newBal = Number(acct.balance) + amount;
-      await supabase.from('accounts').update({ balance: newBal }).eq('id', account_id);
+      await supabaseClient.from('accounts').update({ balance: newBal }).eq('id', account_id);
     }
   }
 
@@ -622,7 +649,7 @@ async function saveAccount(){
   const balance = parseFloat(document.getElementById('acctBalance').value) || 0;
   if(!name) return;
 
-  const { error } = await supabase.from('accounts').insert({ user_id: currentUser.id, name, type, balance });
+  const { error } = await supabaseClient.from('accounts').insert({ user_id: currentUser.id, name, type, balance });
   if(error){ alert(error.message); return; }
 
   closeModal('acctModalOverlay');
@@ -637,10 +664,10 @@ async function deleteTx(id){
   if(tx && tx.account_id){
     const acct = accounts.find(function(a){ return a.id === tx.account_id; });
     if(acct){
-      await supabase.from('accounts').update({ balance: Number(acct.balance) - Number(tx.amount) }).eq('id', tx.account_id);
+      await supabaseClient.from('accounts').update({ balance: Number(acct.balance) - Number(tx.amount) }).eq('id', tx.account_id);
     }
   }
-  await supabase.from('transactions').delete().eq('id', id);
+  await supabaseClient.from('transactions').delete().eq('id', id);
   await loadData();
   renderView('finance');
 }
