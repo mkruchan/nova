@@ -407,9 +407,11 @@
     <div id="monoStatus" class="status-msg" style="margin-top:10px;"></div>
     <div id="monoAccountRow" style="display:none; margin-top:14px;">
       <div class="form-row"><label>Account</label><select id="monoAccountSelect"></select></div>
+      <div class="form-row"><label>Sync from date</label><input id="monoFromDate" type="date"></div>
       <div class="modal-actions" style="justify-content:flex-start;">
-        <button class="modal-save" onclick="syncMonobank()">Sync last 31 days</button>
+        <button class="modal-save" onclick="syncMonobank()">Sync</button>
       </div>
+      <div id="monoProgress" class="status-msg" style="margin-top:8px;"></div>
     </div>
     <div class="modal-actions">
       <button class="modal-cancel" onclick="closeModal('monoModalOverlay')">Close</button>
@@ -1485,68 +1487,105 @@ window.connectMonobank = async function(){
 
     statusEl.textContent = 'Connected as ' + (data.name || 'your account') + '.';
     document.getElementById('monoAccountRow').style.display = 'block';
+    const defaultFrom = new Date(Date.now() - 30*24*60*60*1000);
+    document.getElementById('monoFromDate').value = defaultFrom.toISOString().slice(0,10);
   }catch(err){
     statusEl.textContent = "Couldn't reach Monobank from the browser — this is almost certainly a CORS restriction on their API (it isn't designed for direct client-side calls). A small proxy you host yourself would be needed to make this work; the app can't safely route your bank token through anyone else's server.";
     statusEl.classList.add('error');
   }
 };
 
+function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+
 window.syncMonobank = async function(){
   const token = loadMonoToken();
   const accountId = document.getElementById('monoAccountSelect').value;
   const statusEl = document.getElementById('monoStatus');
-  if(!token || !accountId) return;
+  const progressEl = document.getElementById('monoProgress');
+  const fromDateStr = document.getElementById('monoFromDate').value;
+  if(!token || !accountId || !fromDateStr) return;
 
-  statusEl.textContent = 'Fetching last 31 days…';
+  statusEl.textContent = '';
   statusEl.classList.remove('error');
 
+  const MAX_WINDOW = 31 * 24 * 60 * 60 - 3600; // Monobank's hard cap: 31 days + 1 hour
   const to = Math.floor(Date.now() / 1000);
-  const from = to - (31 * 24 * 60 * 60 - 3600); // Monobank's max window is 31 days + 1 hour
+  let from = Math.floor(new Date(fromDateStr + 'T00:00:00').getTime() / 1000);
+  if(from >= to){ statusEl.textContent = 'That date is in the future.'; statusEl.classList.add('error'); return; }
 
-  try{
-    const res = await fetch(`https://api.monobank.ua/personal/statement/${accountId}/${from}/${to}`, {
-      headers: { 'X-Token': token }
-    });
-    if(res.status === 429){
-      statusEl.textContent = 'Rate-limited by Monobank (max once a minute) — wait a bit and try again.';
-      statusEl.classList.add('error');
-      return;
-    }
-    if(!res.ok){
-      statusEl.textContent = 'Monobank returned an error fetching the statement (status ' + res.status + ').';
-      statusEl.classList.add('error');
-      return;
-    }
-    const items = await res.json();
-    const existingIds = new Set(transactions.filter(function(t){ return t.monoId; }).map(function(t){ return t.monoId; }));
-
-    const account = monoAccounts.find(function(a){ return a.id === accountId; });
-    const currency = MONO_CURRENCY_MAP[account ? account.currencyCode : 980] || 'UAH';
-
-    let imported = 0;
-    items.forEach(function(item){
-      if(existingIds.has(item.id)) return;
-      const amount = item.amount / 100; // Monobank amounts are in minor units
-      const type = amount >= 0 ? 'income' : 'expense';
-      const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
-      let category = matchCategory(desc, type);
-      if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
-      const occurred_at = new Date(item.time * 1000).toISOString().slice(0,10);
-
-      transactions.unshift({
-        id: 't' + (nextId++), monoId: item.id, name: desc, category: category,
-        amount: amount, currency: currency, occurred_at: occurred_at
-      });
-      imported++;
-    });
-
-    persist();
-    renderView('finance');
-    statusEl.textContent = 'Synced — imported ' + imported + ' new transaction' + (imported===1?'':'s') + (items.length - imported > 0 ? ' (' + (items.length-imported) + ' already had been synced before)' : '') + '.';
-  }catch(err){
-    statusEl.textContent = "Couldn't reach Monobank from the browser — likely a CORS restriction on their API.";
-    statusEl.classList.add('error');
+  // Split the requested range into <=31-day chunks, oldest first
+  const chunks = [];
+  let chunkStart = from;
+  while(chunkStart < to){
+    const chunkEnd = Math.min(chunkStart + MAX_WINDOW, to);
+    chunks.push([chunkStart, chunkEnd]);
+    chunkStart = chunkEnd;
   }
+
+  const account = monoAccounts.find(function(a){ return a.id === accountId; });
+  const currency = MONO_CURRENCY_MAP[account ? account.currencyCode : 980] || 'UAH';
+  const existingIds = new Set(transactions.filter(function(t){ return t.monoId; }).map(function(t){ return t.monoId; }));
+
+  let totalImported = 0, totalSeen = 0;
+
+  for(let i = 0; i < chunks.length; i++){
+    const [chunkFrom, chunkTo] = chunks[i];
+    progressEl.textContent = chunks.length > 1
+      ? `Fetching chunk ${i+1} of ${chunks.length}… (Monobank allows one request per minute, so this can take a few minutes for a long range)`
+      : 'Fetching…';
+
+    try{
+      const res = await fetch(`https://api.monobank.ua/personal/statement/${accountId}/${chunkFrom}/${chunkTo}`, {
+        headers: { 'X-Token': token }
+      });
+      if(res.status === 429){
+        progressEl.textContent = '';
+        statusEl.textContent = `Rate-limited by Monobank partway through (got ${i} of ${chunks.length} chunks, imported ${totalImported} so far). Wait a minute and sync again from ${new Date(chunkFrom*1000).toISOString().slice(0,10)} to pick up the rest.`;
+        statusEl.classList.add('error');
+        return;
+      }
+      if(!res.ok){
+        progressEl.textContent = '';
+        statusEl.textContent = 'Monobank returned an error (status ' + res.status + ') partway through — imported ' + totalImported + ' so far.';
+        statusEl.classList.add('error');
+        return;
+      }
+      const items = await res.json();
+      totalSeen += items.length;
+
+      items.forEach(function(item){
+        if(existingIds.has(item.id)) return;
+        const amount = item.amount / 100; // Monobank amounts are in minor units
+        const type = amount >= 0 ? 'income' : 'expense';
+        const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
+        let category = matchCategory(desc, type);
+        if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
+        const occurred_at = new Date(item.time * 1000).toISOString().slice(0,10);
+
+        transactions.unshift({
+          id: 't' + (nextId++), monoId: item.id, name: desc, category: category,
+          amount: amount, currency: currency, occurred_at: occurred_at
+        });
+        existingIds.add(item.id);
+        totalImported++;
+      });
+
+      persist();
+
+      // Monobank allows one statement call per 60 seconds — wait before the next chunk (not after the last one)
+      if(i < chunks.length - 1) await sleep(61000);
+    }catch(err){
+      progressEl.textContent = '';
+      statusEl.textContent = "Couldn't reach Monobank from the browser — likely a CORS restriction on their API. Imported " + totalImported + " before this happened.";
+      statusEl.classList.add('error');
+      return;
+    }
+  }
+
+  progressEl.textContent = '';
+  renderView('finance');
+  statusEl.textContent = 'Synced — imported ' + totalImported + ' new transaction' + (totalImported===1?'':'s') +
+    (totalSeen - totalImported > 0 ? ' (' + (totalSeen-totalImported) + ' were already synced before)' : '') + '.';
 };
 
 function exportCSV(){
