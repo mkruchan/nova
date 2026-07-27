@@ -99,6 +99,17 @@
   .ph.shimmer{ background:linear-gradient(90deg, var(--muted) 0%, var(--white) 50%, var(--muted) 100%); background-size:200% auto; -webkit-background-clip:text; background-clip:text; color:transparent; animation:shimmer 1.4s linear infinite; }
   @keyframes shimmer{ to{ background-position:-200% center; } }
 
+  .quick-add-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:18px; }
+  .quick-add-btn{ display:flex; align-items:center; justify-content:center; gap:8px; border-radius:12px; padding:14px; font-size:13.5px; font-weight:600; border:1px solid var(--border-2); }
+  .quick-add-ic{ width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .quick-add-ic svg{ width:12px; height:12px; }
+  .quick-add-btn.income{ background:rgba(91,140,255,0.12); color:var(--blue-light); border-color:rgba(91,140,255,0.3); }
+  .quick-add-btn.income .quick-add-ic{ background:var(--blue); color:#0A0D18; }
+  .quick-add-btn.income:hover{ background:rgba(91,140,255,0.2); }
+  .quick-add-btn.expense{ background:rgba(91,140,255,0.12); color:var(--blue-light); border-color:rgba(91,140,255,0.3); }
+  .quick-add-btn.expense .quick-add-ic{ background:var(--blue); color:#0A0D18; }
+  .quick-add-btn.expense:hover{ background:rgba(91,140,255,0.2); }
+
   .stats-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:18px; }
   .stat-card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
   .stat-label{ font-size:12px; color:var(--muted); margin-bottom:10px; }
@@ -899,6 +910,15 @@ function financeHTML(){
       <div class="ask-nova-body"><div class="ph" id="novaPh">Ask Nova anything…</div></div>
     </div>
 
+    <div class="quick-add-row">
+      <button class="quick-add-btn income" onclick="openTxModal('income','Salary')">
+        <span class="quick-add-ic"><svg class="icon"><use href="#ic-plus"/></svg></span> Add Income
+      </button>
+      <button class="quick-add-btn expense" onclick="openTxModal('expense','Other expense')">
+        <span class="quick-add-ic"><svg class="icon"><use href="#ic-plus"/></svg></span> Add Expense
+      </button>
+    </div>
+
     <div class="stats-row">
       <div class="stat-card"><div class="stat-label">Net Worth</div><div class="stat-num">${fmtShort(netWorth())}</div><div class="stat-delta">All-time total</div></div>
       <div class="stat-card"><div class="stat-label">Spent This Month</div><div class="stat-num">${fmtShort(-monthSpend())}</div><div class="stat-delta">&nbsp;</div></div>
@@ -923,7 +943,7 @@ function financeHTML(){
 
     <div class="bottom-row">
       <div class="panel-card">
-        <div class="panel-title"><h3>Income</h3><button class="add-btn" onclick="openTxModal('income','Salary')">+ Add</button></div>
+        <div class="panel-title"><h3>Income</h3></div>
         <div id="incomeList">
           ${(function(){
             const inc = transactions.filter(function(t){ return Number(t.amount) > 0; }).slice(0,8);
@@ -941,7 +961,7 @@ function financeHTML(){
         </div>
       </div>
       <div class="panel-card">
-        <div class="panel-title"><h3>Expenses</h3><button class="add-btn" onclick="openTxModal('expense','Other expense')">+ Add</button></div>
+        <div class="panel-title"><h3>Expenses</h3></div>
         <div id="txList">
           ${(function(){
             const exp = transactions.filter(function(t){ return Number(t.amount) < 0; }).slice(0,8);
