@@ -653,6 +653,17 @@ function savingsRate(){
   if(inc <= 0) return null;
   return Math.round(((inc - monthSpend()) / inc) * 100);
 }
+// Escape any text that came from the user, a CSV import, or Monobank's own
+// transaction descriptions before it's ever inserted into the page as HTML.
+function escapeHtml(str){
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function fmt(n){
   const sym = CURRENCY_SYMBOLS[DISPLAY_CURRENCY] || '';
   const sign = n < 0 ? '-' : '';
@@ -1139,7 +1150,7 @@ function financeHTML(){
               const orig = (t.currency && t.currency !== DISPLAY_CURRENCY) ? ` · ${Number(t.amount).toLocaleString()} ${CURRENCY_SYMBOLS[t.currency]||t.currency}` : '';
               return `<div class="tx-row">
                 <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-                <div class="tx-info"><div class="tx-name">${t.name}</div><div class="tx-meta">${t.occurred_at} · ${t.category}${orig}</div></div>
+                <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}${orig}</div></div>
                 <div class="tx-amt pos">+${fmt(toDisplay(t.amount, t.currency))}</div>
                 <button class="tx-edit" onclick="editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
                 <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
@@ -1160,7 +1171,7 @@ function financeHTML(){
             const orig = (t.currency && t.currency !== DISPLAY_CURRENCY) ? ` · ${Math.abs(Number(t.amount)).toLocaleString()} ${CURRENCY_SYMBOLS[t.currency]||t.currency}` : '';
             return `<div class="tx-row">
               <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-              <div class="tx-info"><div class="tx-name">${t.name}</div><div class="tx-meta">${t.occurred_at} · ${t.category}${orig}</div></div>
+              <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}${orig}</div></div>
               <div class="tx-amt ${isPos?'pos':'neg'}">${isPos?'+':''}${fmt(toDisplay(t.amount, t.currency))}</div>
               <button class="tx-edit" onclick="editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
               <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
