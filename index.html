@@ -419,6 +419,19 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="rangeModalOverlay">
+  <div class="modal">
+    <h3>Date Range</h3>
+    <div class="form-row"><label>From</label><input id="rangeFrom" type="date"></div>
+    <div class="form-row"><label>To (leave blank for today)</label><input id="rangeTo" type="date"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal('rangeModalOverlay')">Cancel</button>
+      <button class="modal-cancel" onclick="resetDateRange()">Reset to this month</button>
+      <button class="modal-save" onclick="applyDateRange()">Apply</button>
+    </div>
+  </div>
+</div>
+
 </div>
 
 <script>
@@ -628,13 +641,52 @@ function renderView(view){
 }
 
 /* ---------- Finance calculations ---------- */
+let customRangeActive = false;
+let customRangeFrom = null;
+let customRangeTo = null;
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+
+function rangeLabel(){
+  if(!customRangeActive || !customRangeFrom) return 'This Month';
+  const to = customRangeTo || todayStr();
+  return to === todayStr() ? ('Since ' + customRangeFrom) : (customRangeFrom + ' – ' + to);
+}
+
 function thisMonthTx(){
+  if(customRangeActive && customRangeFrom){
+    const to = customRangeTo || todayStr();
+    return transactions.filter(function(t){ return t.occurred_at >= customRangeFrom && t.occurred_at <= to; });
+  }
   const now = new Date();
   return transactions.filter(function(t){
     const d = new Date(t.occurred_at);
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   });
 }
+
+window.applyDateRange = function(){
+  const from = document.getElementById('rangeFrom').value;
+  const to = document.getElementById('rangeTo').value;
+  if(!from){ return; }
+  customRangeActive = true;
+  customRangeFrom = from;
+  customRangeTo = to || null;
+  closeModal('rangeModalOverlay');
+  renderView('finance');
+};
+window.resetDateRange = function(){
+  customRangeActive = false;
+  customRangeFrom = null;
+  customRangeTo = null;
+  closeModal('rangeModalOverlay');
+  renderView('finance');
+};
+window.openRangeModal = function(){
+  document.getElementById('rangeFrom').value = customRangeFrom || '';
+  document.getElementById('rangeTo').value = customRangeTo || '';
+  openModal('rangeModalOverlay');
+};
 
 function netWorth(){
   return transactions.reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
@@ -1028,10 +1080,18 @@ window.saveBudgetEdit = function(){
 
 function trendSVG(height){
   height = height || 150;
-  // Simple running-balance line over the last 30 days of transactions (relative change), since we don't store daily net-worth snapshots yet.
-  const days = 30;
+  // Running-balance line over either the active custom range or the last 30 days by default
+  // (since we don't store daily net-worth snapshots yet, this is a relative change over the window).
   const now = new Date();
-  const start = new Date(now); start.setDate(start.getDate() - days);
+  let start, days;
+  if(customRangeActive && customRangeFrom){
+    start = new Date(customRangeFrom + 'T00:00:00');
+    const end = customRangeTo ? new Date(customRangeTo + 'T00:00:00') : now;
+    days = Math.max(1, Math.round((end - start) / (1000*60*60*24)));
+  } else {
+    days = 30;
+    start = new Date(now); start.setDate(start.getDate() - days);
+  }
   const daily = new Array(days+1).fill(0);
   transactions.forEach(function(t){
     const d = new Date(t.occurred_at);
@@ -1081,23 +1141,25 @@ function financeOverviewSummaryHTML(){
 
 function financeOverviewDetailHTML(){
   const rate = savingsRate();
+  const label = rangeLabel();
   return `
     <div class="detail-header">
       <button class="back-btn" onclick="closeOverviewDetail()">‹</button>
       <div class="detail-title">Overview</div>
-      <div style="width:32px;"></div>
+      <button class="header-btn" onclick="openRangeModal()">📅 ${label}</button>
     </div>
+    ${customRangeActive ? `<div style="text-align:right; margin:-8px 0 12px;"><button class="header-btn" onclick="resetDateRange()">Reset to this month</button></div>` : ''}
 
     <div class="stats-row">
       <div class="stat-card"><div class="stat-label">Net Worth</div><div class="stat-num">${fmtShort(netWorth())}</div><div class="stat-delta">All-time total</div></div>
-      <div class="stat-card"><div class="stat-label">Spent This Month</div><div class="stat-num">${fmtShort(-monthSpend())}</div><div class="stat-delta">&nbsp;</div></div>
-      <div class="stat-card"><div class="stat-label">Income This Month</div><div class="stat-num">${fmtShort(monthIncome())}</div><div class="stat-delta">&nbsp;</div></div>
+      <div class="stat-card"><div class="stat-label">Spent — ${label}</div><div class="stat-num">${fmtShort(-monthSpend())}</div><div class="stat-delta">&nbsp;</div></div>
+      <div class="stat-card"><div class="stat-label">Income — ${label}</div><div class="stat-num">${fmtShort(monthIncome())}</div><div class="stat-delta">&nbsp;</div></div>
       <div class="stat-card"><div class="stat-label">Savings Rate</div><div class="stat-num">${rate===null?'—':rate+'%'}</div><div class="stat-delta">&nbsp;</div></div>
     </div>
 
     <div class="charts-row" style="grid-template-columns:1fr;">
       <div class="chart-card">
-        <div class="chart-title">Balance Trend (30 days)</div>
+        <div class="chart-title">Balance Trend — ${label}</div>
         ${transactions.length ? trendSVG(150) : '<div class="empty-note">Add some transactions to see a trend.</div>'}
       </div>
     </div>
@@ -1120,6 +1182,7 @@ function financeHTML(){
           ${ratesLoading ? 'Updating rates…' : (ratesUpdatedAt ? 'Rates: ' + timeAgo(ratesUpdatedAt) : 'Rates: fallback')}
         </span>
         <button class="header-btn" onclick="openMonoModal()">Bank</button>
+        <button class="header-btn" onclick="openRangeModal()">📅 ${rangeLabel()}</button>
         <button class="header-btn" onclick="exportCSV()">Export</button>
         <button class="header-btn" onclick="document.getElementById('importFile').click()">Import</button>
         <input type="file" id="importFile" accept=".csv" style="display:none;" onchange="handleImportFile(event)">
