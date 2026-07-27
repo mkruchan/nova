@@ -213,6 +213,15 @@
 
   .budget-edit-row input{ text-align:right; }
 
+  .mono-acct-row{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .mono-acct-row:last-child{ border-bottom:none; }
+  .mono-acct-check{ width:16px; height:16px; flex-shrink:0; accent-color:var(--blue); }
+  .mono-acct-info{ flex:1; min-width:0; }
+  .mono-acct-label{ font-size:13px; color:var(--white); }
+  .mono-acct-status{ font-size:11px; color:var(--muted-dim); margin-top:2px; }
+  .mono-acct-status.synced{ color:var(--green); }
+  .mono-acct-remove{ background:none; border:none; color:var(--rose); font-size:11px; padding:4px 8px; flex-shrink:0; }
+
   .bottom-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   .panel-card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
   .panel-title{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
@@ -406,10 +415,11 @@
     </div>
     <div id="monoStatus" class="status-msg" style="margin-top:10px;"></div>
     <div id="monoAccountRow" style="display:none; margin-top:14px;">
-      <div class="form-row"><label>Account</label><select id="monoAccountSelect"></select></div>
-      <div class="form-row"><label>Sync from date</label><input id="monoFromDate" type="date"></div>
+      <div class="side-label" style="margin:0 0 8px;">Accounts</div>
+      <div id="monoAccountList"></div>
+      <div class="form-row" style="margin-top:12px;"><label>Sync from date</label><input id="monoFromDate" type="date"></div>
       <div class="modal-actions" style="justify-content:flex-start;">
-        <button class="modal-save" onclick="syncMonobank()">Sync</button>
+        <button class="modal-save" onclick="syncMonobank()">Sync selected</button>
       </div>
       <div id="monoProgress" class="status-msg" style="margin-top:8px;"></div>
     </div>
@@ -1534,6 +1544,7 @@ function importFromCSVText(text){
 /* ---------- Monobank ---------- */
 const MONO_CURRENCY_MAP = { 980: 'UAH', 978: 'EUR', 840: 'USD', 8: 'ALL' };
 let monoAccounts = [];
+let monoSyncStatus = {}; // { [accountId]: { lastSyncedAt, count, label } }
 
 function loadMonoToken(){
   try{ return localStorage.getItem('nova-mono-token') || ''; }catch(e){ return ''; }
@@ -1541,6 +1552,50 @@ function loadMonoToken(){
 function saveMonoToken(token){
   try{ localStorage.setItem('nova-mono-token', token); }catch(e){ /* ignore */ }
 }
+function loadMonoSyncStatus(){
+  try{ const s = localStorage.getItem('nova-mono-sync-status'); monoSyncStatus = s ? JSON.parse(s) : {}; }
+  catch(e){ monoSyncStatus = {}; }
+}
+function persistMonoSyncStatus(){
+  try{ localStorage.setItem('nova-mono-sync-status', JSON.stringify(monoSyncStatus)); }catch(e){}
+}
+
+function monoAccountLabel(a){
+  const cur = MONO_CURRENCY_MAP[a.currencyCode] || a.currencyCode;
+  return (a.maskedPan && a.maskedPan[0] ? a.maskedPan[0] : a.type || 'Account') + ' · ' + cur;
+}
+
+function renderMonoAccountList(){
+  const listEl = document.getElementById('monoAccountList');
+  listEl.innerHTML = monoAccounts.map(function(a){
+    const status = monoSyncStatus[a.id];
+    const label = monoAccountLabel(a);
+    const statusText = status
+      ? `Synced — ${status.count} transaction${status.count===1?'':'s'}, last ${timeAgo(status.lastSyncedAt)}`
+      : 'Not synced yet';
+    return `<div class="mono-acct-row">
+      <input type="checkbox" class="mono-acct-check" data-acct="${a.id}" checked>
+      <div class="mono-acct-info">
+        <div class="mono-acct-label">${escapeHtml(label)}</div>
+        <div class="mono-acct-status${status?' synced':''}">${statusText}</div>
+      </div>
+      ${status ? `<button class="mono-acct-remove" onclick="removeMonoAccountData('${a.id}')">Remove data</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+window.removeMonoAccountData = function(accountId){
+  const status = monoSyncStatus[accountId];
+  const count = status ? status.count : 0;
+  if(!confirm(`Delete ${count} transaction${count===1?'':'s'} imported from this account? This can't be undone.`)) return;
+
+  transactions = transactions.filter(function(t){ return t.monoAccountId !== accountId; });
+  persist();
+  delete monoSyncStatus[accountId];
+  persistMonoSyncStatus();
+  renderMonoAccountList();
+  renderView('finance');
+};
 
 window.openMonoModal = function(){
   const token = loadMonoToken();
@@ -1548,6 +1603,7 @@ window.openMonoModal = function(){
   document.getElementById('monoStatus').textContent = '';
   document.getElementById('monoStatus').classList.remove('error');
   document.getElementById('monoAccountRow').style.display = 'none';
+  loadMonoSyncStatus();
   openModal('monoModalOverlay');
   if(token) connectMonobank();
 };
@@ -1589,12 +1645,7 @@ window.connectMonobank = async function(){
       return;
     }
 
-    const sel = document.getElementById('monoAccountSelect');
-    sel.innerHTML = monoAccounts.map(function(a){
-      const cur = MONO_CURRENCY_MAP[a.currencyCode] || a.currencyCode;
-      const label = (a.maskedPan && a.maskedPan[0] ? a.maskedPan[0] : a.type || 'Account') + ' · ' + cur;
-      return `<option value="${a.id}">${label}</option>`;
-    }).join('');
+    renderMonoAccountList();
 
     statusEl.textContent = 'Connected as ' + (data.name || 'your account') + '.';
     document.getElementById('monoAccountRow').style.display = 'block';
@@ -1610,40 +1661,51 @@ function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 
 window.syncMonobank = async function(){
   const token = loadMonoToken();
-  const accountId = document.getElementById('monoAccountSelect').value;
   const statusEl = document.getElementById('monoStatus');
   const progressEl = document.getElementById('monoProgress');
   const fromDateStr = document.getElementById('monoFromDate').value;
-  if(!token || !accountId || !fromDateStr) return;
+
+  const checkedIds = Array.from(document.querySelectorAll('.mono-acct-check'))
+    .filter(function(cb){ return cb.checked; })
+    .map(function(cb){ return cb.getAttribute('data-acct'); });
+
+  if(!token || !fromDateStr){ statusEl.textContent = 'Pick a "sync from" date first.'; statusEl.classList.add('error'); return; }
+  if(!checkedIds.length){ statusEl.textContent = 'Check at least one account to sync.'; statusEl.classList.add('error'); return; }
 
   statusEl.textContent = '';
   statusEl.classList.remove('error');
 
   const MAX_WINDOW = 31 * 24 * 60 * 60 - 3600; // Monobank's hard cap: 31 days + 1 hour
   const to = Math.floor(Date.now() / 1000);
-  let from = Math.floor(new Date(fromDateStr + 'T00:00:00').getTime() / 1000);
+  const from = Math.floor(new Date(fromDateStr + 'T00:00:00').getTime() / 1000);
   if(from >= to){ statusEl.textContent = 'That date is in the future.'; statusEl.classList.add('error'); return; }
 
-  // Split the requested range into <=31-day chunks, oldest first
-  const chunks = [];
-  let chunkStart = from;
-  while(chunkStart < to){
-    const chunkEnd = Math.min(chunkStart + MAX_WINDOW, to);
-    chunks.push([chunkStart, chunkEnd]);
-    chunkStart = chunkEnd;
-  }
+  // Build one shared queue of (accountId, chunkFrom, chunkTo) across every checked account,
+  // since Monobank's 1-request-per-60-seconds limit applies to the token as a whole, not per account.
+  const queue = [];
+  checkedIds.forEach(function(accountId){
+    let chunkStart = from;
+    while(chunkStart < to){
+      const chunkEnd = Math.min(chunkStart + MAX_WINDOW, to);
+      queue.push({ accountId: accountId, from: chunkStart, to: chunkEnd });
+      chunkStart = chunkEnd;
+    }
+  });
 
-  const account = monoAccounts.find(function(a){ return a.id === accountId; });
-  const currency = MONO_CURRENCY_MAP[account ? account.currencyCode : 980] || 'UAH';
   const existingIds = new Set(transactions.filter(function(t){ return t.monoId; }).map(function(t){ return t.monoId; }));
-
+  const perAccountImported = {};
+  checkedIds.forEach(function(id){ perAccountImported[id] = 0; });
   let totalImported = 0, totalSeen = 0;
 
-  for(let i = 0; i < chunks.length; i++){
-    const [chunkFrom, chunkTo] = chunks[i];
-    progressEl.textContent = chunks.length > 1
-      ? `Fetching chunk ${i+1} of ${chunks.length}… (Monobank allows one request per minute, so this can take a few minutes for a long range)`
-      : 'Fetching…';
+  for(let i = 0; i < queue.length; i++){
+    const { accountId, from: chunkFrom, to: chunkTo } = queue[i];
+    const account = monoAccounts.find(function(a){ return a.id === accountId; });
+    const acctLabel = account ? monoAccountLabel(account) : accountId;
+    const currency = MONO_CURRENCY_MAP[account ? account.currencyCode : 980] || 'UAH';
+
+    progressEl.textContent = queue.length > 1
+      ? `Fetching ${acctLabel} — request ${i+1} of ${queue.length}… (Monobank allows one request per minute across all accounts, so this can take a while)`
+      : `Fetching ${acctLabel}…`;
 
     try{
       const res = await fetch(`https://api.monobank.ua/personal/statement/${accountId}/${chunkFrom}/${chunkTo}`, {
@@ -1651,14 +1713,18 @@ window.syncMonobank = async function(){
       });
       if(res.status === 429){
         progressEl.textContent = '';
-        statusEl.textContent = `Rate-limited by Monobank partway through (got ${i} of ${chunks.length} chunks, imported ${totalImported} so far). Wait a minute and sync again from ${new Date(chunkFrom*1000).toISOString().slice(0,10)} to pick up the rest.`;
+        statusEl.textContent = `Rate-limited by Monobank partway through (completed ${i} of ${queue.length} requests, imported ${totalImported} so far). Wait a minute and sync again — already-synced data won't be duplicated.`;
         statusEl.classList.add('error');
+        renderMonoAccountList();
+        renderView('finance');
         return;
       }
       if(!res.ok){
         progressEl.textContent = '';
         statusEl.textContent = 'Monobank returned an error (status ' + res.status + ') partway through — imported ' + totalImported + ' so far.';
         statusEl.classList.add('error');
+        renderMonoAccountList();
+        renderView('finance');
         return;
       }
       const items = await res.json();
@@ -1674,28 +1740,42 @@ window.syncMonobank = async function(){
         const occurred_at = new Date(item.time * 1000).toISOString().slice(0,10);
 
         transactions.unshift({
-          id: 't' + (nextId++), monoId: item.id, name: desc, category: category,
+          id: 't' + (nextId++), monoId: item.id, monoAccountId: accountId, name: desc, category: category,
           amount: amount, currency: currency, occurred_at: occurred_at
         });
         existingIds.add(item.id);
         totalImported++;
+        perAccountImported[accountId] = (perAccountImported[accountId] || 0) + 1;
       });
 
       persist();
 
-      // Monobank allows one statement call per 60 seconds — wait before the next chunk (not after the last one)
-      if(i < chunks.length - 1) await sleep(61000);
+      // Monobank allows one statement call per 60 seconds — wait before the next request (not after the last one)
+      if(i < queue.length - 1) await sleep(61000);
     }catch(err){
       progressEl.textContent = '';
       statusEl.textContent = "Couldn't reach Monobank from the browser — likely a CORS restriction on their API. Imported " + totalImported + " before this happened.";
       statusEl.classList.add('error');
+      renderMonoAccountList();
+      renderView('finance');
       return;
     }
   }
 
+  // Update per-account sync status
+  checkedIds.forEach(function(accountId){
+    const prevCount = (monoSyncStatus[accountId] && monoSyncStatus[accountId].count) || 0;
+    monoSyncStatus[accountId] = {
+      lastSyncedAt: Date.now(),
+      count: prevCount + (perAccountImported[accountId] || 0)
+    };
+  });
+  persistMonoSyncStatus();
+  renderMonoAccountList();
+
   progressEl.textContent = '';
   renderView('finance');
-  statusEl.textContent = 'Synced — imported ' + totalImported + ' new transaction' + (totalImported===1?'':'s') +
+  statusEl.textContent = 'Synced ' + checkedIds.length + ' account' + (checkedIds.length===1?'':'s') + ' — imported ' + totalImported + ' new transaction' + (totalImported===1?'':'s') +
     (totalSeen - totalImported > 0 ? ' (' + (totalSeen-totalImported) + ' were already synced before)' : '') + '.';
 };
 
