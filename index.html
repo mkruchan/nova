@@ -160,6 +160,8 @@
   .clickable-card{ cursor:pointer; transition:border-color 0.15s ease; }
   .clickable-card:hover{ border-color:var(--blue-dim); }
   .chevron{ color:var(--muted-dim); font-size:16px; flex-shrink:0; }
+  .chevron-btn{ background:none; border:none; color:var(--muted-dim); font-size:18px; padding:2px 6px; line-height:1; }
+  .chevron-btn:hover{ color:var(--white); }
   .clickable-row{ cursor:pointer; }
   .clickable-row:hover .cat-name{ color:var(--blue-light); }
 
@@ -788,7 +790,10 @@ function donutSVG(data){
   return `<svg width="150" height="150" viewBox="0 0 200 200"><circle cx="100" cy="100" r="70" fill="none" stroke="var(--panel-2)" stroke-width="26"/>${arcs}</svg>`;
 }
 
-let financeSubView = null; // null | 'expense' | 'budget'
+let financeSubView = null; // null | 'expense' | 'budget' | 'overview' | 'history'
+let historyType = 'expense'; // 'income' | 'expense'
+let historyCategoryFilter = 'all';
+let historySearch = '';
 
 function monthlyExpenseBarsHTML(){
   const now = new Date();
@@ -819,7 +824,7 @@ function donutWithCenterLabel(svg, total, sublabel){
   return `<div class="donut-wrap-mini">${svg}
     <div class="donut-center-label">
       <div class="donut-total-sub">${sublabel}</div>
-      <div class="donut-total">${fmtShort(-total)}</div>
+      <div class="donut-total">${fmtShort(total)}</div>
     </div>
   </div>`;
 }
@@ -1090,8 +1095,11 @@ window.saveBudgetEdit = function(){
 
 function trendSVG(height){
   height = height || 150;
-  // Running-balance line over either the active custom range or the last 30 days by default
-  // (since we don't store daily net-worth snapshots yet, this is a relative change over the window).
+  // Running-balance line that reflects real balance history: starts from the
+  // true balance the moment before the window begins (sum of everything dated
+  // earlier), then accumulates actual daily changes — so every point on the
+  // line is a real historical balance, and the final point matches Net Worth
+  // whenever the window runs through today.
   const now = new Date();
   let start, days;
   if(customRangeActive && customRangeFrom){
@@ -1102,13 +1110,18 @@ function trendSVG(height){
     days = 30;
     start = new Date(now); start.setDate(start.getDate() - days);
   }
+  const startStr = start.toISOString().slice(0,10);
+  const balanceBeforeStart = transactions.reduce(function(sum, t){
+    return t.occurred_at < startStr ? sum + toDisplay(t.amount, t.currency) : sum;
+  }, 0);
+
   const daily = new Array(days+1).fill(0);
   transactions.forEach(function(t){
     const d = new Date(t.occurred_at);
     const idx = Math.floor((d - start) / (1000*60*60*24));
     if(idx >= 0 && idx <= days) daily[idx] += toDisplay(t.amount, t.currency);
   });
-  let running = 0;
+  let running = balanceBeforeStart;
   const points = daily.map(function(v, i){
     running += v;
     const x = (i/days) * 480;
@@ -1149,6 +1162,80 @@ function financeOverviewSummaryHTML(){
     </div>`;
 }
 
+window.openHistory = function(type){
+  historyType = type;
+  historyCategoryFilter = 'all';
+  historySearch = '';
+  financeSubView = 'history';
+  renderView('finance');
+};
+window.closeHistory = function(){
+  financeSubView = null;
+  renderView('finance');
+};
+window.setHistoryCategory = function(v){
+  historyCategoryFilter = v;
+  renderView('finance');
+};
+window.setHistorySearch = function(v){
+  historySearch = v;
+  renderHistoryList();
+};
+
+function renderHistoryList(){
+  const listEl = document.getElementById('historyList');
+  if(!listEl) return;
+  listEl.innerHTML = historyRows();
+}
+
+function historyRows(){
+  const isIncome = historyType === 'income';
+  let list = transactions.filter(function(t){ return isIncome ? Number(t.amount) > 0 : Number(t.amount) < 0; });
+  if(historyCategoryFilter !== 'all') list = list.filter(function(t){ return t.category === historyCategoryFilter; });
+  if(historySearch.trim()) {
+    const q = historySearch.trim().toLowerCase();
+    list = list.filter(function(t){ return t.name.toLowerCase().indexOf(q) !== -1; });
+  }
+  list = list.slice().sort(function(a,b){ return a.occurred_at < b.occurred_at ? 1 : -1; });
+
+  if(!list.length) return `<div class="empty-note">No ${isIncome?'income':'expenses'} match these filters.</div>`;
+
+  return list.map(function(t){
+    const icon = CATEGORY_ICON[t.category] || (isIncome ? 'ic-dollar' : 'ic-wallet');
+    const orig = (t.currency && t.currency !== DISPLAY_CURRENCY) ? ` · ${Number(Math.abs(t.amount)).toLocaleString()} ${CURRENCY_SYMBOLS[t.currency]||t.currency}` : '';
+    return `<div class="tx-row">
+      <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
+      <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}${orig}</div></div>
+      <div class="tx-amt ${isIncome?'pos':'neg'}">${isIncome?'+':''}${fmt(toDisplay(t.amount, t.currency))}</div>
+      <button class="tx-edit" onclick="editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
+      <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function historyScreenHTML(){
+  const isIncome = historyType === 'income';
+  const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  const catOptions = ['<option value="all">All categories</option>'].concat(
+    categories.map(function(c){ return `<option value="${c}"${historyCategoryFilter===c?' selected':''}>${c}</option>`; })
+  ).join('');
+
+  return `
+    <div class="detail-header">
+      <button class="back-btn" onclick="closeHistory()">‹</button>
+      <div class="detail-title">${isIncome?'Income':'Expense'} History</div>
+      <div style="width:32px;"></div>
+    </div>
+
+    <div class="filter-row detail-filters">
+      <select class="filter-select" onchange="setHistoryCategory(this.value)">${catOptions}</select>
+      <input class="filter-select" type="text" placeholder="Search by name…" value="${escapeHtml(historySearch)}" oninput="setHistorySearch(this.value)" style="flex:1;">
+    </div>
+
+    <div id="historyList">${historyRows()}</div>
+  `;
+}
+
 function financeOverviewDetailHTML(){
   const rate = savingsRate();
   const label = rangeLabel();
@@ -1183,6 +1270,7 @@ function financeHTML(){
   if(financeSubView === 'expense') return expenseDetailScreenHTML();
   if(financeSubView === 'budget') return budgetDetailScreenHTML();
   if(financeSubView === 'overview') return financeOverviewDetailHTML();
+  if(financeSubView === 'history') return historyScreenHTML();
 
   return `
     <div class="main-header">
@@ -1213,7 +1301,7 @@ function financeHTML(){
 
     <div class="bottom-row">
       <div class="panel-card">
-        <div class="panel-title"><h3>Income</h3></div>
+        <div class="panel-title"><h3>Income</h3><button class="chevron-btn" onclick="openHistory('income')">›</button></div>
         <div id="incomeList">
           ${(function(){
             const inc = transactions.filter(function(t){ return Number(t.amount) > 0; }).slice(0,8);
@@ -1233,7 +1321,7 @@ function financeHTML(){
         </div>
       </div>
       <div class="panel-card">
-        <div class="panel-title"><h3>Expenses</h3></div>
+        <div class="panel-title"><h3>Expenses</h3><button class="chevron-btn" onclick="openHistory('expense')">›</button></div>
         <div id="txList">
           ${(function(){
             const exp = transactions.filter(function(t){ return Number(t.amount) < 0; }).slice(0,8);
