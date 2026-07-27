@@ -23,7 +23,7 @@
     --green:#34D399; --rose:#FB7185; --white:#F3F5FC; --muted:#8993B5; --muted-dim:#5C6485;
   }
   *{ box-sizing:border-box; }
-  html,body{ margin:0; padding:0; height:100%; }
+  html,body{ margin:0; padding:0; height:100%; overflow-x:hidden; max-width:100%; }
   body{
     background:#050710; font-family:'Inter', sans-serif; color:var(--white);
     min-height:100vh; -webkit-font-smoothing:antialiased;
@@ -69,7 +69,7 @@
   .side-footer button{ background:none; border:none; color:var(--muted-dim); font-size:11.5px; padding:6px 10px; }
 
   .main-col{ flex:1; display:flex; flex-direction:column; min-width:0; background:var(--window); min-height:0; }
-  .main{ flex:1; padding:24px 28px; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; position:relative; background:var(--window); min-height:0; }
+  .main{ flex:1; padding:24px 28px; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; position:relative; background:var(--window); min-height:0; }
   .main-dim{ position:fixed; inset:0; background:rgba(5,7,16,0); pointer-events:none; transition:background 0.4s ease; z-index:15; }
   .main-dim.on{ background:rgba(5,7,16,0.55); }
 
@@ -135,7 +135,7 @@
   .empty-note{ font-size:12px; color:var(--muted-dim); text-align:center; padding:12px 0; }
 
   .chart-title-row{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:6px; }
-  .filter-row{ display:flex; gap:8px; }
+  .filter-row{ display:flex; gap:8px; flex-wrap:wrap; }
   .filter-select{ background:var(--panel-2); border:1px solid var(--border-2); color:var(--muted); border-radius:7px; padding:6px 9px; font-size:16px; outline:none; }
   .filter-select:focus{ border-color:var(--blue); }
   .breakdown-total-label{ font-size:11.5px; color:var(--muted); margin-top:6px; }
@@ -146,15 +146,15 @@
   .cat-row{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:12.5px; }
   .cat-row:last-child{ border-bottom:none; }
   .cat-swatch{ width:10px; height:10px; border-radius:3px; flex-shrink:0; }
-  .cat-name{ flex:1; color:var(--white); }
+  .cat-name{ flex:1; min-width:0; color:var(--white); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .cat-pct{ color:var(--muted-dim); width:38px; text-align:right; font-variant-numeric:tabular-nums; }
   .cat-amt{ width:90px; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
   @media (max-width: 760px){
     .breakdown-body{ gap:14px; }
     .cat-list{ min-width:150px; }
     .donut-wrap-mini svg{ width:110px; height:110px; }
-    .donut-total{ font-size:15px; }
-    .donut-total-sub{ font-size:9px; }
+    .donut-total{ font-size:13px; }
+    .donut-total-sub{ font-size:8.5px; }
   }
 
   .clickable-card{ cursor:pointer; transition:border-color 0.15s ease; }
@@ -166,9 +166,9 @@
   .clickable-row:hover .cat-name{ color:var(--blue-light); }
 
   .donut-wrap-mini{ position:relative; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
-  .donut-center-label{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; pointer-events:none; }
-  .donut-total-sub{ font-size:10.5px; color:var(--muted); margin-bottom:4px; }
-  .donut-total{ font-family:'Sora', sans-serif; font-weight:700; font-size:19px; }
+  .donut-center-label{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; pointer-events:none; padding:0 20%; }
+  .donut-total-sub{ font-size:10.5px; color:var(--muted); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+  .donut-total{ font-family:'Sora', sans-serif; font-weight:700; font-size:19px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 
   .detail-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
   .back-btn{ width:32px; height:32px; border-radius:50%; background:var(--panel); border:1px solid var(--border-2); color:var(--white); font-size:18px; display:flex; align-items:center; justify-content:center; }
@@ -239,11 +239,11 @@
   .tx-meta{ font-size:10.5px; color:var(--muted-dim); }
   .tx-amt{ font-size:12.5px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .tx-amt.neg{ color:var(--white); } .tx-amt.pos{ color:var(--green); }
-  .tx-del{ background:none; border:none; color:var(--muted-dim); font-size:14px; padding:2px 6px; opacity:0; transition:opacity .15s; }
-  .tx-edit{ background:none; border:none; color:var(--muted-dim); padding:2px 6px; opacity:0; transition:opacity .15s; display:flex; align-items:center; }
+  .tx-del{ background:none; border:none; color:var(--muted-dim); font-size:14px; padding:2px 6px; flex-shrink:0; }
+  .tx-edit{ background:none; border:none; color:var(--muted-dim); padding:2px 6px; flex-shrink:0; display:flex; align-items:center; }
   .tx-edit svg{ width:14px; height:14px; }
-  .tx-row:hover .tx-del, .tx-row:hover .tx-edit{ opacity:1; }
   .tx-edit:hover{ color:var(--blue-light); }
+  .tx-del:hover{ color:var(--rose); }
 
   .account-row{ display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--border); font-size:12.5px; }
   .account-row:last-child{ border-bottom:none; }
@@ -359,7 +359,7 @@
 </div>
 
 <!-- ============ Modals ============ -->
-<div class="modal-overlay" id="txModalOverlay">
+<div class="modal-overlay" id="txModalOverlay" onclick="if(event.target===this) cancelTxModal()">
   <div class="modal">
     <h3 id="txModalTitle">Add Transaction</h3>
     <div class="form-row"><label>Name</label><input id="txName" type="text"></div>
@@ -392,7 +392,7 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="budgetModalOverlay">
+<div class="modal-overlay" id="budgetModalOverlay" onclick="if(event.target===this) closeModal('budgetModalOverlay')">
   <div class="modal" style="max-height:80vh; overflow-y:auto;">
     <div class="modal-actions" style="justify-content:space-between; margin-top:0; margin-bottom:16px;">
       <h3 style="margin:0;">Edit Budget</h3>
@@ -407,7 +407,7 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="monoModalOverlay">
+<div class="modal-overlay" id="monoModalOverlay" onclick="if(event.target===this) closeModal('monoModalOverlay')">
   <div class="modal" style="max-height:80vh; overflow-y:auto;">
     <h3>Connect Monobank</h3>
     <div class="setup-box" style="margin-bottom:16px;">
@@ -433,6 +433,11 @@
         <button class="modal-save" onclick="syncMonobank()">Sync selected</button>
       </div>
       <div id="monoProgress" class="status-msg" style="margin-top:8px;"></div>
+      <div class="side-label" style="margin:16px 0 4px;">Display</div>
+      <div class="setup-box" style="padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <span style="font-size:12px; color:var(--muted); line-height:1.5;">Your synced data stays saved either way — this just controls whether it's shown.</span>
+        <button class="header-btn" id="monoVisibilityBtn" onclick="toggleMonoVisibility(); refreshMonoVisibilityLabel();" style="flex-shrink:0;"></button>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="modal-cancel" onclick="closeModal('monoModalOverlay')">Close</button>
@@ -440,7 +445,7 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="rangeModalOverlay">
+<div class="modal-overlay" id="rangeModalOverlay" onclick="if(event.target===this) closeModal('rangeModalOverlay')">
   <div class="modal">
     <h3>Date Range</h3>
     <div class="form-row"><label>From</label><input id="rangeFrom" type="date"></div>
@@ -511,6 +516,31 @@ const EXPENSE_CATEGORIES = [
 const INCOME_CATEGORIES = ["Salary","Freelance","Sale","Gifts","Other income","Cashback","Business","Refund","Transfer"];
 
 const DONUT_COLORS = ['#5B8CFF', '#8FB2FF', '#C3D3FF', '#2A3A66', '#4A5A8A', '#7A8CC9'];
+
+// Every category gets its own fixed color, so the same category always looks
+// the same regardless of where it ranks in a given month's breakdown.
+const CATEGORY_COLOR_PALETTE = [
+  '#5B8CFF','#34D399','#FBBF24','#FB7185','#A78BFA','#22D3EE',
+  '#F97316','#84CC16','#EC4899','#818CF8','#2DD4BF','#F472B6',
+  '#EAB308','#60A5FA','#4ADE80','#F87171','#C084FC','#38BDF8',
+  '#FB923C','#A3E635','#F0ABFC','#93C5FD','#6EE7B7','#FDE047',
+  '#FCA5A5','#D8B4FE','#7DD3FC','#FDBA74','#BEF264','#F9A8D4'
+];
+const CATEGORY_COLOR = {};
+(function(){
+  const names = EXPENSE_CATEGORIES.filter(function(c){ return c !== 'Transfer'; })
+    .concat(INCOME_CATEGORIES.filter(function(c){ return c !== 'Transfer'; }));
+  const seen = {};
+  let i = 0;
+  names.forEach(function(name){
+    if(seen[name]) return;
+    seen[name] = true;
+    CATEGORY_COLOR[name] = CATEGORY_COLOR_PALETTE[i % CATEGORY_COLOR_PALETTE.length];
+    i++;
+  });
+  CATEGORY_COLOR['Transfer'] = '#6B7280';
+})();
+function colorForCategory(name){ return CATEGORY_COLOR[name] || '#8993B5'; }
 
 /* ---------- Currency ---------- */
 const DISPLAY_CURRENCY = 'EUR';   // everything is shown/totaled in this currency
@@ -597,6 +627,27 @@ let currentUser = { id: 'local' };
 let transactions = [];
 let currentView = 'finance';
 let nextId = 1;
+let showMonoData = true;
+
+function loadMonoVisibility(){
+  try{
+    const v = localStorage.getItem('nova-show-mono-data');
+    showMonoData = v === null ? true : v === 'true';
+  }catch(e){ showMonoData = true; }
+}
+function setMonoVisibility(show){
+  showMonoData = show;
+  try{ localStorage.setItem('nova-show-mono-data', String(show)); }catch(e){}
+  renderView('finance');
+}
+window.toggleMonoVisibility = function(){ setMonoVisibility(!showMonoData); };
+
+// Everything that DISPLAYS or CALCULATES from transactions should read through
+// this, so hiding Monobank-synced data is a pure view toggle — the underlying
+// data in `transactions` is untouched and comes right back when re-enabled.
+function visibleTransactions(){
+  return showMonoData ? transactions : transactions.filter(function(t){ return !t.monoId; });
+}
 
 function loadData(){
   try{
@@ -623,6 +674,7 @@ function init(){
   loadData();
   loadBudgets();
   loadCachedRates();
+  loadMonoVisibility();
   renderView('finance');
   refreshExchangeRates();
   setInterval(refreshExchangeRates, 24 * 60 * 60 * 1000); // rates only actually change ~once a day on the free API anyway
@@ -676,12 +728,13 @@ function rangeLabel(){
 }
 
 function thisMonthTx(){
+  const base = visibleTransactions();
   if(customRangeActive && customRangeFrom){
     const to = customRangeTo || todayStr();
-    return transactions.filter(function(t){ return t.occurred_at >= customRangeFrom && t.occurred_at <= to; });
+    return base.filter(function(t){ return t.occurred_at >= customRangeFrom && t.occurred_at <= to; });
   }
   const now = new Date();
-  return transactions.filter(function(t){
+  return base.filter(function(t){
     const d = new Date(t.occurred_at);
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   });
@@ -711,7 +764,7 @@ window.openRangeModal = function(){
 };
 
 function netWorth(){
-  return transactions.reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
+  return visibleTransactions().reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
 }
 
 function monthIncome(){
@@ -761,7 +814,7 @@ let breakdownCategory = 'all';
 
 function expensesForPeriod(period){
   const now = new Date();
-  return transactions.filter(function(t){
+  return visibleTransactions().filter(function(t){
     if(Number(t.amount) >= 0 || t.category === 'Transfer') return false;
     const d = new Date(t.occurred_at);
     if(period === 'month') return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
@@ -795,7 +848,7 @@ function donutSVG(data){
     const dash = (frac * c).toFixed(2) + ' ' + (c - frac*c).toFixed(2);
     const rotate = -90 + cum * 360;
     cum += frac;
-    return `<circle cx="100" cy="100" r="${r}" fill="none" stroke="${DONUT_COLORS[i % DONUT_COLORS.length]}" stroke-width="26" stroke-dasharray="${dash}" transform="rotate(${rotate.toFixed(1)} 100 100)"/>`;
+    return `<circle cx="100" cy="100" r="${r}" fill="none" stroke="${colorForCategory(d[0])}" stroke-width="26" stroke-dasharray="${dash}" transform="rotate(${rotate.toFixed(1)} 100 100)"/>`;
   }).join('');
   return `<svg width="150" height="150" viewBox="0 0 200 200"><circle cx="100" cy="100" r="70" fill="none" stroke="var(--panel-2)" stroke-width="26"/>${arcs}</svg>`;
 }
@@ -812,7 +865,7 @@ function monthlyExpenseBarsHTML(){
     months.push(new Date(now.getFullYear(), now.getMonth() - i, 1));
   }
   const sums = months.map(function(m){
-    return transactions.filter(function(t){
+    return visibleTransactions().filter(function(t){
       const d = new Date(t.occurred_at);
       return Number(t.amount) < 0 && t.category !== 'Transfer' && d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth();
     }).reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
@@ -852,7 +905,7 @@ function expenseCategorySummaryHTML(){
   const rows = top.map(function(d,i){
     const pct = total ? Math.round((d[1]/total)*100) : 0;
     return `<div class="cat-row">
-      <span class="cat-swatch" style="background:${DONUT_COLORS[i % DONUT_COLORS.length]}"></span>
+      <span class="cat-swatch" style="background:${colorForCategory(d[0])}"></span>
       <span class="cat-name">${d[0]}</span>
       <span class="cat-pct">${pct}%</span>
       <span class="cat-amt">${fmt(-d[1])}</span>
@@ -894,7 +947,7 @@ function expenseDetailScreenHTML(){
   const rows = data.length ? data.map(function(d,i){
     const pct = total ? Math.round((d[1]/total)*100) : 0;
     return `<div class="cat-row clickable-row" onclick="setBreakdownCategory('${d[0]}')">
-      <span class="cat-swatch" style="background:${DONUT_COLORS[i % DONUT_COLORS.length]}"></span>
+      <span class="cat-swatch" style="background:${colorForCategory(d[0])}"></span>
       <span class="cat-name">${d[0]}</span>
       <span class="cat-pct">${pct}%</span>
       <span class="cat-amt">${fmt(-d[1])}</span>
@@ -956,7 +1009,7 @@ function totalExpenseBudget(){
 }
 
 function txForMonth(date){
-  return transactions.filter(function(t){
+  return visibleTransactions().filter(function(t){
     const d = new Date(t.occurred_at);
     return d.getFullYear() === date.getFullYear() && d.getMonth() === date.getMonth();
   });
@@ -1121,12 +1174,13 @@ function trendSVG(height){
     start = new Date(now); start.setDate(start.getDate() - days);
   }
   const startStr = start.toISOString().slice(0,10);
-  const balanceBeforeStart = transactions.reduce(function(sum, t){
+  const trendTx = visibleTransactions();
+  const balanceBeforeStart = trendTx.reduce(function(sum, t){
     return t.occurred_at < startStr ? sum + toDisplay(t.amount, t.currency) : sum;
   }, 0);
 
   const daily = new Array(days+1).fill(0);
-  transactions.forEach(function(t){
+  trendTx.forEach(function(t){
     const d = new Date(t.occurred_at);
     const idx = Math.floor((d - start) / (1000*60*60*24));
     if(idx >= 0 && idx <= days) daily[idx] += toDisplay(t.amount, t.currency);
@@ -1168,7 +1222,7 @@ function financeOverviewSummaryHTML(){
         <div class="mini-stat"><div class="mini-stat-label">Income</div><div class="mini-stat-num">${fmtShort(monthIncome())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Savings</div><div class="mini-stat-num">${rate===null?'—':rate+'%'}</div></div>
       </div>
-      ${transactions.length ? trendSVG(60) : '<div class="empty-note">Add some transactions to see a trend.</div>'}
+      ${visibleTransactions().length ? trendSVG(60) : '<div class="empty-note">Add some transactions to see a trend.</div>'}
     </div>`;
 }
 
@@ -1201,9 +1255,10 @@ function renderHistoryList(){
 function historyRows(){
   const isTransfer = historyType === 'transfer';
   const isIncome = historyType === 'income';
+  const base = visibleTransactions();
   let list = isTransfer
-    ? transactions.filter(function(t){ return t.category === 'Transfer'; })
-    : transactions.filter(function(t){ return (isIncome ? Number(t.amount) > 0 : Number(t.amount) < 0) && t.category !== 'Transfer'; });
+    ? base.filter(function(t){ return t.category === 'Transfer'; })
+    : base.filter(function(t){ return (isIncome ? Number(t.amount) > 0 : Number(t.amount) < 0) && t.category !== 'Transfer'; });
   if(!isTransfer && historyCategoryFilter !== 'all') list = list.filter(function(t){ return t.category === historyCategoryFilter; });
   if(historySearch.trim()) {
     const q = historySearch.trim().toLowerCase();
@@ -1274,7 +1329,7 @@ function financeOverviewDetailHTML(){
     <div class="charts-row" style="grid-template-columns:1fr;">
       <div class="chart-card">
         <div class="chart-title">Balance Trend — ${label}</div>
-        ${transactions.length ? trendSVG(150) : '<div class="empty-note">Add some transactions to see a trend.</div>'}
+        ${visibleTransactions().length ? trendSVG(150) : '<div class="empty-note">Add some transactions to see a trend.</div>'}
       </div>
     </div>
   `;
@@ -1321,7 +1376,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
-            const inc = transactions.filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer'; }).slice(0,8);
+            const inc = visibleTransactions().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer'; }).slice(0,8);
             if(!inc.length) return '<div class="empty-note">No income logged yet.</div>';
             return inc.map(function(t){
               const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
@@ -1341,7 +1396,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
         <div id="txList">
           ${(function(){
-            const exp = transactions.filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; }).slice(0,8);
+            const exp = visibleTransactions().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; }).slice(0,8);
             if(!exp.length) return '<div class="empty-note">No expenses logged yet.</div>';
             return exp.map(function(t){
             const icon = CATEGORY_ICON[t.category] || 'ic-wallet';
@@ -1361,7 +1416,7 @@ function financeHTML(){
     </div>
 
     ${(function(){
-      const transfers = transactions.filter(function(t){ return t.category === 'Transfer'; });
+      const transfers = visibleTransactions().filter(function(t){ return t.category === 'Transfer'; });
       if(!transfers.length) return '';
       return `<div class="bottom-row" style="grid-template-columns:1fr;">
         <div class="panel-card clickable-card" onclick="openHistory('transfer')">
@@ -1727,6 +1782,12 @@ window.removeMonoAccountData = function(accountId){
   renderView('finance');
 };
 
+function refreshMonoVisibilityLabel(){
+  const btn = document.getElementById('monoVisibilityBtn');
+  if(!btn) return;
+  btn.textContent = showMonoData ? 'Hide Monobank data' : 'Show Monobank data';
+}
+
 window.openMonoModal = function(){
   const token = loadMonoToken();
   document.getElementById('monoToken').value = token;
@@ -1735,6 +1796,7 @@ window.openMonoModal = function(){
   document.getElementById('monoAccountRow').style.display = 'none';
   loadMonoSyncStatus();
   openModal('monoModalOverlay');
+  refreshMonoVisibilityLabel();
   if(token) connectMonobank();
 };
 
