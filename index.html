@@ -51,7 +51,7 @@
   .status-msg.error{ color:var(--rose); }
 
   /* ---------- App shell ---------- */
-  #app{ display:none; height:100vh; background:var(--window); }
+  #app{ display:none; height:100vh; height:100dvh; background:var(--window); }
   #app.visible{ display:flex; }
 
   .sidebar{ width:224px; background:var(--panel); border-right:1px solid var(--border); padding:20px 14px; flex-shrink:0; display:none; flex-direction:column; }
@@ -68,8 +68,8 @@
   .side-footer{ margin-top:auto; padding-top:12px; border-top:1px solid var(--border); }
   .side-footer button{ background:none; border:none; color:var(--muted-dim); font-size:11.5px; padding:6px 10px; }
 
-  .main-col{ flex:1; display:flex; flex-direction:column; min-width:0; background:var(--window); }
-  .main{ flex:1; padding:24px 28px; overflow-y:auto; position:relative; background:var(--window); }
+  .main-col{ flex:1; display:flex; flex-direction:column; min-width:0; background:var(--window); min-height:0; }
+  .main{ flex:1; padding:24px 28px; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; position:relative; background:var(--window); min-height:0; }
   .main-dim{ position:fixed; inset:0; background:rgba(5,7,16,0); pointer-events:none; transition:background 0.4s ease; z-index:15; }
   .main-dim.on{ background:rgba(5,7,16,0.55); }
 
@@ -103,18 +103,26 @@
   .quick-add-btn{ display:flex; align-items:center; justify-content:center; gap:8px; border-radius:12px; padding:14px; font-size:13.5px; font-weight:600; border:1px solid var(--border-2); }
   .quick-add-ic{ width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .quick-add-ic svg{ width:12px; height:12px; }
-  .quick-add-btn.income{ background:rgba(91,140,255,0.12); color:var(--blue-light); border-color:rgba(91,140,255,0.3); }
-  .quick-add-btn.income .quick-add-ic{ background:var(--blue); color:#0A0D18; }
-  .quick-add-btn.income:hover{ background:rgba(91,140,255,0.2); }
-  .quick-add-btn.expense{ background:rgba(91,140,255,0.12); color:var(--blue-light); border-color:rgba(91,140,255,0.3); }
-  .quick-add-btn.expense .quick-add-ic{ background:var(--blue); color:#0A0D18; }
-  .quick-add-btn.expense:hover{ background:rgba(91,140,255,0.2); }
+  .quick-add-btn.income{ background:rgba(52,211,153,0.12); color:var(--green); border-color:rgba(52,211,153,0.3); }
+  .quick-add-btn.income .quick-add-ic{ background:var(--green); color:#0A0D18; }
+  .quick-add-btn.income:hover{ background:rgba(52,211,153,0.2); }
+  .quick-add-btn.expense{ background:rgba(251,113,133,0.12); color:var(--rose); border-color:rgba(251,113,133,0.3); }
+  .quick-add-btn.expense .quick-add-ic{ background:var(--rose); color:#0A0D18; }
+  .quick-add-btn.expense:hover{ background:rgba(251,113,133,0.2); }
 
   .stats-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:18px; }
   .stat-card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
   .stat-label{ font-size:12px; color:var(--muted); margin-bottom:10px; }
   .stat-num{ font-family:'Sora', sans-serif; font-weight:700; font-size:23px; margin-bottom:8px; }
   .stat-delta{ font-size:12px; font-weight:600; color:var(--muted-dim); }
+
+  .mini-stats-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:10px 0 14px; }
+  .mini-stat{ text-align:left; }
+  .mini-stat-label{ font-size:10.5px; color:var(--muted); margin-bottom:4px; }
+  .mini-stat-num{ font-family:'Sora', sans-serif; font-weight:700; font-size:15px; color:var(--white); }
+  @media (max-width: 500px){
+    .mini-stats-grid{ grid-template-columns:repeat(2,1fr); }
+  }
 
   .charts-row{ display:grid; grid-template-columns:1.4fr 1fr; gap:14px; margin-bottom:18px; }
   .chart-card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
@@ -242,7 +250,9 @@
   .form-row input:focus, .form-row select:focus{ border-color:var(--blue); }
   .type-toggle{ display:flex; gap:6px; }
   .type-btn{ flex:1; background:var(--panel-2); border:1px solid var(--border-2); color:var(--muted); border-radius:8px; padding:9px 0; font-size:12.5px; font-weight:600; }
-  .type-btn.active{ background:var(--blue); color:#0A0D18; border-color:transparent; }
+  .type-btn.active{ border-color:transparent; }
+  .type-btn[data-type="expense"].active{ background:var(--rose); color:#0A0D18; }
+  .type-btn[data-type="income"].active{ background:var(--green); color:#0A0D18; }
   .modal-actions{ display:flex; gap:8px; margin-top:18px; justify-content:flex-end; }
   .modal-actions button{ border:none; border-radius:8px; padding:9px 16px; font-size:12.5px; font-weight:600; }
   .modal-cancel{ background:var(--panel-2); color:var(--muted); }
@@ -255,13 +265,21 @@
   .tab.active{ color:var(--blue-light); }
   .tab.active .ic{ background:rgba(91,140,255,0.14); }
 
+  .mobile-only{ display:none; }
+
+  .fab-add{ position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg, var(--blue-light), var(--blue)); border:none; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(91,140,255,0.45); z-index:20; }
+  .fab-add svg{ width:22px; height:22px; color:#0A0D18; }
+  .mobile-export-row{ gap:10px; justify-content:center; margin:8px 0 76px; }
+
   @media (max-width: 760px){
     .sidebar{ display:none !important; }
     .tabbar{ display:flex; }
     .stats-row{ grid-template-columns:repeat(2,1fr); }
     .charts-row{ grid-template-columns:1fr; }
     .bottom-row{ grid-template-columns:1fr; }
-    .main{ padding:16px 16px calc(16px + env(safe-area-inset-bottom)); }
+    .main{ padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+    .desktop-only{ display:none !important; }
+    .mobile-only{ display:flex; }
   }
   @media (min-width: 761px){
     .sidebar{ display:flex !important; }
@@ -328,8 +346,8 @@
     <div class="form-row">
       <label>Type</label>
       <div class="type-toggle">
-        <button type="button" class="type-btn active" data-type="expense" onclick="setTxType('expense')">Expense</button>
         <button type="button" class="type-btn" data-type="income" onclick="setTxType('income')">Income</button>
+        <button type="button" class="type-btn active" data-type="expense" onclick="setTxType('expense')">Expense</button>
       </div>
     </div>
     <div class="form-row"><label>Category</label>
@@ -624,10 +642,12 @@ function expenseCategorySummaryHTML(){
         <div class="chart-title">Top Expense Categories, ${periodLabel('month')}</div>
         <span class="chevron">›</span>
       </div>
-      <div class="breakdown-body">
-        ${donutWithCenterLabel(svg, total, 'Total expenses')}
-        <div class="cat-list">${data.length ? rows + moreRow : '<div class="empty-note">No expenses logged this month yet.</div>'}</div>
-      </div>
+      ${data.length ? `
+        <div class="breakdown-body">
+          ${donutWithCenterLabel(svg, total, 'Total expenses')}
+          <div class="cat-list">${rows}${moreRow}</div>
+        </div>
+      ` : '<div class="empty-note">No expenses logged this month yet.</div>'}
     </div>`;
 }
 
@@ -670,9 +690,7 @@ function expenseDetailScreenHTML(){
       <select class="filter-select" onchange="setBreakdownCategory(this.value)">${catOptions}</select>
     </div>
 
-    <div class="detail-donut-row">
-      ${donutWithCenterLabel(svg, total, periodLabel(breakdownPeriod))}
-    </div>
+    ${data.length ? `<div class="detail-donut-row">${donutWithCenterLabel(svg, total, periodLabel(breakdownPeriod))}</div>` : ''}
 
     ${monthlyExpenseBarsHTML()}
 
@@ -857,7 +875,8 @@ window.saveBudgetEdit = function(){
   renderView('finance');
 };
 
-function trendSVG(){
+function trendSVG(height){
+  height = height || 150;
   // Simple running-balance line over the last 30 days of transactions (relative change), since we don't store daily net-worth snapshots yet.
   const days = 30;
   const now = new Date();
@@ -877,46 +896,45 @@ function trendSVG(){
   const ys = points.map(function(p){ return p.y; });
   const minY = Math.min.apply(null, ys.concat([0])), maxY = Math.max.apply(null, ys.concat([1]));
   const range = (maxY - minY) || 1;
-  const toY = function(y){ return 140 - ((y - minY) / range) * 120; };
+  const pad = Math.round(height * 0.067); // proportional top/bottom padding
+  const usable = height - pad;
+  const toY = function(y){ return usable - ((y - minY) / range) * (usable - pad); };
   const path = points.map(function(p,i){ return (i===0?'M':'L') + p.x.toFixed(1) + ',' + toY(p.y).toFixed(1); }).join(' ');
-  const areaPath = path + ` L480,150 L0,150 Z`;
+  const areaPath = path + ` L480,${height} L0,${height} Z`;
   return `
-    <svg width="100%" height="150" viewBox="0 0 480 150" preserveAspectRatio="none">
+    <svg width="100%" height="${height}" viewBox="0 0 480 ${height}" preserveAspectRatio="none">
       <defs><linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5B8CFF" stop-opacity="0.35"/><stop offset="100%" stop-color="#5B8CFF" stop-opacity="0"/></linearGradient></defs>
       <path d="${areaPath}" fill="url(#areaFill)"/>
       <path d="${path}" fill="none" stroke="#9DB8FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
 }
 
-/* ---------- Finance view HTML ---------- */
-function financeHTML(){
-  if(financeSubView === 'expense') return expenseDetailScreenHTML();
-  if(financeSubView === 'budget') return budgetDetailScreenHTML();
-
+// Compact clickable card combining Net Worth / Spent / Income / Savings Rate / Balance Trend
+function financeOverviewSummaryHTML(){
   const rate = savingsRate();
   return `
-    <div class="main-header">
-      <div class="main-title">Finance <span>— Overview</span></div>
-      <div class="live-badge">
-        <span class="live-dot">Live</span>
-        <button class="header-btn" onclick="exportCSV()">Export</button>
-        <button class="header-btn" onclick="document.getElementById('importFile').click()">Import</button>
-        <input type="file" id="importFile" accept=".csv" style="display:none;" onchange="handleImportFile(event)">
+    <div class="chart-card clickable-card" style="grid-column:1 / -1;" onclick="openOverviewDetail()">
+      <div class="chart-title-row">
+        <div class="chart-title">Overview</div>
+        <span class="chevron">›</span>
       </div>
-    </div>
+      <div class="mini-stats-grid">
+        <div class="mini-stat"><div class="mini-stat-label">Net Worth</div><div class="mini-stat-num">${fmtShort(netWorth())}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Spent</div><div class="mini-stat-num">${fmtShort(-monthSpend())}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Income</div><div class="mini-stat-num">${fmtShort(monthIncome())}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Savings</div><div class="mini-stat-num">${rate===null?'—':rate+'%'}</div></div>
+      </div>
+      ${transactions.length ? trendSVG(60) : '<div class="empty-note">Add some transactions to see a trend.</div>'}
+    </div>`;
+}
 
-    <div class="ask-nova" data-state="idle" id="novaBar">
-      <div class="orb-wrap" id="novaOrb"><div class="pulse-ring r1"></div><div class="pulse-ring r2"></div><div class="orb"></div></div>
-      <div class="ask-nova-body"><div class="ph" id="novaPh">Ask Nova anything…</div></div>
-    </div>
-
-    <div class="quick-add-row">
-      <button class="quick-add-btn income" onclick="openTxModal('income','Salary')">
-        <span class="quick-add-ic"><svg class="icon"><use href="#ic-plus"/></svg></span> Add Income
-      </button>
-      <button class="quick-add-btn expense" onclick="openTxModal('expense','Other expense')">
-        <span class="quick-add-ic"><svg class="icon"><use href="#ic-plus"/></svg></span> Add Expense
-      </button>
+function financeOverviewDetailHTML(){
+  const rate = savingsRate();
+  return `
+    <div class="detail-header">
+      <button class="back-btn" onclick="closeOverviewDetail()">‹</button>
+      <div class="detail-title">Overview</div>
+      <div style="width:32px;"></div>
     </div>
 
     <div class="stats-row">
@@ -929,8 +947,32 @@ function financeHTML(){
     <div class="charts-row" style="grid-template-columns:1fr;">
       <div class="chart-card">
         <div class="chart-title">Balance Trend (30 days)</div>
-        ${transactions.length ? trendSVG() : '<div class="empty-note">Add some transactions to see a trend.</div>'}
+        ${transactions.length ? trendSVG(150) : '<div class="empty-note">Add some transactions to see a trend.</div>'}
       </div>
+    </div>
+  `;
+}
+window.openOverviewDetail = function(){ financeSubView = 'overview'; renderView('finance'); };
+window.closeOverviewDetail = function(){ financeSubView = null; renderView('finance'); };
+
+/* ---------- Finance view HTML ---------- */
+function financeHTML(){
+  if(financeSubView === 'expense') return expenseDetailScreenHTML();
+  if(financeSubView === 'budget') return budgetDetailScreenHTML();
+  if(financeSubView === 'overview') return financeOverviewDetailHTML();
+
+  return `
+    <div class="main-header">
+      <div class="live-badge">
+        <span class="live-dot">Live</span>
+        <button class="header-btn" onclick="exportCSV()">Export</button>
+        <button class="header-btn" onclick="document.getElementById('importFile').click()">Import</button>
+        <input type="file" id="importFile" accept=".csv" style="display:none;" onchange="handleImportFile(event)">
+      </div>
+    </div>
+
+    <div class="charts-row">
+      ${financeOverviewSummaryHTML()}
     </div>
 
     <div class="charts-row">
@@ -980,6 +1022,15 @@ function financeHTML(){
         </div>
       </div>
     </div>
+
+    <div class="mobile-only mobile-export-row">
+      <button class="header-btn" onclick="exportCSV()">Export</button>
+      <button class="header-btn" onclick="document.getElementById('importFile').click()">Import</button>
+    </div>
+
+    <button class="fab-add" onclick="openTxModal('expense','Other expense')">
+      <svg class="icon"><use href="#ic-plus"/></svg>
+    </button>
   `;
 }
 
