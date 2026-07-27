@@ -420,7 +420,13 @@
     </div>
     <div id="monoStatus" class="status-msg" style="margin-top:10px;"></div>
     <div id="monoAccountRow" style="display:none; margin-top:14px;">
-      <div class="side-label" style="margin:0 0 8px;">Accounts</div>
+      <div class="panel-title" style="margin-bottom:8px;">
+        <h3 style="font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted-dim); font-weight:600; margin:0;">Accounts</h3>
+        <div style="display:flex; gap:8px;">
+          <button class="header-btn" onclick="setAllMonoAccounts(true)">Select all</button>
+          <button class="header-btn" onclick="setAllMonoAccounts(false)">Deselect all</button>
+        </div>
+      </div>
       <div id="monoAccountList"></div>
       <div class="form-row" style="margin-top:12px;"><label>Sync from date</label><input id="monoFromDate" type="date"></div>
       <div class="modal-actions" style="justify-content:flex-start;">
@@ -1311,8 +1317,8 @@ function financeHTML(){
     </div>
 
     <div class="bottom-row">
-      <div class="panel-card">
-        <div class="panel-title"><h3>Income</h3><button class="chevron-btn" onclick="openHistory('income')">›</button></div>
+      <div class="panel-card clickable-card" onclick="openHistory('income')">
+        <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
             const inc = transactions.filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer'; }).slice(0,8);
@@ -1324,15 +1330,15 @@ function financeHTML(){
                 <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
                 <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}${orig}</div></div>
                 <div class="tx-amt pos">+${fmt(toDisplay(t.amount, t.currency))}</div>
-                <button class="tx-edit" onclick="editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
-                <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
+                <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
+                <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
               </div>`;
             }).join('');
           })()}
         </div>
       </div>
-      <div class="panel-card">
-        <div class="panel-title"><h3>Expenses</h3><button class="chevron-btn" onclick="openHistory('expense')">›</button></div>
+      <div class="panel-card clickable-card" onclick="openHistory('expense')">
+        <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
         <div id="txList">
           ${(function(){
             const exp = transactions.filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; }).slice(0,8);
@@ -1345,8 +1351,8 @@ function financeHTML(){
               <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
               <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}${orig}</div></div>
               <div class="tx-amt ${isPos?'pos':'neg'}">${isPos?'+':''}${fmt(toDisplay(t.amount, t.currency))}</div>
-              <button class="tx-edit" onclick="editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
-              <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
+              <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
+              <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
             </div>`;
           }).join('');
           })()}
@@ -1358,8 +1364,8 @@ function financeHTML(){
       const transfers = transactions.filter(function(t){ return t.category === 'Transfer'; });
       if(!transfers.length) return '';
       return `<div class="bottom-row" style="grid-template-columns:1fr;">
-        <div class="panel-card">
-          <div class="panel-title"><h3>Transfers</h3><button class="chevron-btn" onclick="openHistory('transfer')">›</button></div>
+        <div class="panel-card clickable-card" onclick="openHistory('transfer')">
+          <div class="panel-title"><h3>Transfers</h3><span class="chevron">›</span></div>
           <div class="empty-note" style="text-align:left; padding:0 0 8px;">Moved between your own connected accounts — not counted as income or spending.</div>
           ${transfers.slice(0,4).map(function(t){
             const icon = CATEGORY_ICON['Transfer'] || 'ic-refresh';
@@ -1367,8 +1373,8 @@ function financeHTML(){
               <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
               <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at}</div></div>
               <div class="tx-amt">${fmt(toDisplay(t.amount, t.currency))}</div>
-              <button class="tx-edit" onclick="editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
-              <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
+              <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
+              <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
             </div>`;
           }).join('')}
         </div>
@@ -1703,6 +1709,10 @@ function renderMonoAccountList(){
     </div>`;
   }).join('');
 }
+
+window.setAllMonoAccounts = function(checked){
+  document.querySelectorAll('.mono-acct-check').forEach(function(cb){ cb.checked = checked; });
+};
 
 window.removeMonoAccountData = function(accountId){
   const status = monoSyncStatus[accountId];
