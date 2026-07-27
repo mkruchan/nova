@@ -496,18 +496,55 @@ function loadCachedRates(){
   }catch(e){ /* keep fallback */ }
 }
 
+// Monobank's own free public rate feed — no auth needed. Pulls whichever of
+// UAH/USD/ALL pairs it actually publishes; anything it doesn't have just
+// falls through to the general fallback API instead.
+async function fetchMonoRates(){
+  try{
+    const res = await fetch('https://api.monobank.ua/bank/currency');
+    if(!res.ok) return null;
+    const data = await res.json();
+    let uahPerEur = null, uahPerUsd = null, uahPerAll = null;
+    data.forEach(function(r){
+      const mid = (r.rateBuy && r.rateSell) ? (r.rateBuy + r.rateSell) / 2 : r.rateCross;
+      if(r.currencyCodeA === 978 && r.currencyCodeB === 980) uahPerEur = mid;
+      if(r.currencyCodeA === 840 && r.currencyCodeB === 980) uahPerUsd = mid;
+      if(r.currencyCodeA === 8 && r.currencyCodeB === 980) uahPerAll = mid;
+    });
+    if(!uahPerEur) return null;
+    return {
+      UAH: uahPerEur,
+      USD: uahPerUsd ? uahPerEur / uahPerUsd : null,
+      ALL: uahPerAll ? uahPerEur / uahPerAll : null
+    };
+  }catch(e){ return null; }
+}
+
 async function refreshExchangeRates(){
   ratesLoading = true;
+  let anySucceeded = false;
   try{
     const res = await fetch('https://open.er-api.com/v6/latest/EUR');
     const data = await res.json();
     if(data && data.result === 'success' && data.rates){
       exchangeRates = { EUR: 1, USD: data.rates.USD, UAH: data.rates.UAH, ALL: data.rates.ALL };
-      ratesUpdatedAt = Date.now();
-      localStorage.setItem('nova-rates', JSON.stringify({ rates: exchangeRates, updatedAt: ratesUpdatedAt }));
+      anySucceeded = true;
     }
   }catch(e){
     // network/CORS failure — silently keep last known (cached or fallback) rates
+  }
+
+  const monoRates = await fetchMonoRates();
+  if(monoRates){
+    if(monoRates.UAH) exchangeRates.UAH = monoRates.UAH;
+    if(monoRates.USD) exchangeRates.USD = monoRates.USD;
+    if(monoRates.ALL) exchangeRates.ALL = monoRates.ALL;
+    anySucceeded = true;
+  }
+
+  if(anySucceeded){
+    ratesUpdatedAt = Date.now();
+    localStorage.setItem('nova-rates', JSON.stringify({ rates: exchangeRates, updatedAt: ratesUpdatedAt }));
   }
   ratesLoading = false;
   if(currentView === 'finance') renderView('finance');
