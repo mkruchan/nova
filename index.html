@@ -250,14 +250,14 @@
   .panel-title h3{ font-family:'Sora', sans-serif; font-weight:700; font-size:13.5px; margin:0; }
   .add-btn{ background:var(--blue-dim); color:var(--blue-light); border:none; border-radius:7px; padding:5px 10px; font-size:11px; font-weight:600; }
 
-  .tx-row{ display:flex; align-items:center; gap:11px; padding:9px 0; border-bottom:1px solid var(--border); }
+  .tx-row{ display:flex; align-items:center; gap:11px; padding:9px 0; border-bottom:1px solid var(--border); min-height:40px; overflow:hidden; }
   .tx-row:last-child{ border-bottom:none; }
   .tx-icon{ width:28px; height:28px; border-radius:50%; background:var(--panel-2); border:1px solid var(--border-2); display:flex; align-items:center; justify-content:center; color:var(--muted); flex-shrink:0; }
   .tx-icon svg.icon{ width:14px; height:14px; }
   .tx-info{ flex:1; min-width:0; }
   .tx-name{ font-size:12.5px; color:var(--white); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .tx-meta{ font-size:10.5px; color:var(--muted-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .tx-amt{ font-size:12.5px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .tx-amt{ font-size:12.5px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; flex-shrink:0; }
   .tx-amt.neg{ color:var(--white); } .tx-amt.pos{ color:var(--green); }
   .tx-del{ background:none; border:none; color:var(--muted-dim); font-size:14px; padding:2px 6px; flex-shrink:0; }
   .tx-edit{ background:none; border:none; color:var(--muted-dim); padding:2px 6px; flex-shrink:0; display:flex; align-items:center; }
@@ -397,7 +397,7 @@
       <select id="txCategory" onchange="handleCategorySelectChange(this)"></select>
     </div>
     <div class="form-row amount-currency-row">
-      <div><label>Amount</label><input id="txAmount" type="number" step="0.01"></div>
+      <div><label>Amount</label><input id="txAmount" type="text" inputmode="decimal" oninput="formatAmountInput(this)"></div>
       <div><label>Currency</label>
         <select id="txCurrency">
           <option value="ALL" selected>Lek (ALL)</option>
@@ -585,6 +585,7 @@ const CATEGORY_COLOR = {};
     i++;
   });
   CATEGORY_COLOR['Transfer'] = '#6B7280';
+  CATEGORY_COLOR['Loan'] = '#EF4444';
 })();
 function colorForCategory(name){
   if(!CATEGORY_COLOR[name]){
@@ -970,13 +971,14 @@ function renderView(view){
 let customRangeActive = false;
 let customRangeFrom = null;
 let customRangeTo = null;
+let activeRangePresetLabel = null; // e.g. 'Last Month' — null means either default or an exact custom range
 
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 
 function rangeLabel(){
   if(!customRangeActive || !customRangeFrom) return 'This Month';
-  const to = customRangeTo || todayStr();
-  return to === todayStr() ? ('Since ' + customRangeFrom) : (customRangeFrom + ' – ' + to);
+  if(activeRangePresetLabel) return activeRangePresetLabel;
+  return 'Custom timeframe';
 }
 
 function thisMonthTx(){
@@ -996,6 +998,10 @@ window.applyRangePreset = function(preset){
   const now = new Date();
   const fmt10 = function(d){ return d.toISOString().slice(0,10); };
   let from, to = null;
+  const presetLabels = {
+    thisMonth: 'This Month', lastMonth: 'Last Month', thisQuarter: 'This Quarter',
+    last6Months: 'Last 6 Months', thisYear: 'This Year', lastYear: 'Last Year', allTime: 'All Time'
+  };
 
   if(preset === 'thisMonth'){
     from = fmt10(new Date(now.getFullYear(), now.getMonth(), 1));
@@ -1022,6 +1028,7 @@ window.applyRangePreset = function(preset){
   customRangeActive = true;
   customRangeFrom = from;
   customRangeTo = to;
+  activeRangePresetLabel = presetLabels[preset] || null;
   closeModal('rangeModalOverlay');
   renderView('finance');
 };
@@ -1033,6 +1040,7 @@ window.applyDateRange = function(){
   customRangeActive = true;
   customRangeFrom = from;
   customRangeTo = to || null;
+  activeRangePresetLabel = null; // exact manual dates — shown as 'Custom timeframe', not a named preset
   closeModal('rangeModalOverlay');
   renderView('finance');
 };
@@ -1040,6 +1048,7 @@ window.resetDateRange = function(){
   customRangeActive = false;
   customRangeFrom = null;
   customRangeTo = null;
+  activeRangePresetLabel = null;
   closeModal('rangeModalOverlay');
   renderView('finance');
 };
@@ -1089,6 +1098,14 @@ function fmt(n){
   const sym = CURRENCY_SYMBOLS[DISPLAY_CURRENCY] || '';
   const sign = n < 0 ? '-' : '';
   return sign + sym + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Shows an amount in whatever currency the transaction actually was, not
+// converted to the EUR display currency — used in Income/Expenses/Transfers
+// and History, where seeing the real original amount matters more than a
+// single unified currency (that's what Overview/Top Expense Categories are for).
+function fmtOriginal(amount, currency){
+  const sym = CURRENCY_SYMBOLS[currency] || currency || '';
+  return sym + Math.abs(Number(amount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtShort(n){
   const sym = CURRENCY_SYMBOLS[DISPLAY_CURRENCY] || '';
@@ -1545,7 +1562,7 @@ function financeOverviewSummaryHTML(){
         <span class="chevron">›</span>
       </div>
       <div class="mini-stats-grid">
-        <div class="mini-stat"><div class="mini-stat-label">Net Worth</div><div class="mini-stat-num">${fmtShort(netWorth())}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Net Worth (All-time)</div><div class="mini-stat-num">${fmtShort(netWorth())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Spent</div><div class="mini-stat-num">${fmtShort(-monthSpend())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Income</div><div class="mini-stat-num">${fmtShort(monthIncome())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Savings</div><div class="mini-stat-num">${rate===null?'—':rate+'%'}</div></div>
@@ -1597,13 +1614,12 @@ function historyRows(){
 
   return list.map(function(t){
     const icon = CATEGORY_ICON[t.category] || (isIncome ? 'ic-dollar' : 'ic-wallet');
-    const orig = (t.currency && t.currency !== DISPLAY_CURRENCY) ? ` · ${Number(Math.abs(t.amount)).toLocaleString()} ${CURRENCY_SYMBOLS[t.currency]||t.currency}` : '';
     const amtClass = isTransfer ? '' : (isIncome ? 'pos' : 'neg');
-    const sign = isTransfer ? '' : (isIncome ? '+' : '');
+    const sign = isTransfer ? (Number(t.amount) < 0 ? '-' : '') : (isIncome ? '+' : '-');
     return `<div class="tx-row">
       <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-      <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at}${isTransfer?'':' · '+escapeHtml(t.category)}${orig}</div></div>
-      <div class="tx-amt ${amtClass}">${sign}${fmt(toDisplay(t.amount, t.currency))}</div>
+      <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at}${isTransfer?'':' · '+escapeHtml(t.category)}</div></div>
+      <div class="tx-amt ${amtClass}">${sign}${fmtOriginal(t.amount, t.currency)}</div>
       <button class="tx-edit" onclick="editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
       <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
     </div>`;
@@ -1828,11 +1844,10 @@ function financeHTML(){
             return exp.map(function(t){
             const icon = CATEGORY_ICON[t.category] || 'ic-wallet';
             const isPos = Number(t.amount) > 0;
-            const orig = (t.currency && t.currency !== DISPLAY_CURRENCY) ? ` · ${Math.abs(Number(t.amount)).toLocaleString()} ${CURRENCY_SYMBOLS[t.currency]||t.currency}` : '';
             return `<div class="tx-row">
               <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-              <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}${orig}</div></div>
-              <div class="tx-amt ${isPos?'pos':'neg'}">${isPos?'+':''}${fmt(toDisplay(t.amount, t.currency))}</div>
+              <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}</div></div>
+              <div class="tx-amt ${isPos?'pos':'neg'}">${isPos?'+':'-'}${fmtOriginal(t.amount, t.currency)}</div>
               <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
               <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
             </div>`;
@@ -1848,11 +1863,10 @@ function financeHTML(){
             if(!inc.length) return '<div class="empty-note">No income logged yet.</div>';
             return inc.map(function(t){
               const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
-              const orig = (t.currency && t.currency !== DISPLAY_CURRENCY) ? ` · ${Number(t.amount).toLocaleString()} ${CURRENCY_SYMBOLS[t.currency]||t.currency}` : '';
               return `<div class="tx-row">
                 <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-                <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}${orig}</div></div>
-                <div class="tx-amt pos">+${fmt(toDisplay(t.amount, t.currency))}</div>
+                <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}</div></div>
+                <div class="tx-amt pos">+${fmtOriginal(t.amount, t.currency)}</div>
                 <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
                 <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
               </div>`;
@@ -1874,7 +1888,7 @@ function financeHTML(){
             return `<div class="tx-row">
               <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
               <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at}</div></div>
-              <div class="tx-amt">${fmt(toDisplay(t.amount, t.currency))}</div>
+              <div class="tx-amt">${Number(t.amount) < 0 ? '-' : ''}${fmtOriginal(t.amount, t.currency)}</div>
               <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
               <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
             </div>`;
@@ -1952,11 +1966,32 @@ function editTx(id){
   const type = Number(t.amount) >= 0 ? 'income' : 'expense';
   setTxType(type);
   document.getElementById('txName').value = t.name;
-  document.getElementById('txAmount').value = Math.abs(Number(t.amount));
+  document.getElementById('txAmount').value = Math.abs(Number(t.amount)).toLocaleString('en-US', { maximumFractionDigits: 2 });
   document.getElementById('txDate').value = t.occurred_at;
   document.getElementById('txCurrency').value = t.currency || DEFAULT_INPUT_CURRENCY;
   const catSel = document.getElementById('txCategory');
   if(catSel) catSel.value = t.category;
+}
+
+// Formats the amount input live as the user types, e.g. "1234.5" -> "1,234.5",
+// same thousand-separator style used everywhere else amounts are displayed.
+window.formatAmountInput = function(el){
+  const cursorFromEnd = el.value.length - el.selectionStart;
+  let raw = el.value.replace(/[^0-9.]/g, '');
+  const firstDot = raw.indexOf('.');
+  if(firstDot !== -1){
+    raw = raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, '');
+  }
+  const parts = raw.split('.');
+  let intPart = parts[0].replace(/^0+(?=\d)/, '');
+  const decPart = parts.length > 1 ? parts[1].slice(0, 2) : null;
+  const intFormatted = intPart ? Number(intPart).toLocaleString('en-US') : '';
+  el.value = intFormatted + (decPart !== null ? '.' + decPart : (raw.endsWith('.') ? '.' : ''));
+  const pos = Math.max(0, el.value.length - cursorFromEnd);
+  el.setSelectionRange(pos, pos);
+};
+function parseAmountInput(str){
+  return parseFloat(String(str).replace(/,/g, ''));
 }
 
 function cancelTxModal(){
@@ -1969,7 +2004,7 @@ function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 function saveTransaction(){
   const name = document.getElementById('txName').value.trim();
   const category = document.getElementById('txCategory').value;
-  const rawAmount = parseFloat(document.getElementById('txAmount').value);
+  const rawAmount = parseAmountInput(document.getElementById('txAmount').value);
   const amount = isNaN(rawAmount) ? rawAmount : (currentTxType === 'income' ? Math.abs(rawAmount) : -Math.abs(rawAmount));
   const occurred_at = document.getElementById('txDate').value;
   const currency = document.getElementById('txCurrency').value || DEFAULT_INPUT_CURRENCY;
