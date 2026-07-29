@@ -425,6 +425,8 @@
       </div>
     </div>
     <div class="form-row"><label>Monthly income target</label><input id="budgetIncomeTarget" type="number" step="1" min="0" placeholder="0"></div>
+    <div class="form-row"><label>Monthly expense budget (overall)</label><input id="budgetExpenseTarget" type="number" step="1" min="0" placeholder="0"></div>
+    <div class="empty-note" style="text-align:left; margin:-4px 0 10px;">Leave at 0 to use the sum of your category budgets below instead.</div>
     <div class="side-label" style="margin:14px 0 4px;">Category budgets (leave 0 to skip)</div>
     <div id="budgetCategoryRows"></div>
   </div>
@@ -1325,7 +1327,7 @@ window.openExpenseDetail = function(){ financeSubView = 'expense'; renderView('f
 window.closeExpenseDetail = function(){ financeSubView = null; renderView('finance'); };
 
 /* ---------- Budgets ---------- */
-let budgets = { categoryBudgets: {}, incomeTarget: 0 };
+let budgets = { categoryBudgets: {}, incomeTarget: 0, expenseTarget: 0 };
 let budgetViewMonth = new Date(); budgetViewMonth.setDate(1);
 
 function loadBudgets(){
@@ -1335,10 +1337,12 @@ function loadBudgets(){
   }catch(e){ /* keep defaults */ }
   if(!budgets.categoryBudgets) budgets.categoryBudgets = {};
   if(!budgets.incomeTarget) budgets.incomeTarget = 0;
+  if(!budgets.expenseTarget) budgets.expenseTarget = 0;
 }
 function persistBudgets(){ localStorage.setItem('nova-budgets', JSON.stringify(budgets)); scheduleCloudPush(); }
 
 function totalExpenseBudget(){
+  if(Number(budgets.expenseTarget) > 0) return Number(budgets.expenseTarget);
   return Object.values(budgets.categoryBudgets).reduce(function(s,v){ return s + Number(v||0); }, 0);
 }
 
@@ -1474,11 +1478,13 @@ window.shiftBudgetMonth = function(delta){
 };
 window.openBudgetEdit = function(){
   document.getElementById('budgetIncomeTarget').value = budgets.incomeTarget || '';
+  document.getElementById('budgetExpenseTarget').value = budgets.expenseTarget || '';
   document.getElementById('budgetCategoryRows').innerHTML = budgetEditModalBody();
   openModal('budgetModalOverlay');
 };
 window.saveBudgetEdit = function(){
   budgets.incomeTarget = parseFloat(document.getElementById('budgetIncomeTarget').value) || 0;
+  budgets.expenseTarget = parseFloat(document.getElementById('budgetExpenseTarget').value) || 0;
   document.querySelectorAll('[data-budget-cat]').forEach(function(input){
     const cat = input.getAttribute('data-budget-cat');
     const val = parseFloat(input.value);
@@ -2289,6 +2295,12 @@ function loadMonoSyncStatus(){
 function persistMonoSyncStatus(){
   try{ localStorage.setItem('nova-mono-sync-status', JSON.stringify(monoSyncStatus)); }catch(e){}
 }
+function loadMonoFromDate(){
+  try{ return localStorage.getItem('nova-mono-from-date') || null; }catch(e){ return null; }
+}
+function saveMonoFromDate(dateStr){
+  try{ localStorage.setItem('nova-mono-from-date', dateStr); }catch(e){}
+}
 
 function monoAccountLabel(a){
   const cur = MONO_CURRENCY_MAP[a.currencyCode] || a.currencyCode;
@@ -2390,8 +2402,13 @@ window.connectMonobank = async function(){
 
     statusEl.textContent = 'Connected as ' + (data.name || 'your account') + '.';
     document.getElementById('monoAccountRow').style.display = 'block';
-    const defaultFrom = new Date(Date.now() - 30*24*60*60*1000);
-    document.getElementById('monoFromDate').value = defaultFrom.toISOString().slice(0,10);
+    const savedFrom = loadMonoFromDate();
+    if(savedFrom){
+      document.getElementById('monoFromDate').value = savedFrom;
+    } else {
+      const defaultFrom = new Date(Date.now() - 30*24*60*60*1000);
+      document.getElementById('monoFromDate').value = defaultFrom.toISOString().slice(0,10);
+    }
   }catch(err){
     statusEl.textContent = "Couldn't reach Monobank from the browser — this is almost certainly a CORS restriction on their API (it isn't designed for direct client-side calls). A small proxy you host yourself would be needed to make this work; the app can't safely route your bank token through anyone else's server.";
     statusEl.classList.add('error');
@@ -2488,13 +2505,20 @@ window.syncMonobank = async function(){
   if(!token || !fromDateStr){ statusEl.textContent = 'Pick a "sync from" date first.'; statusEl.classList.add('error'); return; }
   if(!checkedIds.length){ statusEl.textContent = 'Check at least one account to sync.'; statusEl.classList.add('error'); return; }
 
+  saveMonoFromDate(fromDateStr); // remember this choice for next time you open Bank
+
   statusEl.textContent = '';
   statusEl.classList.remove('error');
 
   const MAX_WINDOW = 31 * 24 * 60 * 60 - 3600; // Monobank's hard cap: 31 days + 1 hour
   const to = Math.floor(Date.now() / 1000);
   const from = Math.floor(new Date(fromDateStr + 'T00:00:00').getTime() / 1000);
-  if(from >= to){ statusEl.textContent = 'That date is in the future.'; statusEl.classList.add('error'); return; }
+  if(from >= to){
+    // A future start date is a deliberate choice (e.g. "start tracking from Aug 1"),
+    // not a mistake — there's just genuinely nothing to import yet.
+    statusEl.textContent = `${fromDateStr} hasn't happened yet, so there's nothing to sync — this date is saved, and syncing again once it arrives will pick up anything from then on.`;
+    return;
+  }
 
   // Build one shared queue of (accountId, chunkFrom, chunkTo) across every checked account,
   // since Monobank's 1-request-per-60-seconds limit applies to the token as a whole, not per account.
