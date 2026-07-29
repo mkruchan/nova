@@ -969,6 +969,11 @@ function applyCloudPayload(payload){
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
   if(payload.loans) loans = payload.loans;
 
+  // Cloud-sourced budgets need the exact same normalization as locally-loaded
+  // ones — otherwise a budget pulled from an older data shape leaves
+  // budgets.months undefined and crashes the next time anything reads it.
+  normalizeBudgets();
+
   // Re-apply custom categories to the working lists and recompute nextId,
   // same backfill logic loadData()/loadCustomCategories() already do.
   [customExpenseCategories, customIncomeCategories].forEach(function(list, i){
@@ -1532,11 +1537,7 @@ function getBudgetForMonth(date){
   return mb;
 }
 
-function loadBudgets(){
-  try{
-    const saved = localStorage.getItem('nova-budgets');
-    if(saved) budgets = JSON.parse(saved);
-  }catch(e){ /* keep defaults */ }
+function normalizeBudgets(){
   if(!budgets || typeof budgets !== 'object' || Array.isArray(budgets)){
     budgets = { months: {} };
   }
@@ -1551,6 +1552,14 @@ function loadBudgets(){
     budgets = { months: {} };
     budgets.months[key] = migrated;
   }
+}
+
+function loadBudgets(){
+  try{
+    const saved = localStorage.getItem('nova-budgets');
+    if(saved) budgets = JSON.parse(saved);
+  }catch(e){ /* keep defaults */ }
+  normalizeBudgets();
 }
 function persistBudgets(){ localStorage.setItem('nova-budgets', JSON.stringify(budgets)); scheduleCloudPush(); }
 
