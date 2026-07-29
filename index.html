@@ -827,13 +827,22 @@ function persistLoans(){
 }
 
 function loanProgress(loan){
-  const paid = visibleTransactions()
-    .filter(function(t){ return t.loanId === loan.id && t.category === 'Loan' && Number(t.amount) < 0; })
-    .reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
+  const paidTx = visibleTransactions()
+    .filter(function(t){ return t.loanId === loan.id && t.category === 'Loan' && Number(t.amount) < 0; });
+  const paid = paidTx.reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
+  // Original-currency figures assume payments were made in the loan's own
+  // currency (the normal case) — if you ever pay in a different currency,
+  // that portion won't show here, but the EUR figures above stay accurate regardless.
+  const paidOriginal = paidTx.filter(function(t){ return (t.currency || DEFAULT_INPUT_CURRENCY) === loan.currency; })
+    .reduce(function(s,t){ return s + Math.abs(Number(t.amount)); }, 0);
   const principal = toDisplay(loan.principal, loan.currency);
   const remaining = Math.max(0, principal - paid);
   const pct = principal > 0 ? Math.min(100, Math.round((paid/principal)*100)) : 0;
-  return { paid: paid, principal: principal, remaining: remaining, pct: pct };
+  const remainingOriginal = Math.max(0, Number(loan.principal) - paidOriginal);
+  return {
+    paid: paid, principal: principal, remaining: remaining, pct: pct,
+    principalOriginal: Number(loan.principal), remainingOriginal: remainingOriginal, currency: loan.currency
+  };
 }
 
 window.openAddLoanModal = function(){
@@ -2042,7 +2051,7 @@ function financeHTML(){
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
               <div>
                 <div style="font-weight:600; font-size:13px;">${escapeHtml(loan.name)}</div>
-                <div class="empty-note" style="padding:0; margin-top:2px;">${fmtShort(p.remaining)} remaining of ${fmtShort(p.principal)}</div>
+                <div class="empty-note" style="padding:0; margin-top:2px;">${fmtOriginal(p.remainingOriginal, p.currency)} remaining of ${fmtOriginal(p.principalOriginal, p.currency)}${p.currency !== DISPLAY_CURRENCY ? ` <span style="opacity:0.7;">(≈ ${fmtShort(p.remaining)} of ${fmtShort(p.principal)})</span>` : ''}</div>
               </div>
               <div style="display:flex; gap:6px; align-items:center;">
                 <button class="header-btn" onclick="addLoanPayment('${loan.id}')">+ Payment</button>
