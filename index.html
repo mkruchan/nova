@@ -417,15 +417,16 @@
 
 <div class="modal-overlay" id="budgetModalOverlay" onclick="if(event.target===this) closeModal('budgetModalOverlay')">
   <div class="modal" style="max-height:80vh; overflow-y:auto;">
-    <div class="modal-actions" style="justify-content:space-between; margin-top:0; margin-bottom:16px;">
+    <div class="modal-actions" style="justify-content:space-between; margin-top:0; margin-bottom:4px;">
       <h3 style="margin:0;">Edit Budget</h3>
       <div style="display:flex; gap:8px;">
         <button class="modal-cancel" onclick="closeModal('budgetModalOverlay')">Cancel</button>
         <button class="modal-save" onclick="saveBudgetEdit()">Save</button>
       </div>
     </div>
-    <div class="form-row"><label>Monthly income target</label><input id="budgetIncomeTarget" type="number" step="1" min="0" placeholder="0"></div>
-    <div class="form-row"><label>Monthly expense budget (overall)</label><input id="budgetExpenseTarget" type="number" step="1" min="0" placeholder="0"></div>
+    <div class="side-label" id="budgetModalMonthLabel" style="margin-bottom:14px;"></div>
+    <div class="form-row"><label>Monthly income target</label><input id="budgetIncomeTarget" type="text" inputmode="decimal" placeholder="0" oninput="formatAmountInput(this)"></div>
+    <div class="form-row"><label>Monthly expense budget (overall)</label><input id="budgetExpenseTarget" type="text" inputmode="decimal" placeholder="0" oninput="formatAmountInput(this)"></div>
     <div class="empty-note" style="text-align:left; margin:-4px 0 10px;">Leave at 0 to use the sum of your category budgets below instead.</div>
     <div class="side-label" style="margin:14px 0 4px;">Category budgets (leave 0 to skip)</div>
     <div id="budgetCategoryRows"></div>
@@ -459,6 +460,7 @@
       <div id="monoAccountList"></div>
       <div class="form-row" style="margin-top:12px;"><label>Sync from date</label><input id="monoFromDate" type="date"></div>
       <div class="modal-actions" style="justify-content:flex-start;">
+        <button class="header-btn" onclick="saveMonoFromDateOnly()">Save date</button>
         <button class="modal-save" onclick="syncMonobank()">Sync selected</button>
       </div>
       <div id="monoProgress" class="status-msg" style="margin-top:8px;"></div>
@@ -1327,23 +1329,42 @@ window.openExpenseDetail = function(){ financeSubView = 'expense'; renderView('f
 window.closeExpenseDetail = function(){ financeSubView = null; renderView('finance'); };
 
 /* ---------- Budgets ---------- */
-let budgets = { categoryBudgets: {}, incomeTarget: 0, expenseTarget: 0 };
+let budgets = { months: {} }; // keyed 'YYYY-MM' -> { categoryBudgets: {}, incomeTarget: 0, expenseTarget: 0 }
 let budgetViewMonth = new Date(); budgetViewMonth.setDate(1);
+
+function monthKey(date){ return date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0'); }
+
+function emptyMonthBudget(){ return { categoryBudgets: {}, incomeTarget: 0, expenseTarget: 0 }; }
+
+function getBudgetForMonth(date){
+  const key = monthKey(date);
+  if(!budgets.months[key]) budgets.months[key] = emptyMonthBudget();
+  return budgets.months[key];
+}
 
 function loadBudgets(){
   try{
     const saved = localStorage.getItem('nova-budgets');
     if(saved) budgets = JSON.parse(saved);
   }catch(e){ /* keep defaults */ }
-  if(!budgets.categoryBudgets) budgets.categoryBudgets = {};
-  if(!budgets.incomeTarget) budgets.incomeTarget = 0;
-  if(!budgets.expenseTarget) budgets.expenseTarget = 0;
+  if(!budgets.months){
+    // Migrate the old single flat budget (applied to every month) into just
+    // the current real month, so nobody's existing settings disappear.
+    const migrated = emptyMonthBudget();
+    if(budgets.categoryBudgets) migrated.categoryBudgets = budgets.categoryBudgets;
+    if(budgets.incomeTarget) migrated.incomeTarget = budgets.incomeTarget;
+    if(budgets.expenseTarget) migrated.expenseTarget = budgets.expenseTarget;
+    const key = monthKey(new Date());
+    budgets = { months: {} };
+    budgets.months[key] = migrated;
+  }
 }
 function persistBudgets(){ localStorage.setItem('nova-budgets', JSON.stringify(budgets)); scheduleCloudPush(); }
 
-function totalExpenseBudget(){
-  if(Number(budgets.expenseTarget) > 0) return Number(budgets.expenseTarget);
-  return Object.values(budgets.categoryBudgets).reduce(function(s,v){ return s + Number(v||0); }, 0);
+function totalExpenseBudget(date){
+  const b = getBudgetForMonth(date || budgetViewMonth);
+  if(Number(b.expenseTarget) > 0) return Number(b.expenseTarget);
+  return Object.values(b.categoryBudgets).reduce(function(s,v){ return s + Number(v||0); }, 0);
 }
 
 function txForMonth(date){
@@ -1373,7 +1394,7 @@ function progressBar(pct, over){
 // Compact dashboard card
 function monthlyBudgetSummaryHTML(){
   const now = new Date();
-  const target = totalExpenseBudget();
+  const target = totalExpenseBudget(now);
   const spent = monthSpendFor(now);
   const pct = target > 0 ? Math.round((spent/target)*100) : 0;
   const over = target > 0 && spent > target;
@@ -1399,11 +1420,12 @@ function monthlyBudgetSummaryHTML(){
 
 function budgetDetailScreenHTML(){
   const m = budgetViewMonth;
+  const mb = getBudgetForMonth(m);
   const monthLabel = m.toLocaleString(undefined, { month:'long', year:'numeric' });
   const spent = monthSpendFor(m);
   const income = monthIncomeFor(m);
-  const expenseTarget = totalExpenseBudget();
-  const incomeTarget = Number(budgets.incomeTarget || 0);
+  const expenseTarget = totalExpenseBudget(m);
+  const incomeTarget = Number(mb.incomeTarget || 0);
   const profit = income - spent;
   const profitTarget = incomeTarget - expenseTarget;
 
@@ -1411,8 +1433,8 @@ function budgetDetailScreenHTML(){
   const expensePct = expenseTarget > 0 ? Math.round((spent/expenseTarget)*100) : 0;
   const expenseOver = expenseTarget > 0 && spent > expenseTarget;
 
-  const catRows = Object.keys(budgets.categoryBudgets).filter(function(c){ return Number(budgets.categoryBudgets[c]) > 0; }).map(function(cat){
-    const budget = Number(budgets.categoryBudgets[cat]);
+  const catRows = Object.keys(mb.categoryBudgets).filter(function(c){ return Number(mb.categoryBudgets[c]) > 0; }).map(function(cat){
+    const budget = Number(mb.categoryBudgets[cat]);
     const actual = categorySpendFor(cat, m);
     const pct = budget > 0 ? Math.round((actual/budget)*100) : 0;
     const over = actual > budget;
@@ -1461,11 +1483,12 @@ function budgetDetailScreenHTML(){
 }
 
 function budgetEditModalBody(){
+  const mb = getBudgetForMonth(budgetViewMonth);
   return allExpenseCategories().filter(function(cat){ return cat !== 'Transfer'; }).map(function(cat){
-    const val = budgets.categoryBudgets[cat] || '';
+    const val = mb.categoryBudgets[cat] ? Number(mb.categoryBudgets[cat]).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
     return `<div class="form-row budget-edit-row">
       <label>${cat}</label>
-      <input type="number" step="1" min="0" placeholder="0" value="${val}" data-budget-cat="${cat}">
+      <input type="text" inputmode="decimal" placeholder="0" value="${val}" data-budget-cat="${cat}" oninput="formatAmountInput(this)">
     </div>`;
   }).join('');
 }
@@ -1477,19 +1500,22 @@ window.shiftBudgetMonth = function(delta){
   renderView('finance');
 };
 window.openBudgetEdit = function(){
-  document.getElementById('budgetIncomeTarget').value = budgets.incomeTarget || '';
-  document.getElementById('budgetExpenseTarget').value = budgets.expenseTarget || '';
+  const mb = getBudgetForMonth(budgetViewMonth);
+  document.getElementById('budgetModalMonthLabel').textContent = budgetViewMonth.toLocaleString(undefined, { month:'long', year:'numeric' });
+  document.getElementById('budgetIncomeTarget').value = mb.incomeTarget ? Number(mb.incomeTarget).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
+  document.getElementById('budgetExpenseTarget').value = mb.expenseTarget ? Number(mb.expenseTarget).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
   document.getElementById('budgetCategoryRows').innerHTML = budgetEditModalBody();
   openModal('budgetModalOverlay');
 };
 window.saveBudgetEdit = function(){
-  budgets.incomeTarget = parseFloat(document.getElementById('budgetIncomeTarget').value) || 0;
-  budgets.expenseTarget = parseFloat(document.getElementById('budgetExpenseTarget').value) || 0;
+  const mb = getBudgetForMonth(budgetViewMonth);
+  mb.incomeTarget = parseAmountInput(document.getElementById('budgetIncomeTarget').value) || 0;
+  mb.expenseTarget = parseAmountInput(document.getElementById('budgetExpenseTarget').value) || 0;
   document.querySelectorAll('[data-budget-cat]').forEach(function(input){
     const cat = input.getAttribute('data-budget-cat');
-    const val = parseFloat(input.value);
-    if(val > 0) budgets.categoryBudgets[cat] = val;
-    else delete budgets.categoryBudgets[cat];
+    const val = parseAmountInput(input.value);
+    if(val > 0) mb.categoryBudgets[cat] = val;
+    else delete mb.categoryBudgets[cat];
   });
   persistBudgets();
   closeModal('budgetModalOverlay');
@@ -2301,6 +2327,14 @@ function loadMonoFromDate(){
 function saveMonoFromDate(dateStr){
   try{ localStorage.setItem('nova-mono-from-date', dateStr); }catch(e){}
 }
+window.saveMonoFromDateOnly = function(){
+  const dateStr = document.getElementById('monoFromDate').value;
+  const statusEl = document.getElementById('monoStatus');
+  if(!dateStr){ statusEl.textContent = 'Pick a date first.'; statusEl.classList.add('error'); return; }
+  saveMonoFromDate(dateStr);
+  statusEl.textContent = `Saved — future syncs will remember ${dateStr} as the starting point. Tap "Sync selected" whenever you're ready to actually pull data.`;
+  statusEl.classList.remove('error');
+};
 
 function monoAccountLabel(a){
   const cur = MONO_CURRENCY_MAP[a.currencyCode] || a.currencyCode;
@@ -2439,7 +2473,7 @@ async function autoSyncMonobank(){
     const myOwnIbans = new Set(accounts.filter(function(a){ return a.iban; }).map(function(a){ return a.iban; }));
     const existingIds = new Set(transactions.filter(function(t){ return t.monoId; }).map(function(t){ return t.monoId; }));
     const to = Math.floor(Date.now() / 1000);
-    const from = to - (3 * 24 * 60 * 60); // short catch-up window — just the last 3 days
+    const from = to - (30 * 24 * 60 * 60); // rolling catch-up window — last 30 days
 
     let anyImported = false;
     for(let i = 0; i < accounts.length; i++){
