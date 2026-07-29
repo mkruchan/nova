@@ -1473,7 +1473,14 @@ function emptyMonthBudget(){ return { categoryBudgets: {}, incomeTarget: 0, expe
 function getBudgetForMonth(date){
   const key = monthKey(date);
   if(!budgets.months[key]) budgets.months[key] = emptyMonthBudget();
-  return budgets.months[key];
+  // Defensive: normalize in case a stored entry is partial/malformed (e.g. from
+  // an interrupted save or an older data shape) — every caller assumes all
+  // three fields exist, so guarantee that here rather than crashing later.
+  const mb = budgets.months[key];
+  if(!mb.categoryBudgets || typeof mb.categoryBudgets !== 'object') mb.categoryBudgets = {};
+  if(typeof mb.incomeTarget !== 'number' || isNaN(mb.incomeTarget)) mb.incomeTarget = 0;
+  if(typeof mb.expenseTarget !== 'number' || isNaN(mb.expenseTarget)) mb.expenseTarget = 0;
+  return mb;
 }
 
 function loadBudgets(){
@@ -1481,11 +1488,14 @@ function loadBudgets(){
     const saved = localStorage.getItem('nova-budgets');
     if(saved) budgets = JSON.parse(saved);
   }catch(e){ /* keep defaults */ }
-  if(!budgets.months){
+  if(!budgets || typeof budgets !== 'object' || Array.isArray(budgets)){
+    budgets = { months: {} };
+  }
+  if(!budgets.months || typeof budgets.months !== 'object'){
     // Migrate the old single flat budget (applied to every month) into just
     // the current real month, so nobody's existing settings disappear.
     const migrated = emptyMonthBudget();
-    if(budgets.categoryBudgets) migrated.categoryBudgets = budgets.categoryBudgets;
+    if(budgets.categoryBudgets && typeof budgets.categoryBudgets === 'object') migrated.categoryBudgets = budgets.categoryBudgets;
     if(budgets.incomeTarget) migrated.incomeTarget = budgets.incomeTarget;
     if(budgets.expenseTarget) migrated.expenseTarget = budgets.expenseTarget;
     const key = monthKey(new Date());
