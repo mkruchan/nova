@@ -78,7 +78,24 @@
   .main-title span{ color:var(--muted); font-weight:500; }
   .live-badge{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); flex-wrap:wrap; }
   .header-btn{ background:var(--panel-2); border:1px solid var(--border-2); color:var(--muted); border-radius:7px; padding:6px 12px; font-size:11.5px; font-weight:600; white-space:nowrap; }
+  .header-icon-btn{ padding:6px 10px; font-size:14px; }
   .rates-status{ font-size:11px; color:var(--muted-dim); white-space:nowrap; }
+  .settings-row{ display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); font-size:13.5px; color:var(--white); cursor:pointer; }
+  .rate-flag-header{ font-size:10.5px; color:var(--muted-dim); text-transform:uppercase; letter-spacing:0.08em; font-weight:600; padding:10px 0 6px; }
+  .rate-flag-row{ display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); }
+  .rate-flag-row:last-child{ border-bottom:1px solid var(--border-2); margin-bottom:8px; }
+  .rate-flag-left{ display:flex; align-items:center; gap:10px; }
+  .rate-flag{ font-size:22px; line-height:1; }
+  .rate-flag-name{ font-size:12.5px; color:var(--white); font-weight:600; }
+  .rate-flag-source{ font-size:9.5px; color:var(--muted-dim); margin-top:1px; }
+  .rate-section-label{ font-size:10px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted-dim); margin:12px 0 4px; }
+  .rate-col-header{ display:flex; justify-content:flex-end; gap:16px; font-size:9.5px; color:var(--muted-dim); padding:2px 0 4px; }
+  .rate-col-buy, .rate-col-sell{ width:64px; text-align:right; }
+  .rate-values{ display:flex; gap:16px; }
+  .rate-buy, .rate-sell{ width:64px; text-align:right; font-size:12px; color:var(--white); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .rate-sell-only{ width:auto; min-width:64px; }
+  .settings-row:last-of-type{ border-bottom:none; }
+  .settings-row:hover{ color:var(--blue-light); }
   .header-btn:hover{ color:var(--white); border-color:var(--blue); }
   .live-dot{ display:inline-flex; align-items:center; gap:5px; color:var(--green); font-weight:600; }
   .live-dot::before{ content:""; width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 6px var(--green); }
@@ -156,9 +173,6 @@
     .cat-pct{ width:auto; }
     .cat-amt{ width:auto; }
     .donut-wrap-mini svg{ width:60px; height:60px; }
-    .donut-center-label{ padding:0 6%; }
-    .donut-total{ font-size:8px; }
-    .donut-total-sub{ font-size:5.5px; margin-bottom:1px; }
   }
 
   .clickable-card{ cursor:pointer; transition:border-color 0.15s ease; }
@@ -170,9 +184,6 @@
   .clickable-row:hover .cat-name{ color:var(--blue-light); }
 
   .donut-wrap-mini{ position:relative; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
-  .donut-center-label{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; pointer-events:none; padding:0 20%; }
-  .donut-total-sub{ font-size:10.5px; color:var(--muted); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
-  .donut-total{ font-family:'Sora', sans-serif; font-weight:700; font-size:19px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 
   .detail-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
   .back-btn{ width:32px; height:32px; border-radius:50%; background:var(--panel); border:1px solid var(--border-2); color:var(--white); font-size:18px; display:flex; align-items:center; justify-content:center; }
@@ -298,10 +309,12 @@
     .stats-row{ grid-template-columns:repeat(2,1fr); }
     .charts-row{ grid-template-columns:1fr; }
     .bottom-row{ grid-template-columns:1fr; }
-    .main{ padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+    .main{ padding:calc(16px + env(safe-area-inset-top)) 16px calc(160px + env(safe-area-inset-bottom)); }
     .fab-add{ bottom:calc(84px + env(safe-area-inset-bottom)); }
     .rates-status{ display:none; }
     .header-btn{ padding:5px 9px; font-size:10.5px; }
+    .range-label-text{ display:none; }
+    #rangeHeaderBtn, .header-icon-btn{ width:34px; height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; font-size:14px; }
     .live-dot{ font-size:11px; }
   }
   @media (min-width: 761px){
@@ -329,6 +342,7 @@
     <symbol id="ic-car" viewBox="0 0 24 24"><path d="M5 16V9.5l2-4.5h10l2 4.5V16"/><circle cx="7.5" cy="16.5" r="1.6"/><circle cx="16.5" cy="16.5" r="1.6"/><path d="M3 16h1.5M19.5 16H21"/></symbol>
     <symbol id="ic-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="ic-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+    <symbol id="ic-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="ic-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><line x1="12" y1="18" x2="12" y2="22"/></symbol>
   </defs>
 </svg>
@@ -342,8 +356,8 @@
     <div class="side-label">Life Modules</div>
     <button class="side-item active" data-view="finance"><span class="si-left"><svg class="icon"><use href="#ic-wallet"/></svg>Finance</span></button>
     <button class="side-item" data-view="diet"><span class="si-left"><svg class="icon"><use href="#ic-utensils"/></svg>Diet</span><span class="tag">Soon</span></button>
+    <button class="side-item" onclick="openSettingsModal()"><span class="si-left"><svg class="icon"><use href="#ic-settings"/></svg>Settings</span></button>
     <button class="side-item" data-view="sport"><span class="si-left"><svg class="icon"><use href="#ic-dumbbell"/></svg>Sport</span><span class="tag">Soon</span></button>
-    <button class="side-item" data-view="sleep"><span class="si-left"><svg class="icon"><use href="#ic-moon"/></svg>Sleep</span><span class="tag">Soon</span></button>
     <button class="side-item" data-view="tasks"><span class="si-left"><svg class="icon"><use href="#ic-check-square"/></svg>Tasks</span><span class="tag">Soon</span></button>
     </div>
 
@@ -355,8 +369,8 @@
     <div class="tabbar">
       <button class="tab active" data-view="finance"><span class="ic"><svg class="icon"><use href="#ic-wallet"/></svg></span>Finance</button>
       <button class="tab" data-view="diet"><span class="ic"><svg class="icon"><use href="#ic-utensils"/></svg></span>Diet</button>
+      <button class="tab" onclick="openSettingsModal()"><span class="ic"><svg class="icon"><use href="#ic-settings"/></svg></span>Settings</button>
       <button class="tab" data-view="sport"><span class="ic"><svg class="icon"><use href="#ic-dumbbell"/></svg></span>Sport</button>
-      <button class="tab" data-view="sleep"><span class="ic"><svg class="icon"><use href="#ic-moon"/></svg></span>Sleep</button>
       <button class="tab" data-view="tasks"><span class="ic"><svg class="icon"><use href="#ic-check-square"/></svg></span>Tasks</button>
     </div>
   </div>
@@ -418,6 +432,10 @@
       <p style="margin:0 0 8px;">1. Go to <b>api.monobank.ua</b> and log in with your Monobank app to generate a personal token.</p>
       <p style="margin:0;"><b>This token gives read access to your transactions — it's stored only on this device and is never sent anywhere except Monobank's own servers.</b></p>
     </div>
+    <div class="setup-box" style="padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px;">
+      <span style="font-size:12px; color:var(--muted); line-height:1.5;">Your synced data stays saved either way — this just controls whether it's shown.</span>
+      <button class="header-btn" id="monoVisibilityBtn" onclick="toggleMonoVisibility(); refreshMonoVisibilityLabel();" style="flex-shrink:0;"></button>
+    </div>
     <div class="form-row"><label>Personal token</label><input id="monoToken" type="password" autocomplete="off"></div>
     <div class="modal-actions" style="justify-content:flex-start;">
       <button class="modal-save" onclick="connectMonobank()">Connect</button>
@@ -437,11 +455,6 @@
         <button class="modal-save" onclick="syncMonobank()">Sync selected</button>
       </div>
       <div id="monoProgress" class="status-msg" style="margin-top:8px;"></div>
-      <div class="side-label" style="margin:16px 0 4px;">Display</div>
-      <div class="setup-box" style="padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
-        <span style="font-size:12px; color:var(--muted); line-height:1.5;">Your synced data stays saved either way — this just controls whether it's shown.</span>
-        <button class="header-btn" id="monoVisibilityBtn" onclick="toggleMonoVisibility(); refreshMonoVisibilityLabel();" style="flex-shrink:0;"></button>
-      </div>
     </div>
     <div class="modal-actions">
       <button class="modal-cancel" onclick="closeModal('monoModalOverlay')">Close</button>
@@ -458,6 +471,37 @@
       <button class="modal-cancel" onclick="closeModal('rangeModalOverlay')">Cancel</button>
       <button class="modal-cancel" onclick="resetDateRange()">Reset to this month</button>
       <button class="modal-save" onclick="applyDateRange()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settingsModalOverlay" onclick="if(event.target===this) closeModal('settingsModalOverlay')">
+  <div class="modal">
+    <h3>Settings</h3>
+    <div class="settings-row" onclick="closeModal('settingsModalOverlay'); openMonoModal();">
+      <span>🏦 Bank</span><span class="chevron">›</span>
+    </div>
+    <div class="settings-row" onclick="exportCSV()">
+      <span>⬇️ Export</span><span class="chevron">›</span>
+    </div>
+    <div class="settings-row" onclick="document.getElementById('importFile').click()">
+      <span>⬆️ Import</span><span class="chevron">›</span>
+    </div>
+    <div class="settings-row" onclick="closeModal('settingsModalOverlay'); openRatesDetail();">
+      <span>💱 Exchange rates</span><span class="chevron">›</span>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal('settingsModalOverlay')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="ratesModalOverlay" onclick="if(event.target===this) closeModal('ratesModalOverlay')">
+  <div class="modal" style="max-height:80vh; overflow-y:auto;">
+    <h3>Exchange Rates</h3>
+    <div id="ratesModalBody"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal('ratesModalOverlay')">Close</button>
     </div>
   </div>
 </div>
@@ -596,14 +640,24 @@ function loadCachedRates(){
     const saved = localStorage.getItem('nova-rates');
     if(saved){
       const parsed = JSON.parse(saved);
-      if(parsed && parsed.rates){ exchangeRates = parsed.rates; ratesUpdatedAt = parsed.updatedAt || null; }
+      if(parsed && parsed.rates){
+        exchangeRates = parsed.rates;
+        ratesUpdatedAt = parsed.updatedAt || null;
+        if(parsed.sources) ratesSourceDetail = parsed.sources;
+      }
     }
   }catch(e){ /* keep fallback */ }
+  try{
+    const rawSaved = localStorage.getItem('nova-mono-raw-rates');
+    if(rawSaved) monoRawRates = JSON.parse(rawSaved);
+  }catch(e){ /* keep null */ }
 }
 
 // Monobank's own free public rate feed — no auth needed. Pulls whichever of
 // UAH/USD/ALL pairs it actually publishes; anything it doesn't have just
 // falls through to the general fallback API instead.
+let monoRawRates = { EUR: null, USD: null, ALL: null }; // exact rate(s) vs UAH, straight from Monobank
+
 async function fetchMonoRates(){
   try{
     const res = await fetch('https://api.monobank.ua/bank/currency');
@@ -611,12 +665,17 @@ async function fetchMonoRates(){
     const data = await res.json();
     let uahPerEur = null, uahPerUsd = null, uahPerAll = null;
     data.forEach(function(r){
-      const mid = (r.rateBuy && r.rateSell) ? (r.rateBuy + r.rateSell) / 2 : r.rateCross;
-      if(r.currencyCodeA === 978 && r.currencyCodeB === 980) uahPerEur = mid;
-      if(r.currencyCodeA === 840 && r.currencyCodeB === 980) uahPerUsd = mid;
-      if(r.currencyCodeA === 8 && r.currencyCodeB === 980) uahPerAll = mid;
+      const hasBuySell = !!(r.rateBuy && r.rateSell);
+      const mid = hasBuySell ? (r.rateBuy + r.rateSell) / 2 : r.rateCross;
+      const entry = hasBuySell
+        ? { single: false, buy: r.rateBuy, sell: r.rateSell }
+        : { single: true, rate: r.rateCross };
+      if(r.currencyCodeA === 978 && r.currencyCodeB === 980){ uahPerEur = mid; monoRawRates.EUR = entry; }
+      if(r.currencyCodeA === 840 && r.currencyCodeB === 980){ uahPerUsd = mid; monoRawRates.USD = entry; }
+      if(r.currencyCodeA === 8 && r.currencyCodeB === 980){ uahPerAll = mid; monoRawRates.ALL = entry; }
     });
     if(!uahPerEur) return null;
+    try{ localStorage.setItem('nova-mono-raw-rates', JSON.stringify(monoRawRates)); }catch(e){}
     return {
       UAH: uahPerEur,
       USD: uahPerUsd ? uahPerEur / uahPerUsd : null,
@@ -624,6 +683,8 @@ async function fetchMonoRates(){
     };
   }catch(e){ return null; }
 }
+
+let ratesSourceDetail = { EUR: 'base', USD: 'fallback', UAH: 'fallback', ALL: 'fallback' };
 
 async function refreshExchangeRates(){
   ratesLoading = true;
@@ -633,6 +694,9 @@ async function refreshExchangeRates(){
     const data = await res.json();
     if(data && data.result === 'success' && data.rates){
       exchangeRates = { EUR: 1, USD: data.rates.USD, UAH: data.rates.UAH, ALL: data.rates.ALL };
+      ratesSourceDetail.USD = 'fallback';
+      ratesSourceDetail.UAH = 'fallback';
+      ratesSourceDetail.ALL = 'fallback';
       anySucceeded = true;
     }
   }catch(e){
@@ -641,15 +705,15 @@ async function refreshExchangeRates(){
 
   const monoRates = await fetchMonoRates();
   if(monoRates){
-    if(monoRates.UAH) exchangeRates.UAH = monoRates.UAH;
-    if(monoRates.USD) exchangeRates.USD = monoRates.USD;
-    if(monoRates.ALL) exchangeRates.ALL = monoRates.ALL;
+    if(monoRates.UAH){ exchangeRates.UAH = monoRates.UAH; ratesSourceDetail.UAH = 'monobank'; }
+    if(monoRates.USD){ exchangeRates.USD = monoRates.USD; ratesSourceDetail.USD = 'monobank'; }
+    if(monoRates.ALL){ exchangeRates.ALL = monoRates.ALL; ratesSourceDetail.ALL = 'monobank'; }
     anySucceeded = true;
   }
 
   if(anySucceeded){
     ratesUpdatedAt = Date.now();
-    localStorage.setItem('nova-rates', JSON.stringify({ rates: exchangeRates, updatedAt: ratesUpdatedAt }));
+    localStorage.setItem('nova-rates', JSON.stringify({ rates: exchangeRates, updatedAt: ratesUpdatedAt, sources: ratesSourceDetail }));
   }
   ratesLoading = false;
   if(currentView === 'finance') renderView('finance');
@@ -804,6 +868,18 @@ window.openRangeModal = function(){
   openModal('rangeModalOverlay');
 };
 
+window.openSettingsModal = function(){
+  openModal('settingsModalOverlay');
+};
+
+const CURRENCY_FLAG = { EUR: '🇪🇺', USD: '🇺🇸', UAH: '🇺🇦', ALL: '🇦🇱' };
+const CURRENCY_NAMES = { EUR: 'Euro', USD: 'US Dollar', UAH: 'Ukrainian Hryvnia', ALL: 'Albanian Lek' };
+
+window.openRatesDetail = function(){
+  document.getElementById('ratesModalBody').innerHTML = ratesModalContentHTML();
+  openModal('ratesModalOverlay');
+};
+
 function netWorth(){
   return visibleTransactions().reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
 }
@@ -879,7 +955,7 @@ function categoryBreakdown(txList){
   return Object.entries(byCat).sort(function(a,b){ return b[1]-a[1]; });
 }
 
-function donutSVG(data){
+function donutSVG(data, centerTotal, centerSub){
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
   if(total === 0) return null;
   const r = 70, c = 2*Math.PI*r, strokeW = 10;
@@ -891,7 +967,35 @@ function donutSVG(data){
     cum += frac;
     return `<circle cx="100" cy="100" r="${r}" fill="none" stroke="${colorForCategory(d[0])}" stroke-width="${strokeW}" stroke-dasharray="${dash}" transform="rotate(${rotate.toFixed(1)} 100 100)"/>`;
   }).join('');
-  return `<svg width="150" height="150" viewBox="0 0 200 200"><circle cx="100" cy="100" r="70" fill="none" stroke="var(--panel-2)" stroke-width="${strokeW}"/>${arcs}</svg>`;
+
+  // Center label is drawn as real SVG text tied to the viewBox's own coordinate
+  // system (0-200 units), so it scales perfectly with the circle at any final
+  // pixel size (60px, 150px, whatever CSS renders it at) — no HTML/CSS overlay,
+  // no flexbox/vw guessing. textLength FORCES the text to fit within the given
+  // width by compressing character spacing if needed, so it can never overflow
+  // or need truncating, no matter how large the number is.
+  let centerSvg = '';
+  if(centerTotal){
+    const maxUnits = 106; // safely inside the ring's hole, in viewBox units
+    const len = centerTotal.length;
+    let fontSize = 30;
+    if(len > 6) fontSize = 24;
+    if(len > 8) fontSize = 19;
+    if(len > 10) fontSize = 15;
+    const estWidth = len * fontSize * 0.62;
+    const totalLenAttr = estWidth > maxUnits ? ` textLength="${maxUnits}" lengthAdjust="spacing"` : '';
+    const totalY = centerSub ? 96 : 108;
+    centerSvg = `<text x="100" y="${totalY}" text-anchor="middle" font-family="Sora, sans-serif" font-weight="700" font-size="${fontSize}" fill="#F3F5FC"${totalLenAttr}>${centerTotal}</text>`;
+    if(centerSub){
+      const subLen = centerSub.length;
+      const subFontSize = subLen > 14 ? 9 : 11;
+      const subEst = subLen * subFontSize * 0.55;
+      const subLenAttr = subEst > maxUnits ? ` textLength="${maxUnits}" lengthAdjust="spacing"` : '';
+      centerSvg += `<text x="100" y="120" text-anchor="middle" font-family="Inter, sans-serif" font-size="${subFontSize}" fill="#8993B5"${subLenAttr}>${centerSub}</text>`;
+    }
+  }
+
+  return `<svg width="150" height="150" viewBox="0 0 200 200"><circle cx="100" cy="100" r="70" fill="none" stroke="var(--panel-2)" stroke-width="${strokeW}"/>${arcs}${centerSvg}</svg>`;
 }
 
 let financeSubView = null; // null | 'expense' | 'budget' | 'overview' | 'history'
@@ -923,22 +1027,11 @@ function monthlyExpenseBarsHTML(){
   return `<div class="month-bars-row">${bars}</div>`;
 }
 
-function donutWithCenterLabel(svg, total, sublabel){
-  if(!svg) return '<div class="empty-note">No expenses in this period.</div>';
+function donutWithCenterLabel(data, total, sublabel){
   const totalStr = fmtShort(total);
-  // Shrink further for unusually long numbers (e.g. very large totals) so they
-  // always fit inside the ring instead of just truncating with "…". Sizing
-  // itself uses CSS viewport-relative clamp() rather than a JS width check,
-  // so it's always accurate to the real screen — no "mobile or not" guessing.
-  const shrink = Math.max(0.3, Math.min(1, 6 / totalStr.length));
-  const totalFont = `calc(clamp(6px, 3vw, 19px) * ${shrink})`;
-  const subFont = `calc(clamp(4.5px, 1.8vw, 10.5px) * ${Math.max(0.6, shrink)})`;
-  return `<div class="donut-wrap-mini">${svg}
-    <div class="donut-center-label">
-      <div class="donut-total-sub" style="font-size:${subFont};">${sublabel}</div>
-      <div class="donut-total" style="font-size:${totalFont};">${totalStr}</div>
-    </div>
-  </div>`;
+  const svg = donutSVG(data, totalStr, sublabel);
+  if(!svg) return '<div class="empty-note">No expenses in this period.</div>';
+  return `<div class="donut-wrap-mini">${svg}</div>`;
 }
 
 // Compact clickable card shown on the main dashboard
@@ -946,17 +1039,14 @@ function expenseCategorySummaryHTML(){
   const periodTx = expensesForPeriod('month');
   const data = categoryBreakdown(periodTx);
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
-  const svg = donutSVG(data);
   const top = data.slice(0,4);
   const rest = data.slice(4);
   const restTotal = rest.reduce(function(s,d){ return s + d[1]; }, 0);
 
   const rows = top.map(function(d,i){
-    const pct = total ? Math.round((d[1]/total)*100) : 0;
     return `<div class="cat-row">
       <span class="cat-swatch" style="background:${colorForCategory(d[0])}"></span>
       <span class="cat-name">${d[0]}</span>
-      <span class="cat-pct">${pct}%</span>
       <span class="cat-amt">${fmt(-d[1])}</span>
     </div>`;
   }).join('');
@@ -974,7 +1064,7 @@ function expenseCategorySummaryHTML(){
       </div>
       ${data.length ? `
         <div class="breakdown-body">
-          ${donutWithCenterLabel(svg, total, 'Total')}
+          ${donutWithCenterLabel(data, total, 'Total expenses')}
           <div class="cat-list">${rows}${moreRow}</div>
         </div>
       ` : '<div class="empty-note">No expenses logged this month yet.</div>'}
@@ -987,7 +1077,6 @@ function expenseDetailScreenHTML(){
   const filteredTx = breakdownCategory === 'all' ? periodTx : periodTx.filter(function(t){ return t.category === breakdownCategory; });
   const data = categoryBreakdown(filteredTx);
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
-  const svg = donutSVG(data);
 
   const catOptions = ['<option value="all">All categories</option>'].concat(
     allExpenseCategories().filter(function(c){ return c !== 'Transfer'; }).map(function(c){ return `<option value="${c}"${breakdownCategory===c?' selected':''}>${c}</option>`; })
@@ -1020,7 +1109,7 @@ function expenseDetailScreenHTML(){
       <select class="filter-select" onchange="setBreakdownCategory(this.value)">${catOptions}</select>
     </div>
 
-    ${data.length ? `<div class="detail-donut-row">${donutWithCenterLabel(svg, total, periodLabel(breakdownPeriod))}</div>` : ''}
+    ${data.length ? `<div class="detail-donut-row">${donutWithCenterLabel(data, total, periodLabel(breakdownPeriod))}</div>` : ''}
 
     ${monthlyExpenseBarsHTML()}
 
@@ -1271,7 +1360,6 @@ function financeOverviewSummaryHTML(){
         <div class="mini-stat"><div class="mini-stat-label">Income</div><div class="mini-stat-num">${fmtShort(monthIncome())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Savings</div><div class="mini-stat-num">${rate===null?'—':rate+'%'}</div></div>
       </div>
-      ${visibleTransactions().length ? trendSVG(60) : '<div class="empty-note">Add some transactions to see a trend.</div>'}
     </div>`;
 }
 
@@ -1357,6 +1445,74 @@ function historyScreenHTML(){
   `;
 }
 
+function ratesModalContentHTML(){
+  const uahPerEur = exchangeRates.UAH;
+
+  function rowFor(cur){
+    const raw = monoRawRates[cur];
+    const isMono = !!raw;
+    let valueHtml, caption;
+    if(isMono && !raw.single){
+      // Real two-sided Buy/Sell straight from Monobank
+      valueHtml = `<span class="rate-buy">${Number(raw.buy).toFixed(4)}</span><span class="rate-sell">${Number(raw.sell).toFixed(4)}</span>`;
+      caption = '';
+    } else if(isMono && raw.single){
+      // Monobank only quotes one reference rate for this one — show it in both columns rather than leaving Buy blank
+      valueHtml = `<span class="rate-buy">${Number(raw.rate).toFixed(4)}</span><span class="rate-sell">${Number(raw.rate).toFixed(4)}</span>`;
+      caption = 'single reference rate';
+    } else {
+      const uahPerCur = cur === 'EUR' ? uahPerEur : (uahPerEur / exchangeRates[cur]);
+      valueHtml = `<span class="rate-buy">${Number(uahPerCur).toFixed(4)}</span><span class="rate-sell">${Number(uahPerCur).toFixed(4)}</span>`;
+      caption = 'estimated';
+    }
+    return `<div class="rate-flag-row">
+      <div class="rate-flag-left">
+        <span class="rate-flag">${CURRENCY_FLAG[cur]}</span>
+        <div>
+          <div class="rate-flag-name">${cur}</div>
+          <div class="rate-flag-source">${caption}</div>
+        </div>
+      </div>
+      <div class="rate-values">${valueHtml}</div>
+    </div>`;
+  }
+
+  function eurUsdRowFor(){
+    const eur = monoRawRates.EUR, usd = monoRawRates.USD;
+    let buy, sell, caption;
+    if(eur && !eur.single && usd && !usd.single){
+      buy = eur.buy / usd.buy;
+      sell = eur.sell / usd.sell;
+      caption = '';
+    } else {
+      buy = sell = exchangeRates.USD; // USD units per 1 EUR, already the EUR/USD cross rate
+      caption = 'estimated';
+    }
+    return `<div class="rate-flag-row">
+      <div class="rate-flag-left">
+        <span class="rate-flag">${CURRENCY_FLAG.EUR}${CURRENCY_FLAG.USD}</span>
+        <div>
+          <div class="rate-flag-name">EUR/USD</div>
+          <div class="rate-flag-source">${caption}</div>
+        </div>
+      </div>
+      <div class="rate-values"><span class="rate-buy">${buy.toFixed(4)}</span><span class="rate-sell">${sell.toFixed(4)}</span></div>
+    </div>`;
+  }
+
+  const rows = ['USD','EUR'].map(rowFor).join('') + rowFor('ALL') + eurUsdRowFor();
+
+  return `
+    <div class="panel-card">
+      <div class="panel-title"><h3>Main rates</h3></div>
+      <div class="rate-col-header"><span></span><span class="rate-col-buy">Buy</span><span class="rate-col-sell">Sell</span></div>
+      ${rows}
+    </div>
+
+    <div class="empty-note" style="margin-top:14px; text-align:left;">All rates shown against the Ukrainian Hryvnia (UAH), with real Buy/Sell figures wherever Monobank's own feed provides them. Anything it doesn't quote directly is estimated from a general exchange rate service instead.</div>
+  `;
+}
+
 function financeOverviewDetailHTML(){
   const rate = savingsRate();
   const label = rangeLabel();
@@ -1396,14 +1552,7 @@ function financeHTML(){
   return `
     <div class="main-header">
       <div class="live-badge">
-        <span class="live-dot">Live</span>
-        <span class="rates-status" title="EUR is the display currency; rates fetched from open.er-api.com">
-          ${ratesLoading ? 'Updating rates…' : (ratesUpdatedAt ? 'Rates: ' + timeAgo(ratesUpdatedAt) : 'Rates: fallback')}
-        </span>
-        <button class="header-btn" onclick="openMonoModal()">Bank</button>
-        <button class="header-btn" onclick="openRangeModal()">📅 ${rangeLabel()}</button>
-        <button class="header-btn" onclick="exportCSV()">Export</button>
-        <button class="header-btn" onclick="document.getElementById('importFile').click()">Import</button>
+        <button class="header-btn" id="rangeHeaderBtn" onclick="openRangeModal()">📅<span class="range-label-text"> ${rangeLabel()}</span></button>
         <input type="file" id="importFile" accept=".csv" style="display:none;" onchange="handleImportFile(event)">
       </div>
     </div>
@@ -1421,26 +1570,6 @@ function financeHTML(){
     </div>
 
     <div class="bottom-row">
-      <div class="panel-card clickable-card" onclick="openHistory('income')">
-        <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
-        <div id="incomeList">
-          ${(function(){
-            const inc = visibleTransactions().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer'; }).slice(0,8);
-            if(!inc.length) return '<div class="empty-note">No income logged yet.</div>';
-            return inc.map(function(t){
-              const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
-              const orig = (t.currency && t.currency !== DISPLAY_CURRENCY) ? ` · ${Number(t.amount).toLocaleString()} ${CURRENCY_SYMBOLS[t.currency]||t.currency}` : '';
-              return `<div class="tx-row">
-                <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-                <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}${orig}</div></div>
-                <div class="tx-amt pos">+${fmt(toDisplay(t.amount, t.currency))}</div>
-                <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
-                <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
-              </div>`;
-            }).join('');
-          })()}
-        </div>
-      </div>
       <div class="panel-card clickable-card" onclick="openHistory('expense')">
         <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
         <div id="txList">
@@ -1459,6 +1588,26 @@ function financeHTML(){
               <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
             </div>`;
           }).join('');
+          })()}
+        </div>
+      </div>
+      <div class="panel-card clickable-card" onclick="openHistory('income')">
+        <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
+        <div id="incomeList">
+          ${(function(){
+            const inc = visibleTransactions().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer'; }).slice(0,8);
+            if(!inc.length) return '<div class="empty-note">No income logged yet.</div>';
+            return inc.map(function(t){
+              const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
+              const orig = (t.currency && t.currency !== DISPLAY_CURRENCY) ? ` · ${Number(t.amount).toLocaleString()} ${CURRENCY_SYMBOLS[t.currency]||t.currency}` : '';
+              return `<div class="tx-row">
+                <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
+                <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}${orig}</div></div>
+                <div class="tx-amt pos">+${fmt(toDisplay(t.amount, t.currency))}</div>
+                <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
+                <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
+              </div>`;
+            }).join('');
           })()}
         </div>
       </div>
