@@ -864,7 +864,7 @@ function persistLoans(){
 
 function loanProgress(loan){
   const paidTx = visibleTransactions()
-    .filter(function(t){ return t.loanId === loan.id && t.category === 'Loan' && Number(t.amount) < 0; });
+    .filter(function(t){ return t.loanId === loan.id && t.category === 'Loan' && !t.isLoanReceipt && Number(t.amount) < 0; });
   const paid = paidTx.reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
   // Original-currency figures assume payments were made in the loan's own
   // currency (the normal case) — if you ever pay in a different currency,
@@ -900,10 +900,14 @@ window.saveNewLoan = function(){
   loans.push({ id: loanId, name: name, principal: principal, currency: currency, startDate: date });
   persistLoans();
 
-  // Receiving the loan is real income the moment it lands — reflected in Net Worth immediately.
+  // A loan isn't really "your" money — it's owed back — so it counts against
+  // Net Worth the moment you take it on, same as any other expense. Payments
+  // toward it reduce Net Worth further too, since that's real cash leaving
+  // your pocket right now. isLoanReceipt distinguishes this entry from actual
+  // payments so the payoff-progress tracking isn't thrown off by it.
   transactions.unshift({
     id: 't' + (nextId++), name: 'Loan: ' + name, category: 'Loan',
-    amount: principal, currency: currency, occurred_at: date, loanId: loanId
+    amount: -principal, currency: currency, occurred_at: date, loanId: loanId, isLoanReceipt: true
   });
   persist();
 
@@ -1251,15 +1255,8 @@ window.openRatesDetail = function(){
   openModal('ratesModalOverlay');
 };
 
-function totalLoanLiability(){
-  return loans.reduce(function(sum, loan){ return sum + loanProgress(loan).remaining; }, 0);
-}
-
 function netWorth(){
-  const base = visibleTransactions()
-    .filter(function(t){ return t.category !== 'Loan'; })
-    .reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
-  return base - totalLoanLiability();
+  return visibleTransactions().reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
 }
 
 function monthIncome(){
@@ -1529,6 +1526,7 @@ function expenseDetailScreenHTML(){
 window.setBreakdownPeriod = function(v){ breakdownPeriod = v; renderView('finance'); };
 window.setBreakdownCategory = function(v){ breakdownCategory = v; financeSubView = 'expense'; renderView('finance'); };
 window.setBreakdownType = function(v){ breakdownType = v; breakdownCategory = 'all'; renderView('finance'); };
+window.toggleBreakdownType = function(){ setBreakdownType(breakdownType === 'income' ? 'expense' : 'income'); };
 window.openExpenseDetail = function(){ breakdownType = 'expense'; breakdownCategory = 'all'; financeSubView = 'expense'; renderView('finance'); };
 window.closeExpenseDetail = function(){ financeSubView = null; renderView('finance'); };
 
@@ -1873,9 +1871,8 @@ function historyRows(){
     const icon = isLoan ? (CATEGORY_ICON['Loan'] || 'ic-wallet') : (CATEGORY_ICON[t.category] || (isIncome ? 'ic-dollar' : 'ic-wallet'));
     let amtClass, sign;
     if(isLoan){
-      const isReceipt = Number(t.amount) > 0;
-      amtClass = isReceipt ? 'pos' : 'neg';
-      sign = isReceipt ? '+' : '-';
+      amtClass = Number(t.amount) < 0 ? 'neg' : 'pos';
+      sign = Number(t.amount) < 0 ? '-' : '+';
     } else if(isTransfer){
       amtClass = '';
       sign = Number(t.amount) < 0 ? '-' : '';
@@ -1883,7 +1880,7 @@ function historyRows(){
       amtClass = isIncome ? 'pos' : 'neg';
       sign = isIncome ? '+' : '-';
     }
-    const metaExtra = isLoan ? (Number(t.amount) > 0 ? ' · Loan received' : ' · Payment') : (isTransfer ? '' : ' · ' + escapeHtml(t.category));
+    const metaExtra = isLoan ? ((t.isLoanReceipt || Number(t.amount) > 0) ? ' · Loan received' : ' · Payment') : (isTransfer ? '' : ' · ' + escapeHtml(t.category));
     return `<div class="tx-row">
       <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
       <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at}${metaExtra}</div></div>
