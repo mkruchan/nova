@@ -600,8 +600,8 @@ const CATEGORY_COLOR_PALETTE = [
 ];
 const CATEGORY_COLOR = {};
 (function(){
-  const names = EXPENSE_CATEGORIES.filter(function(c){ return c !== 'Transfer'; })
-    .concat(INCOME_CATEGORIES.filter(function(c){ return c !== 'Transfer'; }));
+  const names = EXPENSE_CATEGORIES.filter(function(c){ return c !== 'Transfer' && c !== 'Loan'; })
+    .concat(INCOME_CATEGORIES.filter(function(c){ return c !== 'Transfer' && c !== 'Loan'; }));
   const seen = {};
   let i = 0;
   names.forEach(function(name){
@@ -1164,16 +1164,23 @@ window.openRatesDetail = function(){
   openModal('ratesModalOverlay');
 };
 
+function totalLoanLiability(){
+  return loans.reduce(function(sum, loan){ return sum + loanProgress(loan).remaining; }, 0);
+}
+
 function netWorth(){
-  return visibleTransactions().reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
+  const base = visibleTransactions()
+    .filter(function(t){ return t.category !== 'Loan'; })
+    .reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
+  return base - totalLoanLiability();
 }
 
 function monthIncome(){
-  return thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer'; })
+  return thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan'; })
     .reduce(function(s,t){ return s + toDisplay(t.amount, t.currency); }, 0);
 }
 function monthSpend(){
-  return thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; })
+  return thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; })
     .reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
 }
 function savingsRate(){
@@ -1304,7 +1311,7 @@ function monthlyExpenseBarsHTML(){
   const sums = months.map(function(m){
     return visibleTransactions().filter(function(t){
       const d = new Date(t.occurred_at);
-      return Number(t.amount) < 0 && t.category !== 'Transfer' && d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth();
+      return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan' && d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth();
     }).reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
   });
   const max = Math.max.apply(null, sums.concat([1]));
@@ -1328,7 +1335,7 @@ function donutWithCenterLabel(data, total, sublabel){
 
 // Compact clickable card shown on the main dashboard
 function expenseCategorySummaryHTML(){
-  const inRange = thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; });
+  const inRange = thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; });
   const data = categoryBreakdown(inRange);
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
   const top = data.slice(0,4);
@@ -1366,14 +1373,14 @@ function expenseCategorySummaryHTML(){
 // Full-screen detail view, opened by tapping the summary card
 function expenseDetailScreenHTML(){
   const periodTx = breakdownPeriod === 'month'
-    ? thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; })
+    ? thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; })
     : expensesForPeriod(breakdownPeriod);
   const filteredTx = breakdownCategory === 'all' ? periodTx : periodTx.filter(function(t){ return t.category === breakdownCategory; });
   const data = categoryBreakdown(filteredTx);
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
 
   const catOptions = ['<option value="all">All categories</option>'].concat(
-    allExpenseCategories().filter(function(c){ return c !== 'Transfer'; }).map(function(c){ return `<option value="${c}"${breakdownCategory===c?' selected':''}>${c}</option>`; })
+    allExpenseCategories().filter(function(c){ return c !== 'Transfer' && c !== 'Loan'; }).map(function(c){ return `<option value="${c}"${breakdownCategory===c?' selected':''}>${c}</option>`; })
   ).join('');
 
   const rows = data.length ? data.map(function(d,i){
@@ -1468,11 +1475,11 @@ function txForMonth(date){
   });
 }
 function monthSpendFor(date){
-  return txForMonth(date).filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; })
+  return txForMonth(date).filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; })
     .reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
 }
 function monthIncomeFor(date){
-  return txForMonth(date).filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer'; })
+  return txForMonth(date).filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan'; })
     .reduce(function(s,t){ return s + toDisplay(t.amount, t.currency); }, 0);
 }
 function categorySpendFor(category, date){
@@ -1578,7 +1585,7 @@ function budgetDetailScreenHTML(){
 
 function budgetEditModalBody(){
   const mb = getBudgetForMonth(budgetViewMonth);
-  return allExpenseCategories().filter(function(cat){ return cat !== 'Transfer'; }).map(function(cat){
+  return allExpenseCategories().filter(function(cat){ return cat !== 'Transfer' && cat !== 'Loan'; }).map(function(cat){
     const val = mb.categoryBudgets[cat] ? Number(mb.categoryBudgets[cat]).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
     return `<div class="form-row budget-edit-row">
       <label>${cat}</label>
@@ -1728,7 +1735,7 @@ function historyRows(){
   const base = visibleTransactions();
   let list = isTransfer
     ? base.filter(function(t){ return t.category === 'Transfer'; })
-    : base.filter(function(t){ return (isIncome ? Number(t.amount) > 0 : Number(t.amount) < 0) && t.category !== 'Transfer'; });
+    : base.filter(function(t){ return (isIncome ? Number(t.amount) > 0 : Number(t.amount) < 0) && t.category !== 'Transfer' && t.category !== 'Loan'; });
   if(!isTransfer && historyCategoryFilter !== 'all') list = list.filter(function(t){ return t.category === historyCategoryFilter; });
   if(historySearch.trim()) {
     const q = historySearch.trim().toLowerCase();
@@ -1755,7 +1762,7 @@ function historyRows(){
 function historyScreenHTML(){
   const isTransfer = historyType === 'transfer';
   const isIncome = historyType === 'income';
-  const categories = (isIncome ? allIncomeCategories() : allExpenseCategories()).filter(function(c){ return c !== 'Transfer'; });
+  const categories = (isIncome ? allIncomeCategories() : allExpenseCategories()).filter(function(c){ return c !== 'Transfer' && c !== 'Loan'; });
   const catOptions = ['<option value="all">All categories</option>'].concat(
     categories.map(function(c){ return `<option value="${c}"${historyCategoryFilter===c?' selected':''}>${c}</option>`; })
   ).join('');
@@ -1965,7 +1972,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
         <div id="txList">
           ${(function(){
-            const exp = visibleTransactions().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; }).slice(0,8);
+            const exp = visibleTransactions().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; }).slice(0,8);
             if(!exp.length) return '<div class="empty-note">No expenses logged yet.</div>';
             return exp.map(function(t){
             const icon = CATEGORY_ICON[t.category] || 'ic-wallet';
@@ -1985,7 +1992,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
-            const inc = visibleTransactions().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer'; }).slice(0,8);
+            const inc = visibleTransactions().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan'; }).slice(0,8);
             if(!inc.length) return '<div class="empty-note">No income logged yet.</div>';
             return inc.map(function(t){
               const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
