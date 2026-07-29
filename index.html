@@ -1845,8 +1845,24 @@ function settingsScreenHTML(){
 
     <div class="side-label" style="margin:20px 0 8px;">Cloud Sync</div>
     ${cloudConfigured() ? cloudConnectedHTML() : cloudSetupFormHTML()}
+
+    <div class="side-label" style="margin:24px 0 8px; color:var(--rose);">Danger Zone</div>
+    <div class="empty-note" style="text-align:left; margin-bottom:8px;">If the app is stuck, unresponsive, or behaving strangely, exporting a backup first and then resetting can help. This clears everything stored on this device (transactions, budgets, loans, categories, connections) and reloads fresh — it does not touch anything already saved in Cloud Sync on other devices.</div>
+    <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
+      <button class="modal-cancel" onclick="exportCSV()">Export backup first</button>
+      <button class="tx-del" style="border:1px solid var(--rose); border-radius:8px; padding:8px 14px;" onclick="resetAppData()">Reset app data</button>
+    </div>
   `;
 }
+
+window.resetAppData = function(){
+  customConfirm("This clears everything stored on this device and reloads the app fresh. This can't be undone — make sure you've exported a backup first if you need one. Continue?", function(){
+    Object.keys(localStorage).forEach(function(key){
+      if(key.indexOf('nova-') === 0) localStorage.removeItem(key);
+    });
+    location.reload();
+  }, { title: 'Reset app data?', confirmLabel: 'Reset' });
+};
 
 function cloudConnectedHTML(){
   const statusText = {
