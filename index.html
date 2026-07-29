@@ -1276,9 +1276,8 @@ function expenseDetailScreenHTML(){
     <div class="detail-header">
       <button class="back-btn" onclick="closeExpenseDetail()">‹</button>
       <div class="detail-title">Expenses by category</div>
-      <button class="header-btn" onclick="openRangeModal()">📅 ${rangeLabel()}</button>
+      <div style="width:32px;"></div>
     </div>
-    ${breakdownPeriod === 'month' && customRangeActive ? `<div style="text-align:right; margin:-8px 0 12px;"><button class="header-btn" onclick="resetDateRange()">Reset to this month</button></div>` : ''}
 
     <div class="filter-row detail-filters">
       <select class="filter-select" onchange="setBreakdownPeriod(this.value)">
@@ -1526,6 +1525,17 @@ function trendSVG(height){
 }
 
 // Compact clickable card combining Net Worth / Spent / Income / Savings Rate / Balance Trend
+function dateRangeBlockHTML(){
+  return `
+    <div class="chart-card clickable-card" style="grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between;" onclick="openRangeModal()">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:20px;">📅</span>
+        <div class="chart-title" style="margin:0;">${rangeLabel()}</div>
+      </div>
+      ${customRangeActive ? `<button class="header-btn" onclick="event.stopPropagation(); resetDateRange();">Reset</button>` : `<span class="chevron">›</span>`}
+    </div>`;
+}
+
 function financeOverviewSummaryHTML(){
   const rate = savingsRate();
   return `
@@ -1763,9 +1773,8 @@ function financeOverviewDetailHTML(){
     <div class="detail-header">
       <button class="back-btn" onclick="closeOverviewDetail()">‹</button>
       <div class="detail-title">Overview</div>
-      <button class="header-btn" onclick="openRangeModal()">📅 ${label}</button>
+      <div style="width:32px;"></div>
     </div>
-    ${customRangeActive ? `<div style="text-align:right; margin:-8px 0 12px;"><button class="header-btn" onclick="resetDateRange()">Reset to this month</button></div>` : ''}
 
     <div class="stats-row">
       <div class="stat-card"><div class="stat-label">Net Worth</div><div class="stat-num">${fmtShort(netWorth())}</div><div class="stat-delta">All-time total</div></div>
@@ -1793,6 +1802,10 @@ function financeHTML(){
   if(financeSubView === 'history') return historyScreenHTML();
 
   return `
+    <div class="charts-row">
+      ${dateRangeBlockHTML()}
+    </div>
+
     <div class="charts-row">
       ${financeOverviewSummaryHTML()}
     </div>
