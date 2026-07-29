@@ -953,14 +953,27 @@ function applyCloudPayload(payload){
   try{ localStorage.setItem('nova-show-mono-data', String(showMonoData)); }catch(e){}
 }
 
+// Any network call can hang far longer than expected if a host is slow,
+// misconfigured, or briefly unreachable — without a hard timeout, an await on
+// that fetch just sits there indefinitely with zero feedback, which looks
+// exactly like the whole app has frozen. This guarantees it always fails
+// fast and clearly instead.
+function fetchWithTimeout(url, opts, timeoutMs){
+  const controller = new AbortController();
+  const timer = setTimeout(function(){ controller.abort(); }, timeoutMs || 10000);
+  return fetch(url, Object.assign({}, opts, { signal: controller.signal }))
+    .finally(function(){ clearTimeout(timer); });
+}
+
 async function pullCloudSync(){
   if(!cloudConfigured()) { cloudSyncStatus = 'unconfigured'; return; }
   if(cloudPushTimer) return; // a local change is still waiting to be pushed — don't risk overwriting it with a stale pull
   cloudSyncStatus = 'syncing';
   try{
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${cloudConfig.url}/rest/v1/nova_sync?sync_id=eq.${encodeURIComponent(cloudConfig.syncId)}&select=data,updated_at`,
-      { headers: { 'apikey': cloudConfig.key, 'Authorization': 'Bearer ' + cloudConfig.key } }
+      { headers: { 'apikey': cloudConfig.key, 'Authorization': 'Bearer ' + cloudConfig.key } },
+      10000
     );
     if(!res.ok){ cloudSyncStatus = 'error'; return; }
     const rows = await res.json();
@@ -975,7 +988,7 @@ async function pullCloudSync(){
       }
     }
     cloudSyncStatus = 'synced';
-  }catch(e){ cloudSyncStatus = 'error'; }
+  }catch(e){ cloudSyncStatus = e.name === 'AbortError' ? 'timeout' : 'error'; }
 }
 
 async function pushCloudSyncNow(){
@@ -983,7 +996,7 @@ async function pushCloudSyncNow(){
   if(!cloudConfigured()) { cloudSyncStatus = 'unconfigured'; return; }
   cloudSyncStatus = 'syncing';
   try{
-    const res = await fetch(`${cloudConfig.url}/rest/v1/nova_sync`, {
+    const res = await fetchWithTimeout(`${cloudConfig.url}/rest/v1/nova_sync`, {
       method: 'POST',
       headers: {
         'apikey': cloudConfig.key,
@@ -992,10 +1005,10 @@ async function pushCloudSyncNow(){
         'Prefer': 'resolution=merge-duplicates,return=minimal'
       },
       body: JSON.stringify({ sync_id: cloudConfig.syncId, data: cloudPayload(), updated_at: new Date().toISOString() })
-    });
+    }, 10000);
     cloudSyncStatus = res.ok ? 'synced' : 'error';
     if(res.ok) cloudLastPulledAt = new Date().toISOString();
-  }catch(e){ cloudSyncStatus = 'error'; }
+  }catch(e){ cloudSyncStatus = e.name === 'AbortError' ? 'timeout' : 'error'; }
   if(currentView === 'settings') renderView('settings');
 }
 
@@ -1866,7 +1879,10 @@ window.resetAppData = function(){
 
 function cloudConnectedHTML(){
   const statusText = {
-    syncing: 'Syncing…', synced: 'Up to date', error: "Couldn't reach the sync server", idle: 'Connected', unconfigured: 'Connected'
+    syncing: 'Syncing…', synced: 'Up to date',
+    error: "Couldn't reach the sync server — double-check your Project URL and anon key",
+    timeout: "Timed out reaching the sync server (10s) — check your Project URL and internet connection",
+    idle: 'Connected', unconfigured: 'Connected'
   }[cloudSyncStatus] || 'Connected';
   return `
     <div class="setup-box" style="margin-bottom:12px;">
