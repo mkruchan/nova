@@ -2204,11 +2204,24 @@ function saveTransaction(){
 }
 
 function deleteTx(id){
-  const idx = transactions.findIndex(function(t){ return t.id === id; });
-  if(idx === -1) return;
-  transactions.splice(idx, 1);
-  persist();
-  renderView('finance');
+  const t = transactions.find(function(x){ return x.id === id; });
+  if(!t) return;
+  const label = t.name ? `"${t.name}"` : 'this transaction';
+  if(!confirm(`Delete ${label}? This can't be undone.`)) return;
+
+  try{
+    const idx = transactions.findIndex(function(x){ return x.id === id; });
+    if(idx === -1) return;
+    transactions.splice(idx, 1);
+    persist();
+    renderView('finance');
+  }catch(e){
+    // Something went wrong rendering afterward — the transaction is already
+    // removed and saved either way, so recover by re-rendering fresh rather
+    // than leaving the screen stuck on a half-updated state.
+    console.error('Error after deleting transaction:', e);
+    try{ renderView('finance'); }catch(e2){ /* last resort — nothing more we can safely do here */ }
+  }
 }
 window.openModal = openModal;
 window.openTxModal = openTxModal;
