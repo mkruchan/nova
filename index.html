@@ -900,14 +900,16 @@ window.saveNewLoan = function(){
   loans.push({ id: loanId, name: name, principal: principal, currency: currency, startDate: date });
   persistLoans();
 
-  // A loan isn't really "your" money — it's owed back — so it counts against
-  // Net Worth the moment you take it on, same as any other expense. Payments
-  // toward it reduce Net Worth further too, since that's real cash leaving
-  // your pocket right now. isLoanReceipt distinguishes this entry from actual
-  // payments so the payoff-progress tracking isn't thrown off by it.
+  // Receiving the loan is logged as a real inflow for your records, but it
+  // doesn't count directly toward Net Worth (Loan-category transactions are
+  // excluded from that sum) — instead, the loan's full principal counts
+  // against Net Worth as an outstanding liability from day one, and each
+  // payment reduces that liability, bringing Net Worth back toward neutral
+  // as it's paid off. isLoanReceipt marks this entry so payoff-progress
+  // tracking doesn't mistake it for an actual payment.
   transactions.unshift({
     id: 't' + (nextId++), name: 'Loan: ' + name, category: 'Loan',
-    amount: -principal, currency: currency, occurred_at: date, loanId: loanId, isLoanReceipt: true
+    amount: principal, currency: currency, occurred_at: date, loanId: loanId, isLoanReceipt: true
   });
   persist();
 
@@ -1255,8 +1257,23 @@ window.openRatesDetail = function(){
   openModal('ratesModalOverlay');
 };
 
+function totalLoanLiability(){
+  return loans.reduce(function(sum, loan){ return sum + loanProgress(loan).remaining; }, 0);
+}
+
 function netWorth(){
-  return visibleTransactions().reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
+  // Only the loan's own receipt is excluded here (that principal isn't
+  // counted as "your" asset) — actual payments DO count as real cash leaving,
+  // which is what makes paying down debt net-worth-neutral: cash drops by
+  // the payment, the liability below drops by the exact same amount, and
+  // the two cancel out instead of hitting Net Worth twice. Any positive
+  // Loan-category transaction is a receipt by construction (payments are
+  // always created as negative), so this catches older loans too, even
+  // ones created before isLoanReceipt existed.
+  const base = visibleTransactions()
+    .filter(function(t){ return !(t.isLoanReceipt || (t.category === 'Loan' && Number(t.amount) > 0)); })
+    .reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
+  return base - totalLoanLiability();
 }
 
 function monthIncome(){
