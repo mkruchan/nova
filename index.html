@@ -529,6 +529,17 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="confirmModalOverlay" onclick="if(event.target===this) confirmModalNo()">
+  <div class="modal">
+    <h3 id="confirmModalTitle">Are you sure?</h3>
+    <p id="confirmModalMessage" style="font-size:13px; color:var(--muted); line-height:1.6; margin:0 0 20px;"></p>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="confirmModalNo()">Cancel</button>
+      <button class="modal-save" id="confirmModalYesBtn" onclick="confirmModalYes()">Delete</button>
+    </div>
+  </div>
+</div>
+
 </div>
 
 <script>
@@ -856,10 +867,11 @@ window.saveNewLoan = function(){
 };
 
 window.deleteLoan = function(loanId){
-  if(!confirm("Remove this loan from the list? Its payment history stays in your transactions, just no longer tracked as a loan.")) return;
-  loans = loans.filter(function(l){ return l.id !== loanId; });
-  persistLoans();
-  renderView('finance');
+  customConfirm("Remove this loan from the list? Its payment history stays in your transactions, just no longer tracked as a loan.", function(){
+    loans = loans.filter(function(l){ return l.id !== loanId; });
+    persistLoans();
+    renderView('finance');
+  }, { confirmLabel: 'Remove' });
 };
 
 window.addLoanPayment = function(loanId){
@@ -934,6 +946,7 @@ function applyCloudPayload(payload){
 
 async function pullCloudSync(){
   if(!cloudConfigured()) { cloudSyncStatus = 'unconfigured'; return; }
+  if(cloudPushTimer) return; // a local change is still waiting to be pushed — don't risk overwriting it with a stale pull
   cloudSyncStatus = 'syncing';
   try{
     const res = await fetch(
@@ -943,14 +956,21 @@ async function pullCloudSync(){
     if(!res.ok){ cloudSyncStatus = 'error'; return; }
     const rows = await res.json();
     if(rows && rows.length){
-      applyCloudPayload(rows[0].data);
-      cloudLastPulledAt = rows[0].updated_at;
+      const cloudUpdatedAt = rows[0].updated_at;
+      // Only overwrite local state if the cloud copy is genuinely newer than
+      // whatever we last changed here — otherwise a periodic pull could
+      // silently undo a local edit/deletion made moments earlier.
+      if(!localLastModifiedAt || new Date(cloudUpdatedAt) > new Date(localLastModifiedAt)){
+        applyCloudPayload(rows[0].data);
+        cloudLastPulledAt = cloudUpdatedAt;
+      }
     }
     cloudSyncStatus = 'synced';
   }catch(e){ cloudSyncStatus = 'error'; }
 }
 
 async function pushCloudSyncNow(){
+  cloudPushTimer = null; // the pending push is now actually happening — safe for pulls again after this
   if(!cloudConfigured()) { cloudSyncStatus = 'unconfigured'; return; }
   cloudSyncStatus = 'syncing';
   try{
@@ -970,8 +990,11 @@ async function pushCloudSyncNow(){
   if(currentView === 'settings') renderView('settings');
 }
 
+let localLastModifiedAt = null; // guards against a periodic pull silently reverting a not-yet-pushed local change
+
 function scheduleCloudPush(){
   if(!cloudConfigured()) return;
+  localLastModifiedAt = new Date().toISOString();
   if(cloudPushTimer) clearTimeout(cloudPushTimer);
   cloudPushTimer = setTimeout(pushCloudSyncNow, 2000); // debounce rapid successive edits into one push
 }
@@ -993,10 +1016,11 @@ window.saveCloudConfigFromForm = async function(){
 };
 
 window.disconnectCloudSync = function(){
-  if(!confirm('Stop syncing this device? Your local data stays exactly as it is — this just disconnects the cloud link.')) return;
-  cloudConfig = { url: null, key: null, syncId: null };
-  saveCloudConfig();
-  renderView('settings');
+  customConfirm('Stop syncing this device? Your local data stays exactly as it is — this just disconnects the cloud link.', function(){
+    cloudConfig = { url: null, key: null, syncId: null };
+    saveCloudConfig();
+    renderView('settings');
+  }, { title: 'Disconnect cloud sync?', confirmLabel: 'Disconnect' });
 };
 
 window.manualCloudSync = async function(){
@@ -2111,6 +2135,27 @@ function setTxType(type){
 
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 
+// Custom confirmation modal matching Nova's own UI, used in place of the
+// native browser confirm() everywhere something gets deleted or disconnected.
+let pendingConfirmCallback = null;
+function customConfirm(message, onConfirm, opts){
+  document.getElementById('confirmModalTitle').textContent = (opts && opts.title) || 'Are you sure?';
+  document.getElementById('confirmModalMessage').textContent = message;
+  document.getElementById('confirmModalYesBtn').textContent = (opts && opts.confirmLabel) || 'Delete';
+  pendingConfirmCallback = onConfirm;
+  openModal('confirmModalOverlay');
+}
+window.confirmModalYes = function(){
+  closeModal('confirmModalOverlay');
+  const cb = pendingConfirmCallback;
+  pendingConfirmCallback = null;
+  if(cb) cb();
+};
+window.confirmModalNo = function(){
+  closeModal('confirmModalOverlay');
+  pendingConfirmCallback = null;
+};
+
 let editingTxId = null;
 
 function openTxModal(type, presetCategory){
@@ -2214,21 +2259,21 @@ function deleteTx(id){
   const t = transactions.find(function(x){ return x.id === id; });
   if(!t) return;
   const label = t.name ? `"${t.name}"` : 'this transaction';
-  if(!confirm(`Delete ${label}? This can't be undone.`)) return;
-
-  try{
-    const idx = transactions.findIndex(function(x){ return x.id === id; });
-    if(idx === -1) return;
-    transactions.splice(idx, 1);
-    persist();
-    renderView('finance');
-  }catch(e){
-    // Something went wrong rendering afterward — the transaction is already
-    // removed and saved either way, so recover by re-rendering fresh rather
-    // than leaving the screen stuck on a half-updated state.
-    console.error('Error after deleting transaction:', e);
-    try{ renderView('finance'); }catch(e2){ /* last resort — nothing more we can safely do here */ }
-  }
+  customConfirm(`Delete ${label}? This can't be undone.`, function(){
+    try{
+      const idx = transactions.findIndex(function(x){ return x.id === id; });
+      if(idx === -1) return;
+      transactions.splice(idx, 1);
+      persist();
+      renderView('finance');
+    }catch(e){
+      // Something went wrong rendering afterward — the transaction is already
+      // removed and saved either way, so recover by re-rendering fresh rather
+      // than leaving the screen stuck on a half-updated state.
+      console.error('Error after deleting transaction:', e);
+      try{ renderView('finance'); }catch(e2){ /* last resort — nothing more we can safely do here */ }
+    }
+  });
 }
 window.openModal = openModal;
 window.openTxModal = openTxModal;
@@ -2531,14 +2576,14 @@ window.setAllMonoAccounts = function(checked){
 window.removeMonoAccountData = function(accountId){
   const status = monoSyncStatus[accountId];
   const count = status ? status.count : 0;
-  if(!confirm(`Delete ${count} transaction${count===1?'':'s'} imported from this account? This can't be undone.`)) return;
-
-  transactions = transactions.filter(function(t){ return t.monoAccountId !== accountId; });
-  persist();
-  delete monoSyncStatus[accountId];
-  persistMonoSyncStatus();
-  renderMonoAccountList();
-  renderView('finance');
+  customConfirm(`Delete ${count} transaction${count===1?'':'s'} imported from this account? This can't be undone.`, function(){
+    transactions = transactions.filter(function(t){ return t.monoAccountId !== accountId; });
+    persist();
+    delete monoSyncStatus[accountId];
+    persistMonoSyncStatus();
+    renderMonoAccountList();
+    renderView('finance');
+  });
 };
 
 function refreshMonoVisibilityLabel(){
