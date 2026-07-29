@@ -1385,9 +1385,10 @@ function donutSVG(data, centerTotal, centerSub){
 }
 
 let financeSubView = null; // null | 'expense' | 'budget' | 'overview' | 'history'
-let historyType = 'expense'; // 'income' | 'expense'
+let historyType = 'expense'; // 'income' | 'expense' | 'transfer' | 'loan'
 let historyCategoryFilter = 'all';
 let historySearch = '';
+let historyLoanId = null; // which loan's payment history to show, when historyType === 'loan'
 
 function monthlyExpenseBarsHTML(){
   const now = new Date();
@@ -1804,10 +1805,11 @@ function financeOverviewSummaryHTML(){
     </div>`;
 }
 
-window.openHistory = function(type){
+window.openHistory = function(type, loanId){
   historyType = type;
   historyCategoryFilter = 'all';
   historySearch = '';
+  historyLoanId = loanId || null;
   financeSubView = 'history';
   renderView('finance');
 };
@@ -1832,27 +1834,44 @@ function renderHistoryList(){
 
 function historyRows(){
   const isTransfer = historyType === 'transfer';
+  const isLoan = historyType === 'loan';
   const isIncome = historyType === 'income';
   const base = visibleTransactions();
-  let list = isTransfer
-    ? base.filter(function(t){ return t.category === 'Transfer'; })
-    : base.filter(function(t){ return (isIncome ? Number(t.amount) > 0 : Number(t.amount) < 0) && t.category !== 'Transfer' && t.category !== 'Loan'; });
-  if(!isTransfer && historyCategoryFilter !== 'all') list = list.filter(function(t){ return t.category === historyCategoryFilter; });
+  let list;
+  if(isLoan){
+    list = base.filter(function(t){ return t.loanId === historyLoanId && t.category === 'Loan'; });
+  } else if(isTransfer){
+    list = base.filter(function(t){ return t.category === 'Transfer'; });
+  } else {
+    list = base.filter(function(t){ return (isIncome ? Number(t.amount) > 0 : Number(t.amount) < 0) && t.category !== 'Transfer' && t.category !== 'Loan'; });
+  }
+  if(!isTransfer && !isLoan && historyCategoryFilter !== 'all') list = list.filter(function(t){ return t.category === historyCategoryFilter; });
   if(historySearch.trim()) {
     const q = historySearch.trim().toLowerCase();
     list = list.filter(function(t){ return t.name.toLowerCase().indexOf(q) !== -1; });
   }
   list = list.slice().sort(function(a,b){ return a.occurred_at < b.occurred_at ? 1 : -1; });
 
-  if(!list.length) return `<div class="empty-note">No ${isTransfer?'transfers':isIncome?'income':'expenses'} match these filters.</div>`;
+  if(!list.length) return `<div class="empty-note">No ${isLoan?'payments':isTransfer?'transfers':isIncome?'income':'expenses'} match these filters.</div>`;
 
   return list.map(function(t){
-    const icon = CATEGORY_ICON[t.category] || (isIncome ? 'ic-dollar' : 'ic-wallet');
-    const amtClass = isTransfer ? '' : (isIncome ? 'pos' : 'neg');
-    const sign = isTransfer ? (Number(t.amount) < 0 ? '-' : '') : (isIncome ? '+' : '-');
+    const icon = isLoan ? (CATEGORY_ICON['Loan'] || 'ic-wallet') : (CATEGORY_ICON[t.category] || (isIncome ? 'ic-dollar' : 'ic-wallet'));
+    let amtClass, sign;
+    if(isLoan){
+      const isReceipt = Number(t.amount) > 0;
+      amtClass = isReceipt ? 'pos' : 'neg';
+      sign = isReceipt ? '+' : '-';
+    } else if(isTransfer){
+      amtClass = '';
+      sign = Number(t.amount) < 0 ? '-' : '';
+    } else {
+      amtClass = isIncome ? 'pos' : 'neg';
+      sign = isIncome ? '+' : '-';
+    }
+    const metaExtra = isLoan ? (Number(t.amount) > 0 ? ' · Loan received' : ' · Payment') : (isTransfer ? '' : ' · ' + escapeHtml(t.category));
     return `<div class="tx-row">
       <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-      <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at}${isTransfer?'':' · '+escapeHtml(t.category)}</div></div>
+      <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at}${metaExtra}</div></div>
       <div class="tx-amt ${amtClass}">${sign}${fmtOriginal(t.amount, t.currency)}</div>
       <button class="tx-edit" onclick="editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
       <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
@@ -1862,12 +1881,15 @@ function historyRows(){
 
 function historyScreenHTML(){
   const isTransfer = historyType === 'transfer';
+  const isLoan = historyType === 'loan';
   const isIncome = historyType === 'income';
   const categories = (isIncome ? allIncomeCategories() : allExpenseCategories()).filter(function(c){ return c !== 'Transfer' && c !== 'Loan'; });
   const catOptions = ['<option value="all">All categories</option>'].concat(
     categories.map(function(c){ return `<option value="${c}"${historyCategoryFilter===c?' selected':''}>${c}</option>`; })
   ).join('');
-  const title = isTransfer ? 'Transfer History' : (isIncome ? 'Income History' : 'Expense History');
+  const loanForTitle = isLoan ? loans.find(function(l){ return l.id === historyLoanId; }) : null;
+  const title = isLoan ? (loanForTitle ? escapeHtml(loanForTitle.name) + ' History' : 'Loan History')
+    : isTransfer ? 'Transfer History' : (isIncome ? 'Income History' : 'Expense History');
 
   return `
     <div class="detail-header">
@@ -1877,7 +1899,7 @@ function historyScreenHTML(){
     </div>
 
     <div class="filter-row detail-filters">
-      ${isTransfer ? '' : `<select class="filter-select" onchange="setHistoryCategory(this.value)">${catOptions}</select>`}
+      ${(isTransfer || isLoan) ? '' : `<select class="filter-select" onchange="setHistoryCategory(this.value)">${catOptions}</select>`}
       <input class="filter-select" type="text" placeholder="Search by name…" value="${escapeHtml(historySearch)}" oninput="setHistorySearch(this.value)" style="flex:1;">
     </div>
 
@@ -2080,11 +2102,11 @@ function financeHTML(){
     </div>
 
     <div class="charts-row">
-      ${expenseCategorySummaryHTML()}
+      ${monthlyBudgetSummaryHTML()}
     </div>
 
     <div class="charts-row">
-      ${monthlyBudgetSummaryHTML()}
+      ${expenseCategorySummaryHTML()}
     </div>
 
     <div class="bottom-row">
@@ -2141,6 +2163,7 @@ function financeHTML(){
                 <div class="empty-note" style="padding:0; margin-top:2px;">${fmtOriginal(p.remainingOriginal, p.currency)} remaining of ${fmtOriginal(p.principalOriginal, p.currency)}${p.currency !== DISPLAY_CURRENCY ? ` <span style="opacity:0.7;">(≈ ${fmtShort(p.remaining)} of ${fmtShort(p.principal)})</span>` : ''}</div>
               </div>
               <div style="display:flex; gap:6px; align-items:center;">
+                <button class="header-btn" onclick="openHistory('loan','${loan.id}')">History</button>
                 <button class="header-btn" onclick="addLoanPayment('${loan.id}')">+ Payment</button>
                 <button class="tx-del" onclick="deleteLoan('${loan.id}')">✕</button>
               </div>
