@@ -152,6 +152,11 @@
   .empty-note{ font-size:12px; color:var(--muted-dim); text-align:center; padding:12px 0; }
 
   .chart-title-row{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:6px; }
+  .range-pill{ background:var(--panel-2); border:1px solid var(--border-2); color:var(--muted); border-radius:20px; padding:4px 10px; font-size:10.5px; font-weight:600; white-space:nowrap; }
+  .range-preset-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .range-preset-btn{ background:var(--panel-2); border:1px solid var(--border-2); color:var(--white); border-radius:8px; padding:9px 8px; font-size:12px; font-weight:600; }
+  .range-preset-btn:hover{ border-color:var(--blue-dim); color:var(--blue-light); }
+  .range-pill:hover{ color:var(--blue-light); }
   .filter-row{ display:flex; gap:8px; flex-wrap:wrap; }
   .filter-select{ background:var(--panel-2); border:1px solid var(--border-2); color:var(--muted); border-radius:7px; padding:6px 9px; font-size:16px; outline:none; }
   .filter-select:focus{ border-color:var(--blue); }
@@ -172,7 +177,7 @@
     .cat-row{ font-size:10.5px; gap:6px; }
     .cat-pct{ width:auto; }
     .cat-amt{ width:auto; }
-    .donut-wrap-mini svg{ width:60px; height:60px; }
+    .donut-wrap-mini svg{ width:140px; height:140px; }
   }
 
   .clickable-card{ cursor:pointer; transition:border-color 0.15s ease; }
@@ -251,7 +256,7 @@
   .tx-icon svg.icon{ width:14px; height:14px; }
   .tx-info{ flex:1; min-width:0; }
   .tx-name{ font-size:12.5px; color:var(--white); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .tx-meta{ font-size:10.5px; color:var(--muted-dim); }
+  .tx-meta{ font-size:10.5px; color:var(--muted-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .tx-amt{ font-size:12.5px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .tx-amt.neg{ color:var(--white); } .tx-amt.pos{ color:var(--green); }
   .tx-del{ background:none; border:none; color:var(--muted-dim); font-size:14px; padding:2px 6px; flex-shrink:0; }
@@ -356,7 +361,7 @@
     <div class="side-label">Life Modules</div>
     <button class="side-item active" data-view="finance"><span class="si-left"><svg class="icon"><use href="#ic-wallet"/></svg>Finance</span></button>
     <button class="side-item" data-view="diet"><span class="si-left"><svg class="icon"><use href="#ic-utensils"/></svg>Diet</span><span class="tag">Soon</span></button>
-    <button class="side-item" onclick="openSettingsModal()"><span class="si-left"><svg class="icon"><use href="#ic-settings"/></svg>Settings</span></button>
+    <button class="side-item" data-view="settings"><span class="si-left"><svg class="icon"><use href="#ic-settings"/></svg>Settings</span></button>
     <button class="side-item" data-view="sport"><span class="si-left"><svg class="icon"><use href="#ic-dumbbell"/></svg>Sport</span><span class="tag">Soon</span></button>
     <button class="side-item" data-view="tasks"><span class="si-left"><svg class="icon"><use href="#ic-check-square"/></svg>Tasks</span><span class="tag">Soon</span></button>
     </div>
@@ -369,7 +374,7 @@
     <div class="tabbar">
       <button class="tab active" data-view="finance"><span class="ic"><svg class="icon"><use href="#ic-wallet"/></svg></span>Finance</button>
       <button class="tab" data-view="diet"><span class="ic"><svg class="icon"><use href="#ic-utensils"/></svg></span>Diet</button>
-      <button class="tab" onclick="openSettingsModal()"><span class="ic"><svg class="icon"><use href="#ic-settings"/></svg></span>Settings</button>
+      <button class="tab" data-view="settings"><span class="ic"><svg class="icon"><use href="#ic-settings"/></svg></span>Settings</button>
       <button class="tab" data-view="sport"><span class="ic"><svg class="icon"><use href="#ic-dumbbell"/></svg></span>Sport</button>
       <button class="tab" data-view="tasks"><span class="ic"><svg class="icon"><use href="#ic-check-square"/></svg></span>Tasks</button>
     </div>
@@ -465,6 +470,17 @@
 <div class="modal-overlay" id="rangeModalOverlay" onclick="if(event.target===this) closeModal('rangeModalOverlay')">
   <div class="modal">
     <h3>Date Range</h3>
+    <div class="side-label" style="margin:0 0 8px;">Quick select</div>
+    <div class="range-preset-grid">
+      <button class="range-preset-btn" onclick="applyRangePreset('thisMonth')">This Month</button>
+      <button class="range-preset-btn" onclick="applyRangePreset('lastMonth')">Last Month</button>
+      <button class="range-preset-btn" onclick="applyRangePreset('thisQuarter')">This Quarter</button>
+      <button class="range-preset-btn" onclick="applyRangePreset('last6Months')">Last 6 Months</button>
+      <button class="range-preset-btn" onclick="applyRangePreset('thisYear')">This Year</button>
+      <button class="range-preset-btn" onclick="applyRangePreset('lastYear')">Last Year</button>
+      <button class="range-preset-btn" onclick="applyRangePreset('allTime')">All Time</button>
+    </div>
+    <div class="side-label" style="margin:16px 0 8px;">Or pick exact dates</div>
     <div class="form-row"><label>From</label><input id="rangeFrom" type="date"></div>
     <div class="form-row"><label>To (leave blank for today)</label><input id="rangeTo" type="date"></div>
     <div class="modal-actions">
@@ -475,26 +491,7 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="settingsModalOverlay" onclick="if(event.target===this) closeModal('settingsModalOverlay')">
-  <div class="modal">
-    <h3>Settings</h3>
-    <div class="settings-row" onclick="closeModal('settingsModalOverlay'); openMonoModal();">
-      <span>🏦 Bank</span><span class="chevron">›</span>
-    </div>
-    <div class="settings-row" onclick="exportCSV()">
-      <span>⬇️ Export</span><span class="chevron">›</span>
-    </div>
-    <div class="settings-row" onclick="document.getElementById('importFile').click()">
-      <span>⬆️ Import</span><span class="chevron">›</span>
-    </div>
-    <div class="settings-row" onclick="closeModal('settingsModalOverlay'); openRatesDetail();">
-      <span>💱 Exchange rates</span><span class="chevron">›</span>
-    </div>
-    <div class="modal-actions">
-      <button class="modal-cancel" onclick="closeModal('settingsModalOverlay')">Close</button>
-    </div>
-  </div>
-</div>
+<input type="file" id="importFile" accept=".csv" style="display:none;" onchange="handleImportFile(event)">
 
 <div class="modal-overlay" id="ratesModalOverlay" onclick="if(event.target===this) closeModal('ratesModalOverlay')">
   <div class="modal" style="max-height:80vh; overflow-y:auto;">
@@ -552,16 +549,17 @@ const CATEGORY_ICON = {
   'Other income': 'ic-wallet',
   'Cashback': 'ic-dollar',
   'Business': 'ic-wallet',
-  'Transfer': 'ic-refresh'
+  'Transfer': 'ic-refresh',
+  'Loan': 'ic-wallet'
 };
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Rent","Bills","Family care","Kitsterovna",
   "Transport","Scooter","Gifts","Charity","Groceries","Eating out","Entertainment","Electronics",
   "Digital / Subscriptions","Clothing","Active Leisure","Entrepreneurship","Investments","Flowers",
-  "Smoking","Self-care","Music & Video","Sport","Services","Fees","Taxes","Other expense","Refund","Transfer"
+  "Smoking","Self-care","Music & Video","Sport","Services","Fees","Taxes","Other expense","Refund","Transfer","Loan"
 ];
-const INCOME_CATEGORIES = ["Salary","Freelance","Sale","Gifts","Other income","Cashback","Business","Refund","Transfer"];
+const INCOME_CATEGORIES = ["Salary","Freelance","Sale","Gifts","Other income","Cashback","Business","Refund","Transfer","Loan"];
 
 const DONUT_COLORS = ['#5B8CFF', '#8FB2FF', '#C3D3FF', '#2A3A66', '#4A5A8A', '#7A8CC9'];
 
@@ -609,6 +607,7 @@ function loadCustomCategories(){
 function persistCustomCategories(){
   localStorage.setItem('nova-custom-expense-categories', JSON.stringify(customExpenseCategories));
   localStorage.setItem('nova-custom-income-categories', JSON.stringify(customIncomeCategories));
+  scheduleCloudPush();
 }
 function allExpenseCategories(){ return EXPENSE_CATEGORIES.concat(customExpenseCategories); }
 function allIncomeCategories(){ return INCOME_CATEGORIES.concat(customIncomeCategories); }
@@ -771,7 +770,142 @@ function loadData(){
 
 function persist(){
   localStorage.setItem('nova-transactions', JSON.stringify(transactions));
+  scheduleCloudPush();
 }
+
+/* ---------- Cloud sync (Supabase) ---------- */
+// Keeps transactions, budgets, and custom categories in sync across devices.
+// Deliberately NOT synced: the Monobank personal token (stays device-local —
+// each device connects to Monobank independently, so the token itself never
+// needs to leave the device it was entered on) and cached exchange
+// rates/Monobank raw rates (just refetched independently per device anyway).
+let cloudConfig = { url: null, key: null, syncId: null };
+let cloudLastPulledAt = null;
+let cloudPushTimer = null;
+let cloudSyncStatus = 'idle'; // idle | syncing | synced | error | unconfigured
+
+function loadCloudConfig(){
+  try{
+    const saved = localStorage.getItem('nova-cloud-config');
+    if(saved) cloudConfig = JSON.parse(saved);
+  }catch(e){ /* keep defaults */ }
+}
+function saveCloudConfig(){
+  try{ localStorage.setItem('nova-cloud-config', JSON.stringify(cloudConfig)); }catch(e){}
+}
+function cloudConfigured(){
+  return !!(cloudConfig.url && cloudConfig.key && cloudConfig.syncId);
+}
+
+function cloudPayload(){
+  return {
+    transactions: transactions,
+    budgets: budgets,
+    customExpenseCategories: customExpenseCategories,
+    customIncomeCategories: customIncomeCategories,
+    showMonoData: showMonoData
+  };
+}
+
+function applyCloudPayload(payload){
+  if(!payload) return;
+  if(payload.transactions) transactions = payload.transactions;
+  if(payload.budgets) budgets = payload.budgets;
+  if(payload.customExpenseCategories) customExpenseCategories = payload.customExpenseCategories;
+  if(payload.customIncomeCategories) customIncomeCategories = payload.customIncomeCategories;
+  if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
+
+  // Re-apply custom categories to the working lists and recompute nextId,
+  // same backfill logic loadData()/loadCustomCategories() already do.
+  [customExpenseCategories, customIncomeCategories].forEach(function(list, i){
+    const target = i === 0 ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+    list.forEach(function(c){ if(target.indexOf(c) === -1) target.push(c); });
+  });
+  const maxId = transactions.reduce(function(m,t){
+    const n = parseInt(String(t.id).replace(/\D/g,''), 10);
+    return isNaN(n) ? m : Math.max(m, n);
+  }, 0);
+  nextId = Math.max(nextId, maxId + 1);
+
+  localStorage.setItem('nova-transactions', JSON.stringify(transactions));
+  localStorage.setItem('nova-budgets', JSON.stringify(budgets));
+  localStorage.setItem('nova-custom-expense-categories', JSON.stringify(customExpenseCategories));
+  localStorage.setItem('nova-custom-income-categories', JSON.stringify(customIncomeCategories));
+  try{ localStorage.setItem('nova-show-mono-data', String(showMonoData)); }catch(e){}
+}
+
+async function pullCloudSync(){
+  if(!cloudConfigured()) { cloudSyncStatus = 'unconfigured'; return; }
+  cloudSyncStatus = 'syncing';
+  try{
+    const res = await fetch(
+      `${cloudConfig.url}/rest/v1/nova_sync?sync_id=eq.${encodeURIComponent(cloudConfig.syncId)}&select=data,updated_at`,
+      { headers: { 'apikey': cloudConfig.key, 'Authorization': 'Bearer ' + cloudConfig.key } }
+    );
+    if(!res.ok){ cloudSyncStatus = 'error'; return; }
+    const rows = await res.json();
+    if(rows && rows.length){
+      applyCloudPayload(rows[0].data);
+      cloudLastPulledAt = rows[0].updated_at;
+    }
+    cloudSyncStatus = 'synced';
+  }catch(e){ cloudSyncStatus = 'error'; }
+}
+
+async function pushCloudSyncNow(){
+  if(!cloudConfigured()) { cloudSyncStatus = 'unconfigured'; return; }
+  cloudSyncStatus = 'syncing';
+  try{
+    const res = await fetch(`${cloudConfig.url}/rest/v1/nova_sync`, {
+      method: 'POST',
+      headers: {
+        'apikey': cloudConfig.key,
+        'Authorization': 'Bearer ' + cloudConfig.key,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify({ sync_id: cloudConfig.syncId, data: cloudPayload(), updated_at: new Date().toISOString() })
+    });
+    cloudSyncStatus = res.ok ? 'synced' : 'error';
+    if(res.ok) cloudLastPulledAt = new Date().toISOString();
+  }catch(e){ cloudSyncStatus = 'error'; }
+  if(currentView === 'settings') renderView('settings');
+}
+
+function scheduleCloudPush(){
+  if(!cloudConfigured()) return;
+  if(cloudPushTimer) clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(pushCloudSyncNow, 2000); // debounce rapid successive edits into one push
+}
+
+window.saveCloudConfigFromForm = async function(){
+  const url = document.getElementById('cloudUrl').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('cloudKey').value.trim();
+  const syncId = document.getElementById('cloudSyncId').value.trim();
+  if(!url || !key || !syncId){
+    document.getElementById('cloudStatus').textContent = 'Fill in all three fields.';
+    return;
+  }
+  cloudConfig = { url: url, key: key, syncId: syncId };
+  saveCloudConfig();
+  document.getElementById('cloudStatus').textContent = 'Connecting…';
+  await pullCloudSync();
+  await pushCloudSyncNow(); // make sure this device's existing local data is captured too, not just overwritten silently
+  renderView('settings');
+};
+
+window.disconnectCloudSync = function(){
+  if(!confirm('Stop syncing this device? Your local data stays exactly as it is — this just disconnects the cloud link.')) return;
+  cloudConfig = { url: null, key: null, syncId: null };
+  saveCloudConfig();
+  renderView('settings');
+};
+
+window.manualCloudSync = async function(){
+  await pullCloudSync();
+  await pushCloudSyncNow();
+  renderView('settings');
+};
 
 function init(){
   document.getElementById('app').classList.add('visible');
@@ -780,9 +914,20 @@ function init(){
   loadCachedRates();
   loadMonoVisibility();
   loadCustomCategories();
+  loadMonoSyncStatus();
+  loadCloudConfig();
   renderView('finance');
   refreshExchangeRates();
   setInterval(refreshExchangeRates, 24 * 60 * 60 * 1000); // rates only actually change ~once a day on the free API anyway
+  autoSyncMonobank();
+  setInterval(autoSyncMonobank, 3 * 60 * 1000); // keep Monobank data current without needing a manual sync
+
+  if(cloudConfigured()){
+    pullCloudSync().then(function(){
+      if(currentView === 'finance') renderView('finance'); // pick up anything newer from another device
+    });
+    setInterval(function(){ pullCloudSync().then(function(){ if(currentView === 'finance') renderView('finance'); }); }, 60 * 1000);
+  }
 }
 
 /* ---------- Navigation ---------- */
@@ -803,6 +948,8 @@ function renderView(view){
   if(view === 'finance'){
     main.innerHTML = financeHTML();
     wireFinanceEvents();
+  } else if(view === 'settings'){
+    main.innerHTML = settingsScreenHTML();
   } else {
     const meta = {
       diet:  { icon:'ic-utensils', label:'Diet' },
@@ -845,6 +992,40 @@ function thisMonthTx(){
   });
 }
 
+window.applyRangePreset = function(preset){
+  const now = new Date();
+  const fmt10 = function(d){ return d.toISOString().slice(0,10); };
+  let from, to = null;
+
+  if(preset === 'thisMonth'){
+    from = fmt10(new Date(now.getFullYear(), now.getMonth(), 1));
+  } else if(preset === 'lastMonth'){
+    from = fmt10(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    to = fmt10(new Date(now.getFullYear(), now.getMonth(), 0)); // day 0 of this month = last day of previous month
+  } else if(preset === 'thisQuarter'){
+    const qStartMonth = Math.floor(now.getMonth() / 3) * 3;
+    from = fmt10(new Date(now.getFullYear(), qStartMonth, 1));
+  } else if(preset === 'last6Months'){
+    from = fmt10(new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()));
+  } else if(preset === 'thisYear'){
+    from = fmt10(new Date(now.getFullYear(), 0, 1));
+  } else if(preset === 'lastYear'){
+    from = fmt10(new Date(now.getFullYear() - 1, 0, 1));
+    to = fmt10(new Date(now.getFullYear() - 1, 11, 31));
+  } else if(preset === 'allTime'){
+    const earliest = transactions.reduce(function(min, t){ return (!min || t.occurred_at < min) ? t.occurred_at : min; }, null);
+    from = earliest || fmt10(now);
+  } else {
+    return;
+  }
+
+  customRangeActive = true;
+  customRangeFrom = from;
+  customRangeTo = to;
+  closeModal('rangeModalOverlay');
+  renderView('finance');
+};
+
 window.applyDateRange = function(){
   const from = document.getElementById('rangeFrom').value;
   const to = document.getElementById('rangeTo').value;
@@ -866,10 +1047,6 @@ window.openRangeModal = function(){
   document.getElementById('rangeFrom').value = customRangeFrom || '';
   document.getElementById('rangeTo').value = customRangeTo || '';
   openModal('rangeModalOverlay');
-};
-
-window.openSettingsModal = function(){
-  openModal('settingsModalOverlay');
 };
 
 const CURRENCY_FLAG = { EUR: '🇪🇺', USD: '🇺🇸', UAH: '🇺🇦', ALL: '🇦🇱' };
@@ -1036,8 +1213,8 @@ function donutWithCenterLabel(data, total, sublabel){
 
 // Compact clickable card shown on the main dashboard
 function expenseCategorySummaryHTML(){
-  const periodTx = expensesForPeriod('month');
-  const data = categoryBreakdown(periodTx);
+  const inRange = thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; });
+  const data = categoryBreakdown(inRange);
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
   const top = data.slice(0,4);
   const rest = data.slice(4);
@@ -1059,7 +1236,7 @@ function expenseCategorySummaryHTML(){
   return `
     <div class="chart-card clickable-card" style="grid-column:1 / -1;" onclick="openExpenseDetail()">
       <div class="chart-title-row">
-        <div class="chart-title">Top Expense Categories, ${periodLabel('month')}</div>
+        <div class="chart-title">Top Expense Categories, ${rangeLabel()}</div>
         <span class="chevron">›</span>
       </div>
       ${data.length ? `
@@ -1073,7 +1250,9 @@ function expenseCategorySummaryHTML(){
 
 // Full-screen detail view, opened by tapping the summary card
 function expenseDetailScreenHTML(){
-  const periodTx = expensesForPeriod(breakdownPeriod);
+  const periodTx = breakdownPeriod === 'month'
+    ? thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; })
+    : expensesForPeriod(breakdownPeriod);
   const filteredTx = breakdownCategory === 'all' ? periodTx : periodTx.filter(function(t){ return t.category === breakdownCategory; });
   const data = categoryBreakdown(filteredTx);
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
@@ -1097,8 +1276,9 @@ function expenseDetailScreenHTML(){
     <div class="detail-header">
       <button class="back-btn" onclick="closeExpenseDetail()">‹</button>
       <div class="detail-title">Expenses by category</div>
-      <div style="width:32px;"></div>
+      <button class="header-btn" onclick="openRangeModal()">📅 ${rangeLabel()}</button>
     </div>
+    ${breakdownPeriod === 'month' && customRangeActive ? `<div style="text-align:right; margin:-8px 0 12px;"><button class="header-btn" onclick="resetDateRange()">Reset to this month</button></div>` : ''}
 
     <div class="filter-row detail-filters">
       <select class="filter-select" onchange="setBreakdownPeriod(this.value)">
@@ -1109,7 +1289,7 @@ function expenseDetailScreenHTML(){
       <select class="filter-select" onchange="setBreakdownCategory(this.value)">${catOptions}</select>
     </div>
 
-    ${data.length ? `<div class="detail-donut-row">${donutWithCenterLabel(data, total, periodLabel(breakdownPeriod))}</div>` : ''}
+    ${data.length ? `<div class="detail-donut-row">${donutWithCenterLabel(data, total, breakdownPeriod === 'month' ? rangeLabel() : periodLabel(breakdownPeriod))}</div>` : ''}
 
     ${monthlyExpenseBarsHTML()}
 
@@ -1140,7 +1320,7 @@ function loadBudgets(){
   if(!budgets.categoryBudgets) budgets.categoryBudgets = {};
   if(!budgets.incomeTarget) budgets.incomeTarget = 0;
 }
-function persistBudgets(){ localStorage.setItem('nova-budgets', JSON.stringify(budgets)); }
+function persistBudgets(){ localStorage.setItem('nova-budgets', JSON.stringify(budgets)); scheduleCloudPush(); }
 
 function totalExpenseBudget(){
   return Object.values(budgets.categoryBudgets).reduce(function(s,v){ return s + Number(v||0); }, 0);
@@ -1445,6 +1625,69 @@ function historyScreenHTML(){
   `;
 }
 
+function settingsScreenHTML(){
+  return `
+    <h2 style="font-family:'Sora',sans-serif; font-size:20px; margin:0 0 18px;">Settings</h2>
+    <div class="settings-row" onclick="openMonoModal()">
+      <span>🏦 Bank</span><span class="chevron">›</span>
+    </div>
+    <div class="settings-row" onclick="exportCSV()">
+      <span>⬇️ Export</span><span class="chevron">›</span>
+    </div>
+    <div class="settings-row" onclick="document.getElementById('importFile').click()">
+      <span>⬆️ Import</span><span class="chevron">›</span>
+    </div>
+    <div class="settings-row" onclick="openRatesDetail()">
+      <span>💱 Exchange rates</span><span class="chevron">›</span>
+    </div>
+
+    <div class="side-label" style="margin:20px 0 8px;">Cloud Sync</div>
+    ${cloudConfigured() ? cloudConnectedHTML() : cloudSetupFormHTML()}
+  `;
+}
+
+function cloudConnectedHTML(){
+  const statusText = {
+    syncing: 'Syncing…', synced: 'Up to date', error: "Couldn't reach the sync server", idle: 'Connected', unconfigured: 'Connected'
+  }[cloudSyncStatus] || 'Connected';
+  return `
+    <div class="setup-box" style="margin-bottom:12px;">
+      <p style="margin:0 0 6px;"><b>✅ Synced across your devices</b></p>
+      <p style="margin:0; font-size:11px;">${escapeHtml(statusText)}${cloudLastPulledAt ? ' · last update ' + timeAgo(new Date(cloudLastPulledAt).getTime()) : ''}</p>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
+      <button class="modal-save" onclick="manualCloudSync()">Sync now</button>
+      <button class="modal-cancel" onclick="disconnectCloudSync()">Disconnect</button>
+    </div>
+  `;
+}
+
+function cloudSetupFormHTML(){
+  return `
+    <div class="setup-box" style="margin-bottom:14px;">
+      <p style="margin:0 0 8px;"><b>Set up a free Supabase project</b> to keep this device and your others in sync.</p>
+      <p style="margin:0 0 4px;">1. Create a free project at <b>supabase.com</b></p>
+      <p style="margin:0 0 4px;">2. In its SQL editor, run:</p>
+      <pre style="background:var(--panel); border:1px solid var(--border-2); border-radius:8px; padding:10px; font-size:10px; overflow-x:auto; white-space:pre; margin:6px 0;">create table nova_sync (
+  sync_id text primary key,
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table nova_sync enable row level security;
+create policy "allow all" on nova_sync
+  for all using (true) with check (true);</pre>
+      <p style="margin:8px 0 0;">3. Copy your Project URL and <b>anon public</b> key from Settings → API, and paste them below — plus a Sync ID (any private string, shared across your own devices only, acts like a password for this data).</p>
+    </div>
+    <div class="form-row"><label>Project URL</label><input id="cloudUrl" type="text" placeholder="https://xxxxx.supabase.co"></div>
+    <div class="form-row"><label>Anon public key</label><input id="cloudKey" type="password" autocomplete="off"></div>
+    <div class="form-row"><label>Sync ID</label><input id="cloudSyncId" type="text" placeholder="e.g. a long private phrase"></div>
+    <div class="modal-actions" style="justify-content:flex-start; margin-top:10px;">
+      <button class="modal-save" onclick="saveCloudConfigFromForm()">Connect</button>
+    </div>
+    <div id="cloudStatus" class="status-msg" style="margin-top:8px;"></div>
+  `;
+}
+
 function ratesModalContentHTML(){
   const uahPerEur = exchangeRates.UAH;
 
@@ -1550,13 +1793,6 @@ function financeHTML(){
   if(financeSubView === 'history') return historyScreenHTML();
 
   return `
-    <div class="main-header">
-      <div class="live-badge">
-        <button class="header-btn" id="rangeHeaderBtn" onclick="openRangeModal()">📅<span class="range-label-text"> ${rangeLabel()}</span></button>
-        <input type="file" id="importFile" accept=".csv" style="display:none;" onchange="handleImportFile(event)">
-      </div>
-    </div>
-
     <div class="charts-row">
       ${financeOverviewSummaryHTML()}
     </div>
@@ -1815,10 +2051,55 @@ function parseFlexibleDate(str){
 function pad(n){ n = String(n); return n.length < 2 ? '0'+n : n; }
 
 const CATEGORY_ALIASES = {
-  'heath':'Health', 'tax':'Taxes', 'subscription':'Digital / Subscriptions',
-  'subscriptions':'Digital / Subscriptions', 'grocery':'Groceries', 'restaurant':'Eating out',
-  'dining':'Eating out', 'utilities':'Bills', 'utility':'Bills', 'salary':'Salary',
-  'wage':'Salary', 'wages':'Salary'
+  // Education
+  'school':'Education', 'university':'Education', 'college':'Education', 'tuition':'Education',
+  'course':'Education', 'udemy':'Education', 'coursera':'Education', 'textbook':'Education',
+  // Travel
+  'hotel':'Travel', 'airlines':'Travel', 'airways':'Travel', 'booking.com':'Travel',
+  'airbnb':'Travel', 'flight':'Travel', 'hostel':'Travel', 'resort':'Travel',
+  // Home
+  'ikea':'Home', 'furniture':'Home', 'hardware store':'Home', 'homecenter':'Home', 'decor':'Home',
+  // Health
+  'heath':'Health', 'farmaci':'Health', 'pharmacy':'Health', 'apotek':'Health', 'clinic':'Health',
+  'hospital':'Health', 'dentist':'Health', 'doctor':'Health', 'medical':'Health', 'optic':'Health',
+  // Rent
+  'rent':'Rent', 'landlord':'Rent', 'lease':'Rent',
+  // Bills
+  'utilities':'Bills', 'utility':'Bills', 'electricity':'Bills', 'water bill':'Bills',
+  'telecom':'Bills', 'vodafone':'Bills', 'orange':'Bills', 'internet bill':'Bills', 'phone bill':'Bills',
+  // Transport
+  'taxi':'Transport', 'uber':'Transport', 'bolt':'Transport', 'fuel':'Transport', 'petrol':'Transport',
+  'gas station':'Transport', 'parking':'Transport', 'metro':'Transport', 'bus ticket':'Transport',
+  // Groceries
+  'grocery':'Groceries', 'supermarket':'Groceries', 'market':'Groceries', 'grocer':'Groceries', 'grocers':'Groceries',
+  'lidl':'Groceries', 'carrefour':'Groceries', 'spar':'Groceries', 'conad':'Groceries',
+  // Eating out
+  'restaurant':'Eating out', 'dining':'Eating out', 'cafe':'Eating out', 'coffee':'Eating out',
+  'pizzeria':'Eating out', 'kafe':'Eating out', 'mcdonald':'Eating out', 'kfc':'Eating out', 'burger':'Eating out',
+  // Entertainment
+  'cinema':'Entertainment', 'movie':'Entertainment', 'theatre':'Entertainment', 'concert':'Entertainment', 'ticket':'Entertainment',
+  // Electronics
+  'electronics':'Electronics', 'media markt':'Electronics', 'samsung store':'Electronics',
+  // Digital / Subscriptions
+  'subscription':'Digital / Subscriptions', 'subscriptions':'Digital / Subscriptions',
+  'netflix':'Digital / Subscriptions', 'spotify':'Digital / Subscriptions', 'apple.com':'Digital / Subscriptions',
+  'icloud':'Digital / Subscriptions', 'google play':'Digital / Subscriptions', 'youtube premium':'Digital / Subscriptions',
+  // Clothing
+  'zara':'Clothing', 'h&m':'Clothing', 'clothing':'Clothing', 'shoes':'Clothing', 'fashion':'Clothing',
+  // Sport
+  'gym':'Sport', 'fitness':'Sport',
+  // Fees / Taxes
+  'fee':'Fees', 'commission':'Fees', 'tax':'Taxes',
+  // Investments
+  'invest':'Investments', 'brokerage':'Investments', 'stock':'Investments',
+  // Loan
+  'loan':'Loan', 'credit':'Loan', 'кредит':'Loan', 'позика':'Loan', 'позику':'Loan',
+  // Transfer
+  'поповнення':'Transfer', 'top-up':'Transfer',
+  // Income-side
+  'salary':'Salary', 'wage':'Salary', 'wages':'Salary', 'payroll':'Salary',
+  'freelance':'Freelance', 'upwork':'Freelance', 'fiverr':'Freelance',
+  'cashback':'Cashback'
 };
 
 function matchCategory(raw, type){
@@ -1830,6 +2111,15 @@ function matchCategory(raw, type){
   if(CATEGORY_ALIASES[clean]){
     const alias = CATEGORY_ALIASES[clean];
     if(list.indexOf(alias) !== -1) return alias;
+  }
+  // Fallback: real bank/merchant descriptions (e.g. "SUPERMARKET HASO",
+  // "CENTRAL FARMACI") will basically never match exactly, so search for any
+  // known keyword appearing anywhere in the description instead.
+  for(const keyword in CATEGORY_ALIASES){
+    if(clean.indexOf(keyword) !== -1){
+      const alias = CATEGORY_ALIASES[keyword];
+      if(list.indexOf(alias) !== -1) return alias;
+    }
   }
   return null;
 }
@@ -2062,6 +2352,81 @@ window.connectMonobank = async function(){
 
 function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 
+// Runs quietly in the background (no modal needed) so newly-synced accounts
+// stay current without the user having to remember to open Bank > Sync.
+// Only pulls a short recent window each time, so it stays fast and light
+// on Monobank's 1-request-per-minute limit even with several accounts.
+let autoSyncInProgress = false;
+async function autoSyncMonobank(){
+  if(autoSyncInProgress) return;
+  const token = loadMonoToken();
+  if(!token) return; // never connected — nothing to keep in sync
+
+  autoSyncInProgress = true;
+  try{
+    const res = await fetch('https://api.monobank.ua/personal/client-info', { headers: { 'X-Token': token } });
+    if(!res.ok) return; // rate-limited or token issue — just try again next round, no need to surface an error silently in the background
+    const data = await res.json();
+    const accounts = data.accounts || [];
+    if(!accounts.length) return;
+    monoAccounts = accounts; // keep this fresh so the Bank modal reflects the same list if opened
+
+    const myOwnIbans = new Set(accounts.filter(function(a){ return a.iban; }).map(function(a){ return a.iban; }));
+    const existingIds = new Set(transactions.filter(function(t){ return t.monoId; }).map(function(t){ return t.monoId; }));
+    const to = Math.floor(Date.now() / 1000);
+    const from = to - (3 * 24 * 60 * 60); // short catch-up window — just the last 3 days
+
+    let anyImported = false;
+    for(let i = 0; i < accounts.length; i++){
+      const account = accounts[i];
+      const currency = MONO_CURRENCY_MAP[account.currencyCode] || 'UAH';
+      try{
+        const sres = await fetch(`https://api.monobank.ua/personal/statement/${account.id}/${from}/${to}`, { headers: { 'X-Token': token } });
+        if(sres.ok){
+          const items = await sres.json();
+          let imported = 0;
+          items.forEach(function(item){
+            if(existingIds.has(item.id)) return;
+            const amount = item.amount / 100;
+            const type = amount >= 0 ? 'income' : 'expense';
+            const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
+            const descLower = desc.toLowerCase();
+            const looksLikeJarTopUp = descLower.indexOf('поповнення') !== -1 || descLower.indexOf('top-up') !== -1 || descLower.indexOf('topup') !== -1;
+            let category;
+            if((item.counterIban && myOwnIbans.has(item.counterIban)) || looksLikeJarTopUp){
+              category = 'Transfer';
+            } else {
+              category = matchCategory(desc, type);
+              if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
+            }
+            const occurred_at = new Date(item.time * 1000).toISOString().slice(0,10);
+            transactions.unshift({
+              id: 't' + (nextId++), monoId: item.id, monoAccountId: account.id, name: desc, category: category,
+              amount: amount, currency: currency, occurred_at: occurred_at
+            });
+            existingIds.add(item.id);
+            imported++;
+          });
+          if(imported > 0){
+            anyImported = true;
+            const prevCount = (monoSyncStatus[account.id] && monoSyncStatus[account.id].count) || 0;
+            monoSyncStatus[account.id] = { lastSyncedAt: Date.now(), count: prevCount + imported };
+          }
+        }
+        // if this one wasn't ok (e.g. rate-limited), just skip it this round — next scheduled run will retry
+      }catch(e){ /* network hiccup — skip this account this round */ }
+      if(i < accounts.length - 1) await sleep(61000); // respect the 1-request-per-minute limit across accounts
+    }
+
+    if(anyImported){
+      persist();
+      persistMonoSyncStatus();
+      if(currentView === 'finance') renderView('finance');
+    }
+  }catch(e){ /* offline, CORS, etc. — silently skip, next scheduled run will retry */ }
+  finally{ autoSyncInProgress = false; }
+}
+
 window.syncMonobank = async function(){
   const token = loadMonoToken();
   const statusEl = document.getElementById('monoStatus');
@@ -2140,8 +2505,13 @@ window.syncMonobank = async function(){
         const amount = item.amount / 100; // Monobank amounts are in minor units
         const type = amount >= 0 ? 'income' : 'expense';
         const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
+        const descLower = desc.toLowerCase();
+        // Jar/goal top-ups ("Поповнення «...»") are money moving within your own
+        // Monobank ecosystem, not real spending — but jars don't always populate
+        // counterIban, so catch these by the description Monobank itself uses.
+        const looksLikeJarTopUp = descLower.indexOf('поповнення') !== -1 || descLower.indexOf('top-up') !== -1 || descLower.indexOf('topup') !== -1;
         let category;
-        if(item.counterIban && myOwnIbans.has(item.counterIban)){
+        if((item.counterIban && myOwnIbans.has(item.counterIban)) || looksLikeJarTopUp){
           category = 'Transfer'; // moving money between your own connected Monobank accounts — not real income/spend
         } else {
           category = matchCategory(desc, type);
