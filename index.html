@@ -1314,17 +1314,21 @@ function timeAgo(ts){
 
 let breakdownPeriod = 'month';
 let breakdownCategory = 'all';
+let breakdownType = 'expense'; // 'expense' | 'income'
 
-function expensesForPeriod(period){
+function transactionsForPeriod(period, type){
   const now = new Date();
+  const isIncome = type === 'income';
   return visibleTransactions().filter(function(t){
-    if(Number(t.amount) >= 0 || t.category === 'Transfer') return false;
+    const rightSign = isIncome ? Number(t.amount) > 0 : Number(t.amount) < 0;
+    if(!rightSign || t.category === 'Transfer' || t.category === 'Loan') return false;
     const d = new Date(t.occurred_at);
     if(period === 'month') return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
     if(period === 'year') return d.getFullYear() === now.getFullYear();
     return true; // all time
   });
 }
+function expensesForPeriod(period){ return transactionsForPeriod(period, 'expense'); }
 
 function periodLabel(period){
   const now = new Date();
@@ -1390,7 +1394,8 @@ let historyCategoryFilter = 'all';
 let historySearch = '';
 let historyLoanId = null; // which loan's payment history to show, when historyType === 'loan'
 
-function monthlyExpenseBarsHTML(){
+function monthlyExpenseBarsHTML(type){
+  const isIncome = type === 'income';
   const now = new Date();
   const months = [];
   for(let i = 8; i >= 0; i--){
@@ -1399,7 +1404,8 @@ function monthlyExpenseBarsHTML(){
   const sums = months.map(function(m){
     return visibleTransactions().filter(function(t){
       const d = new Date(t.occurred_at);
-      return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan' && d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth();
+      const rightSign = isIncome ? Number(t.amount) > 0 : Number(t.amount) < 0;
+      return rightSign && t.category !== 'Transfer' && t.category !== 'Loan' && d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth();
     }).reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
   });
   const max = Math.max.apply(null, sums.concat([1]));
@@ -1460,33 +1466,41 @@ function expenseCategorySummaryHTML(){
 
 // Full-screen detail view, opened by tapping the summary card
 function expenseDetailScreenHTML(){
+  const isIncome = breakdownType === 'income';
   const periodTx = breakdownPeriod === 'month'
-    ? thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; })
-    : expensesForPeriod(breakdownPeriod);
+    ? thisMonthTx().filter(function(t){ const rightSign = isIncome ? Number(t.amount) > 0 : Number(t.amount) < 0; return rightSign && t.category !== 'Transfer' && t.category !== 'Loan'; })
+    : transactionsForPeriod(breakdownPeriod, breakdownType);
   const filteredTx = breakdownCategory === 'all' ? periodTx : periodTx.filter(function(t){ return t.category === breakdownCategory; });
   const data = categoryBreakdown(filteredTx);
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
 
+  const catList = isIncome ? allIncomeCategories() : allExpenseCategories();
   const catOptions = ['<option value="all">All categories</option>'].concat(
-    allExpenseCategories().filter(function(c){ return c !== 'Transfer' && c !== 'Loan'; }).map(function(c){ return `<option value="${c}"${breakdownCategory===c?' selected':''}>${c}</option>`; })
+    catList.filter(function(c){ return c !== 'Transfer' && c !== 'Loan'; }).map(function(c){ return `<option value="${c}"${breakdownCategory===c?' selected':''}>${c}</option>`; })
   ).join('');
 
   const rows = data.length ? data.map(function(d,i){
     const pct = total ? Math.round((d[1]/total)*100) : 0;
+    const amt = isIncome ? fmt(d[1]) : fmt(-d[1]);
     return `<div class="cat-row clickable-row" onclick="setBreakdownCategory('${d[0]}')">
       <span class="cat-swatch" style="background:${colorForCategory(d[0])}"></span>
       <span class="cat-name">${d[0]}</span>
       <span class="cat-pct">${pct}%</span>
-      <span class="cat-amt">${fmt(-d[1])}</span>
+      <span class="cat-amt">${amt}</span>
       <span class="chevron">›</span>
     </div>`;
-  }).join('') : '<div class="empty-note">No expenses in this period.</div>';
+  }).join('') : `<div class="empty-note">No ${isIncome?'income':'expenses'} in this period.</div>`;
 
   return `
     <div class="detail-header">
       <button class="back-btn" onclick="closeExpenseDetail()">‹</button>
-      <div class="detail-title">Expenses by category</div>
+      <div class="detail-title">${isIncome?'Income':'Expenses'} by category</div>
       <div style="width:32px;"></div>
+    </div>
+
+    <div class="type-toggle" style="margin-bottom:12px;">
+      <button type="button" class="type-btn${!isIncome?' active':''}" onclick="setBreakdownType('expense')">Expense</button>
+      <button type="button" class="type-btn${isIncome?' active':''}" onclick="setBreakdownType('income')">Income</button>
     </div>
 
     <div class="filter-row detail-filters">
@@ -1500,12 +1514,12 @@ function expenseDetailScreenHTML(){
 
     ${data.length ? `<div class="detail-donut-row">${donutWithCenterLabel(data, total, breakdownPeriod === 'month' ? rangeLabel() : periodLabel(breakdownPeriod))}</div>` : ''}
 
-    ${monthlyExpenseBarsHTML()}
+    ${monthlyExpenseBarsHTML(breakdownType)}
 
     <div class="cat-list-full">
       <div class="cat-row total-row">
-        <span class="cat-name">Total expenses</span>
-        <span class="cat-amt">${fmt(-total)}</span>
+        <span class="cat-name">Total ${isIncome?'income':'expenses'}</span>
+        <span class="cat-amt">${isIncome ? fmt(total) : fmt(-total)}</span>
       </div>
       ${rows}
     </div>
@@ -1514,7 +1528,8 @@ function expenseDetailScreenHTML(){
 
 window.setBreakdownPeriod = function(v){ breakdownPeriod = v; renderView('finance'); };
 window.setBreakdownCategory = function(v){ breakdownCategory = v; financeSubView = 'expense'; renderView('finance'); };
-window.openExpenseDetail = function(){ financeSubView = 'expense'; renderView('finance'); };
+window.setBreakdownType = function(v){ breakdownType = v; breakdownCategory = 'all'; renderView('finance'); };
+window.openExpenseDetail = function(){ breakdownType = 'expense'; breakdownCategory = 'all'; financeSubView = 'expense'; renderView('finance'); };
 window.closeExpenseDetail = function(){ financeSubView = null; renderView('finance'); };
 
 /* ---------- Budgets ---------- */
