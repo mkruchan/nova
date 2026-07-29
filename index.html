@@ -244,7 +244,7 @@
   .mono-acct-status.synced{ color:var(--green); }
   .mono-acct-remove{ background:none; border:none; color:var(--rose); font-size:11px; padding:4px 8px; flex-shrink:0; }
 
-  .bottom-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .bottom-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px; }
   .panel-card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
   .panel-title{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
   .panel-title h3{ font-family:'Sora', sans-serif; font-weight:700; font-size:13.5px; margin:0; }
@@ -396,6 +396,9 @@
     <div class="form-row"><label>Category</label>
       <select id="txCategory" onchange="handleCategorySelectChange(this)"></select>
     </div>
+    <div class="form-row" id="loanPickerRow" style="display:none;"><label>Which loan is this paying off?</label>
+      <select id="txLoanId"></select>
+    </div>
     <div class="form-row amount-currency-row">
       <div><label>Amount</label><input id="txAmount" type="text" inputmode="decimal" oninput="formatAmountInput(this)"></div>
       <div><label>Currency</label>
@@ -503,6 +506,25 @@
     <div id="ratesModalBody"></div>
     <div class="modal-actions">
       <button class="modal-cancel" onclick="closeModal('ratesModalOverlay')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="loanModalOverlay" onclick="if(event.target===this) closeModal('loanModalOverlay')">
+  <div class="modal">
+    <h3>Add Loan</h3>
+    <div class="empty-note" style="text-align:left; margin-bottom:12px;">This logs the loan as income right away (you have the money now), then lets you track payments against it separately as you pay it down.</div>
+    <div class="form-row"><label>Loan name</label><input id="loanName" type="text" placeholder="e.g. Car loan from Bank X"></div>
+    <div class="form-row"><label>Principal amount</label><input id="loanPrincipal" type="text" inputmode="decimal" oninput="formatAmountInput(this)"></div>
+    <div class="form-row"><label>Currency</label>
+      <select id="loanCurrency">
+        <option value="EUR">EUR</option><option value="USD">USD</option><option value="UAH">UAH</option><option value="ALL">ALL</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Date received</label><input id="loanDate" type="date"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal('loanModalOverlay')">Cancel</button>
+      <button class="modal-save" onclick="saveNewLoan()">Add Loan</button>
     </div>
   </div>
 </div>
@@ -778,6 +800,74 @@ function persist(){
   scheduleCloudPush();
 }
 
+/* ---------- Loans ---------- */
+// A loan is a real entity (name, principal, currency, date) rather than just
+// a category label, so we can actually answer "how much do I still owe" and
+// show payoff progress — not just tag individual transactions.
+let loans = [];
+
+function loadLoans(){
+  try{ const s = localStorage.getItem('nova-loans'); loans = s ? JSON.parse(s) : []; }
+  catch(e){ loans = []; }
+}
+function persistLoans(){
+  localStorage.setItem('nova-loans', JSON.stringify(loans));
+  scheduleCloudPush();
+}
+
+function loanProgress(loan){
+  const paid = visibleTransactions()
+    .filter(function(t){ return t.loanId === loan.id && t.category === 'Loan' && Number(t.amount) < 0; })
+    .reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
+  const principal = toDisplay(loan.principal, loan.currency);
+  const remaining = Math.max(0, principal - paid);
+  const pct = principal > 0 ? Math.min(100, Math.round((paid/principal)*100)) : 0;
+  return { paid: paid, principal: principal, remaining: remaining, pct: pct };
+}
+
+window.openAddLoanModal = function(){
+  document.getElementById('loanName').value = '';
+  document.getElementById('loanPrincipal').value = '';
+  document.getElementById('loanCurrency').value = DEFAULT_INPUT_CURRENCY;
+  document.getElementById('loanDate').value = todayStr();
+  openModal('loanModalOverlay');
+};
+
+window.saveNewLoan = function(){
+  const name = document.getElementById('loanName').value.trim();
+  const principal = parseAmountInput(document.getElementById('loanPrincipal').value);
+  const currency = document.getElementById('loanCurrency').value || DEFAULT_INPUT_CURRENCY;
+  const date = document.getElementById('loanDate').value;
+  if(!name || !principal || principal <= 0 || !date) return;
+
+  const loanId = 'loan' + Date.now();
+  loans.push({ id: loanId, name: name, principal: principal, currency: currency, startDate: date });
+  persistLoans();
+
+  // Receiving the loan is real income the moment it lands — reflected in Net Worth immediately.
+  transactions.unshift({
+    id: 't' + (nextId++), name: 'Loan: ' + name, category: 'Loan',
+    amount: principal, currency: currency, occurred_at: date, loanId: loanId
+  });
+  persist();
+
+  closeModal('loanModalOverlay');
+  renderView('finance');
+};
+
+window.deleteLoan = function(loanId){
+  if(!confirm("Remove this loan from the list? Its payment history stays in your transactions, just no longer tracked as a loan.")) return;
+  loans = loans.filter(function(l){ return l.id !== loanId; });
+  persistLoans();
+  renderView('finance');
+};
+
+window.addLoanPayment = function(loanId){
+  openTxModal('expense', 'Loan');
+  document.getElementById('txLoanId').value = loanId;
+  toggleLoanPicker();
+};
+
 /* ---------- Cloud sync (Supabase) ---------- */
 // Keeps transactions, budgets, and custom categories in sync across devices.
 // Deliberately NOT synced: the Monobank personal token (stays device-local —
@@ -808,7 +898,8 @@ function cloudPayload(){
     budgets: budgets,
     customExpenseCategories: customExpenseCategories,
     customIncomeCategories: customIncomeCategories,
-    showMonoData: showMonoData
+    showMonoData: showMonoData,
+    loans: loans
   };
 }
 
@@ -819,6 +910,7 @@ function applyCloudPayload(payload){
   if(payload.customExpenseCategories) customExpenseCategories = payload.customExpenseCategories;
   if(payload.customIncomeCategories) customIncomeCategories = payload.customIncomeCategories;
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
+  if(payload.loans) loans = payload.loans;
 
   // Re-apply custom categories to the working lists and recompute nextId,
   // same backfill logic loadData()/loadCustomCategories() already do.
@@ -836,6 +928,7 @@ function applyCloudPayload(payload){
   localStorage.setItem('nova-budgets', JSON.stringify(budgets));
   localStorage.setItem('nova-custom-expense-categories', JSON.stringify(customExpenseCategories));
   localStorage.setItem('nova-custom-income-categories', JSON.stringify(customIncomeCategories));
+  localStorage.setItem('nova-loans', JSON.stringify(loans));
   try{ localStorage.setItem('nova-show-mono-data', String(showMonoData)); }catch(e){}
 }
 
@@ -921,6 +1014,7 @@ function init(){
   loadCustomCategories();
   loadMonoSyncStatus();
   loadCloudConfig();
+  loadLoans();
   renderView('finance');
   refreshExchangeRates();
   setInterval(refreshExchangeRates, 24 * 60 * 60 * 1000); // rates only actually change ~once a day on the free API anyway
@@ -1908,6 +2002,28 @@ function financeHTML(){
       </div>
     </div>
 
+    <div class="bottom-row" style="grid-template-columns:1fr;">
+      <div class="panel-card">
+        <div class="panel-title"><h3>Loans</h3><button class="header-btn" onclick="openAddLoanModal()">+ Add Loan</button></div>
+        ${!loans.length ? '<div class="empty-note">No loans tracked. Add one to see payoff progress here.</div>' : loans.map(function(loan){
+          const p = loanProgress(loan);
+          return `<div class="loan-row" style="padding:12px 0; border-bottom:1px solid var(--border);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div>
+                <div style="font-weight:600; font-size:13px;">${escapeHtml(loan.name)}</div>
+                <div class="empty-note" style="padding:0; margin-top:2px;">${fmtShort(p.remaining)} remaining of ${fmtShort(p.principal)}</div>
+              </div>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button class="header-btn" onclick="addLoanPayment('${loan.id}')">+ Payment</button>
+                <button class="tx-del" onclick="deleteLoan('${loan.id}')">✕</button>
+              </div>
+            </div>
+            ${progressBar(p.pct, false)}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
     ${(function(){
       const transfers = visibleTransactions().filter(function(t){ return t.category === 'Transfer'; });
       if(!transfers.length) return '';
@@ -1951,14 +2067,29 @@ function populateCategorySelect(type){
 }
 
 window.handleCategorySelectChange = function(sel){
-  if(sel.value !== '__add_new__') return;
-  const name = prompt('New ' + (currentTxType === 'income' ? 'income' : 'expense') + ' category name:');
-  if(name && name.trim()){
-    const added = addCustomCategory(name, currentTxType);
-    populateCategorySelect(currentTxType);
-    sel.value = added;
+  if(sel.value === '__add_new__'){
+    const name = prompt('New ' + (currentTxType === 'income' ? 'income' : 'expense') + ' category name:');
+    if(name && name.trim()){
+      const added = addCustomCategory(name, currentTxType);
+      populateCategorySelect(currentTxType);
+      sel.value = added;
+    } else {
+      populateCategorySelect(currentTxType); // revert selection back to a real category
+    }
+  }
+  toggleLoanPicker();
+};
+
+window.toggleLoanPicker = function(){
+  const row = document.getElementById('loanPickerRow');
+  if(!row) return;
+  const cat = document.getElementById('txCategory').value;
+  if(currentTxType === 'expense' && cat === 'Loan' && loans.length > 0){
+    const sel = document.getElementById('txLoanId');
+    sel.innerHTML = loans.map(function(l){ return `<option value="${l.id}">${escapeHtml(l.name)}</option>`; }).join('');
+    row.style.display = 'block';
   } else {
-    populateCategorySelect(currentTxType); // revert selection back to a real category
+    row.style.display = 'none';
   }
 };
 
@@ -1968,6 +2099,7 @@ function setTxType(type){
     b.classList.toggle('active', b.getAttribute('data-type') === type);
   });
   populateCategorySelect(type);
+  toggleLoanPicker();
 }
 
 function openModal(id){ document.getElementById(id).classList.add('open'); }
@@ -1987,6 +2119,7 @@ function openTxModal(type, presetCategory){
     const sel = document.getElementById('txCategory');
     if(sel) sel.value = presetCategory;
   }
+  toggleLoanPicker();
 }
 
 function editTx(id){
@@ -2003,6 +2136,11 @@ function editTx(id){
   document.getElementById('txCurrency').value = t.currency || DEFAULT_INPUT_CURRENCY;
   const catSel = document.getElementById('txCategory');
   if(catSel) catSel.value = t.category;
+  toggleLoanPicker();
+  if(t.loanId){
+    const loanSel = document.getElementById('txLoanId');
+    if(loanSel) loanSel.value = t.loanId;
+  }
 }
 
 // Formats the amount input live as the user types, e.g. "1234.5" -> "1,234.5",
@@ -2042,14 +2180,20 @@ function saveTransaction(){
   const currency = document.getElementById('txCurrency').value || DEFAULT_INPUT_CURRENCY;
   if(!name || isNaN(amount) || !occurred_at) return;
 
+  const loanPickerVisible = document.getElementById('loanPickerRow') && document.getElementById('loanPickerRow').style.display !== 'none';
+  const loanId = loanPickerVisible ? document.getElementById('txLoanId').value : null;
+
   if(editingTxId){
     const t = transactions.find(function(x){ return x.id === editingTxId; });
     if(t){
       t.name = name; t.category = category; t.amount = amount; t.currency = currency; t.occurred_at = occurred_at;
+      if(loanId) t.loanId = loanId; else delete t.loanId;
     }
     editingTxId = null;
   } else {
-    transactions.unshift({ id: 't' + (nextId++), name, category, amount, currency, occurred_at });
+    const tx = { id: 't' + (nextId++), name, category, amount, currency, occurred_at };
+    if(loanId) tx.loanId = loanId;
+    transactions.unshift(tx);
   }
   persist();
 
