@@ -142,7 +142,7 @@
     .mini-stats-grid{ grid-template-columns:repeat(2,1fr); }
   }
 
-  .charts-row{ display:grid; grid-template-columns:1.4fr 1fr; gap:14px; margin-bottom:18px; }
+  .charts-row{ display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:14px; margin-bottom:18px; }
   .chart-card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
   .chart-title{ font-family:'Sora', sans-serif; font-weight:700; font-size:14px; margin-bottom:12px; }
   .chart-legend{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
@@ -244,7 +244,7 @@
   .mono-acct-status.synced{ color:var(--green); }
   .mono-acct-remove{ background:none; border:none; color:var(--rose); font-size:11px; padding:4px 8px; flex-shrink:0; }
 
-  .bottom-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px; }
+  .bottom-row{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; margin-bottom:18px; }
   .panel-card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
   .panel-title{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
   .panel-title h3{ font-family:'Sora', sans-serif; font-weight:700; font-size:13.5px; margin:0; }
@@ -312,8 +312,8 @@
     .sidebar{ display:none !important; }
     .tabbar{ display:flex; }
     .stats-row{ grid-template-columns:repeat(2,1fr); }
-    .charts-row{ grid-template-columns:1fr; }
-    .bottom-row{ grid-template-columns:1fr; }
+    .charts-row{ grid-template-columns:minmax(0,1fr); }
+    .bottom-row{ grid-template-columns:minmax(0,1fr); }
     .main{ padding:calc(16px + env(safe-area-inset-top)) 16px calc(160px + env(safe-area-inset-bottom)); }
     .fab-add{ bottom:calc(84px + env(safe-area-inset-bottom)); }
     .rates-status{ display:none; }
@@ -941,6 +941,7 @@ let cloudConfig = { url: null, key: null, syncId: null };
 let cloudLastPulledAt = null;
 let cloudPushTimer = null;
 let cloudSyncStatus = 'idle'; // idle | syncing | synced | error | unconfigured
+let cloudSyncErrorDetail = ''; // the actual error text from Supabase, when available
 
 function loadCloudConfig(){
   try{
@@ -1022,7 +1023,11 @@ async function pullCloudSync(){
       { headers: { 'apikey': cloudConfig.key, 'Authorization': 'Bearer ' + cloudConfig.key } },
       10000
     );
-    if(!res.ok){ cloudSyncStatus = 'error'; return; }
+    if(!res.ok){
+      cloudSyncStatus = 'error';
+      try{ cloudSyncErrorDetail = await res.text(); }catch(e2){ cloudSyncErrorDetail = 'HTTP ' + res.status; }
+      return;
+    }
     const rows = await res.json();
     if(rows && rows.length){
       const cloudUpdatedAt = rows[0].updated_at;
@@ -1035,7 +1040,7 @@ async function pullCloudSync(){
       }
     }
     cloudSyncStatus = 'synced';
-  }catch(e){ cloudSyncStatus = e.name === 'AbortError' ? 'timeout' : 'error'; }
+  }catch(e){ cloudSyncStatus = e.name === 'AbortError' ? 'timeout' : 'error'; cloudSyncErrorDetail = e.message; }
 }
 
 async function pushCloudSyncNow(){
@@ -1043,7 +1048,7 @@ async function pushCloudSyncNow(){
   if(!cloudConfigured()) { cloudSyncStatus = 'unconfigured'; return; }
   cloudSyncStatus = 'syncing';
   try{
-    const res = await fetchWithTimeout(`${cloudConfig.url}/rest/v1/nova_sync`, {
+    const res = await fetchWithTimeout(`${cloudConfig.url}/rest/v1/nova_sync?on_conflict=sync_id`, {
       method: 'POST',
       headers: {
         'apikey': cloudConfig.key,
@@ -1054,8 +1059,12 @@ async function pushCloudSyncNow(){
       body: JSON.stringify({ sync_id: cloudConfig.syncId, data: cloudPayload(), updated_at: new Date().toISOString() })
     }, 10000);
     cloudSyncStatus = res.ok ? 'synced' : 'error';
-    if(res.ok) cloudLastPulledAt = new Date().toISOString();
-  }catch(e){ cloudSyncStatus = e.name === 'AbortError' ? 'timeout' : 'error'; }
+    if(res.ok){
+      cloudLastPulledAt = new Date().toISOString();
+    } else {
+      try{ cloudSyncErrorDetail = await res.text(); }catch(e2){ cloudSyncErrorDetail = 'HTTP ' + res.status; }
+    }
+  }catch(e){ cloudSyncStatus = e.name === 'AbortError' ? 'timeout' : 'error'; cloudSyncErrorDetail = e.message; }
   if(currentView === 'settings') renderView('settings');
 }
 
@@ -1984,6 +1993,7 @@ function cloudConnectedHTML(){
     <div class="setup-box" style="margin-bottom:12px;">
       <p style="margin:0 0 6px;"><b>✅ Synced across your devices</b></p>
       <p style="margin:0; font-size:11px;">${escapeHtml(statusText)}${cloudLastPulledAt ? ' · last update ' + timeAgo(new Date(cloudLastPulledAt).getTime()) : ''}</p>
+      ${cloudSyncStatus === 'error' && cloudSyncErrorDetail ? `<p style="margin:8px 0 0; font-size:10.5px; color:var(--rose); white-space:pre-wrap; word-break:break-word;">${escapeHtml(cloudSyncErrorDetail)}</p>` : ''}
     </div>
     <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
       <button class="modal-save" onclick="manualCloudSync()">Sync now</button>
@@ -2103,7 +2113,7 @@ function financeOverviewDetailHTML(){
       <div class="stat-card"><div class="stat-label">Savings Rate</div><div class="stat-num">${rate===null?'—':rate+'%'}</div><div class="stat-delta">&nbsp;</div></div>
     </div>
 
-    <div class="charts-row" style="grid-template-columns:1fr;">
+    <div class="charts-row" style="grid-template-columns:minmax(0,1fr);">
       <div class="chart-card">
         <div class="chart-title">Balance Trend — ${label}</div>
         ${visibleTransactions().length ? trendSVG(150) : '<div class="empty-note">Add some transactions to see a trend.</div>'}
@@ -2180,7 +2190,7 @@ function financeHTML(){
       </div>
     </div>
 
-    <div class="bottom-row" style="grid-template-columns:1fr;">
+    <div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
       <div class="panel-card">
         <div class="panel-title"><h3>Loans</h3><button class="header-btn" onclick="openAddLoanModal()">+ Add Loan</button></div>
         ${!loans.length ? '<div class="empty-note">No loans tracked. Add one to see payoff progress here.</div>' : loans.map(function(loan){
@@ -2206,7 +2216,7 @@ function financeHTML(){
     ${(function(){
       const transfers = visibleTransactions().filter(function(t){ return t.category === 'Transfer'; });
       if(!transfers.length) return '';
-      return `<div class="bottom-row" style="grid-template-columns:1fr;">
+      return `<div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
         <div class="panel-card clickable-card" onclick="openHistory('transfer')">
           <div class="panel-title"><h3>Transfers</h3><span class="chevron">›</span></div>
           <div class="empty-note" style="text-align:left; padding:0 0 8px;">Moved between your own connected accounts — not counted as income or spending.</div>
@@ -2532,11 +2542,51 @@ const CATEGORY_ALIASES = {
   // Loan
   'loan':'Loan', 'credit':'Loan', 'кредит':'Loan', 'позика':'Loan', 'позику':'Loan',
   // Transfer
-  'поповнення':'Transfer', 'top-up':'Transfer',
   // Income-side
   'salary':'Salary', 'wage':'Salary', 'wages':'Salary', 'payroll':'Salary',
   'freelance':'Freelance', 'upwork':'Freelance', 'fiverr':'Freelance',
-  'cashback':'Cashback'
+  'cashback':'Cashback',
+  // Cyrillic / Ukrainian merchant & service terms — a large share of Monobank
+  // descriptions will be in Ukrainian, not English
+  'аптека':'Health', 'аптечний':'Health', 'клініка':'Health', 'лікар':'Health', 'стоматолог':'Health',
+  'маркет':'Groceries', 'супермаркет':'Groceries', 'продукти':'Groceries', 'магазин':'Groceries',
+  'кафе':'Eating out', 'ресторан':'Eating out', 'піцерія':'Eating out', 'їдальня':'Eating out',
+  'таксі':'Transport', 'убер':'Transport', 'заправка':'Transport', 'паливо':'Transport', 'парковка':'Transport',
+  'оренда':'Rent', 'аренда':'Rent',
+  'комуналка':'Bills', 'комунальні':'Bills', 'інтернет':'Bills', 'мобільний':'Bills',
+  'готель':'Travel', 'авіа':'Travel', 'квиток':'Travel', 'подорож':'Travel',
+  'спортзал':'Sport', 'фітнес':'Sport', 'тренажерний':'Sport',
+  'перукарня':'Self-care', 'салон краси':'Self-care', 'манікюр':'Self-care', 'спа':'Self-care',
+  'кіно':'Entertainment', 'театр':'Entertainment', 'концерт':'Entertainment',
+  'одяг':'Clothing', 'взуття':'Clothing',
+  'квіти':'Flowers', 'квіти магазин':'Flowers',
+  'університет':'Education', 'школа':'Education', 'курси':'Education',
+  'благодійність':'Charity', 'donat':'Charity', 'донат':'Charity',
+  'зарплата':'Salary', 'аванс':'Salary'
+};
+
+// Maps Merchant Category Codes (a globally standardized classification every
+// card transaction carries) to our categories. Monobank's statement API
+// returns this directly as item.mcc — it's far more reliable than guessing
+// from merchant name text, since it doesn't depend on language or how a
+// merchant happened to name their business.
+const MCC_CATEGORY_MAP = {
+  5411:'Groceries', 5422:'Groceries', 5441:'Groceries', 5451:'Groceries', 5462:'Groceries', 5499:'Groceries',
+  5812:'Eating out', 5813:'Eating out', 5814:'Eating out',
+  5541:'Transport', 5542:'Transport', 4121:'Transport', 4111:'Transport', 4112:'Transport', 4131:'Transport', 7523:'Transport', 4789:'Transport',
+  5912:'Health', 8011:'Health', 8021:'Health', 8031:'Health', 8042:'Health', 8049:'Health', 8050:'Health', 8062:'Health', 8071:'Health',
+  5651:'Clothing', 5661:'Clothing', 5137:'Clothing', 5691:'Clothing', 5699:'Clothing',
+  5732:'Electronics', 5733:'Electronics', 5045:'Electronics', 5734:'Digital / Subscriptions', 4816:'Digital / Subscriptions',
+  5941:'Sport', 7941:'Sport', 7997:'Active Leisure',
+  7011:'Travel', 4511:'Travel', 4522:'Travel', 4411:'Travel', 7512:'Travel',
+  8211:'Education', 8220:'Education', 8241:'Education', 8244:'Education', 8249:'Education', 8299:'Education', 5942:'Education',
+  4899:'Bills', 4814:'Bills', 4900:'Bills', 4813:'Bills',
+  7832:'Entertainment', 7922:'Entertainment', 7996:'Entertainment', 7998:'Entertainment', 7999:'Entertainment',
+  7230:'Self-care', 7298:'Self-care', 7297:'Self-care',
+  5992:'Flowers',
+  5211:'Home', 5251:'Home', 5311:'Home', 5722:'Home', 5200:'Home',
+  8398:'Charity',
+  7399:'Services', 7392:'Services'
 };
 
 function matchCategory(raw, type){
@@ -2689,9 +2739,22 @@ window.saveMonoFromDateOnly = function(){
   const statusEl = document.getElementById('monoStatus');
   if(!dateStr){ statusEl.textContent = 'Pick a date first.'; statusEl.classList.add('error'); return; }
   saveMonoFromDate(dateStr);
-  statusEl.textContent = `Saved — future syncs will remember ${dateStr} as the starting point. Tap "Sync selected" whenever you're ready to actually pull data.`;
+  applyDisplayRangeFromDate(dateStr);
+  statusEl.textContent = `Saved — future syncs will remember ${dateStr} as the starting point, and your dashboard now shows data from ${dateStr} onward too. Tap "Sync selected" whenever you're ready to actually pull data.`;
   statusEl.classList.remove('error');
 };
+
+// Sets the dashboard's display range to start from a given date — used when
+// you explicitly set a sync-from date in Bank, so what you see matches what
+// you asked to track, without needing to separately open the Date Range
+// picker too. Deliberately NOT called from the silent background auto-sync,
+// since that shouldn't override a view you're actively looking at.
+function applyDisplayRangeFromDate(dateStr){
+  customRangeActive = true;
+  customRangeFrom = dateStr;
+  customRangeTo = null;
+  activeRangePresetLabel = null;
+}
 
 function monoAccountLabel(a){
   const cur = MONO_CURRENCY_MAP[a.currencyCode] || a.currencyCode;
@@ -2846,11 +2909,11 @@ async function autoSyncMonobank(){
             const amount = item.amount / 100;
             const type = amount >= 0 ? 'income' : 'expense';
             const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
-            const descLower = desc.toLowerCase();
-            const looksLikeJarTopUp = descLower.indexOf('поповнення') !== -1 || descLower.indexOf('top-up') !== -1 || descLower.indexOf('topup') !== -1;
             let category;
-            if((item.counterIban && myOwnIbans.has(item.counterIban)) || looksLikeJarTopUp){
-              category = 'Transfer';
+            if(item.counterIban && myOwnIbans.has(item.counterIban)){
+              category = 'Transfer'; // verified: money moved between your own connected accounts
+            } else if(type === 'expense' && item.mcc && MCC_CATEGORY_MAP[item.mcc]){
+              category = MCC_CATEGORY_MAP[item.mcc];
             } else {
               category = matchCategory(desc, type);
               if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
@@ -2897,6 +2960,7 @@ window.syncMonobank = async function(){
   if(!checkedIds.length){ statusEl.textContent = 'Check at least one account to sync.'; statusEl.classList.add('error'); return; }
 
   saveMonoFromDate(fromDateStr); // remember this choice for next time you open Bank
+  applyDisplayRangeFromDate(fromDateStr); // and show the dashboard from this same date, since you set it explicitly
 
   statusEl.textContent = '';
   statusEl.classList.remove('error');
@@ -2968,14 +3032,11 @@ window.syncMonobank = async function(){
         const amount = item.amount / 100; // Monobank amounts are in minor units
         const type = amount >= 0 ? 'income' : 'expense';
         const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
-        const descLower = desc.toLowerCase();
-        // Jar/goal top-ups ("Поповнення «...»") are money moving within your own
-        // Monobank ecosystem, not real spending — but jars don't always populate
-        // counterIban, so catch these by the description Monobank itself uses.
-        const looksLikeJarTopUp = descLower.indexOf('поповнення') !== -1 || descLower.indexOf('top-up') !== -1 || descLower.indexOf('topup') !== -1;
         let category;
-        if((item.counterIban && myOwnIbans.has(item.counterIban)) || looksLikeJarTopUp){
-          category = 'Transfer'; // moving money between your own connected Monobank accounts — not real income/spend
+        if(item.counterIban && myOwnIbans.has(item.counterIban)){
+          category = 'Transfer'; // verified: money moved between your own connected accounts — jars/goals don't count, only accounts you've actually connected
+        } else if(type === 'expense' && item.mcc && MCC_CATEGORY_MAP[item.mcc]){
+          category = MCC_CATEGORY_MAP[item.mcc];
         } else {
           category = matchCategory(desc, type);
           if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
