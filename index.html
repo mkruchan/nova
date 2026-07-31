@@ -829,6 +829,7 @@ function loadMonoVisibility(){
 function setMonoVisibility(show){
   showMonoData = show;
   try{ localStorage.setItem('nova-show-mono-data', String(show)); }catch(e){}
+  scheduleCloudPush(); // otherwise a periodic pull could silently restore the old value from Supabase moments later
   renderView('finance');
 }
 window.toggleMonoVisibility = function(){ setMonoVisibility(!showMonoData); };
