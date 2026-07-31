@@ -1960,6 +1960,9 @@ function settingsScreenHTML(){
     <div class="settings-row" onclick="openRatesDetail()">
       <span>💱 Exchange rates</span><span class="chevron">›</span>
     </div>
+    <div class="settings-row" onclick="recategorizeTransactions()">
+      <span>🏷️ Re-categorize transactions</span><span class="chevron">›</span>
+    </div>
 
     <div class="side-label" style="margin:20px 0 8px;">Cloud Sync</div>
     ${cloudConfigured() ? cloudConnectedHTML() : cloudSetupFormHTML()}
@@ -1980,6 +1983,37 @@ window.resetAppData = function(){
     });
     location.reload();
   }, { title: 'Reset app data?', confirmLabel: 'Reset' });
+};
+
+// Re-runs the current categorization logic (MCC + keyword matching) against
+// every transaction still sitting in "Other expense"/"Other income" — useful
+// after improving the matching rules, since Monobank sync only categorizes a
+// transaction once, the first time it's imported, and never touches it again.
+window.recategorizeTransactions = function(){
+  const candidates = transactions.filter(function(t){ return t.category === 'Other expense' || t.category === 'Other income'; });
+  if(!candidates.length){
+    customConfirm('No transactions are currently sitting in "Other expense" or "Other income" — nothing to re-categorize.', function(){}, { title: 'Nothing to do', confirmLabel: 'OK' });
+    return;
+  }
+  customConfirm(`Re-check ${candidates.length} transaction${candidates.length===1?'':'s'} currently in "Other expense"/"Other income" against the latest categorization rules? Anything that still doesn't match stays as-is.`, function(){
+    let changed = 0;
+    candidates.forEach(function(t){
+      const type = Number(t.amount) > 0 ? 'income' : 'expense';
+      let newCategory = null;
+      if(type === 'expense') newCategory = mccCategoryFor(t);
+      if(!newCategory) newCategory = matchCategory(t.name, type);
+      if(newCategory && newCategory !== t.category){
+        t.category = newCategory;
+        changed++;
+      }
+    });
+    persist();
+    renderView('settings');
+    customConfirm(changed > 0
+      ? `Done — recategorized ${changed} of ${candidates.length} transaction${candidates.length===1?'':'s'}.`
+      : `Checked ${candidates.length} transaction${candidates.length===1?'':'s'} — none matched a category yet. These probably need a manual category (like peer-to-peer transfers or ATM withdrawals, which genuinely can't be auto-categorized).`,
+      function(){}, { title: 'Re-categorize complete', confirmLabel: 'OK' });
+  }, { title: 'Re-categorize transactions?', confirmLabel: 'Re-check' });
 };
 
 function cloudConnectedHTML(){
@@ -2589,6 +2623,15 @@ const MCC_CATEGORY_MAP = {
   7399:'Services', 7392:'Services'
 };
 
+// Checks both mcc and originalMcc — Monobank sometimes reclassifies a
+// merchant's live mcc for their own purposes, so the original code can
+// occasionally match when the current one doesn't.
+function mccCategoryFor(item){
+  if(item.mcc && MCC_CATEGORY_MAP[item.mcc]) return MCC_CATEGORY_MAP[item.mcc];
+  if(item.originalMcc && MCC_CATEGORY_MAP[item.originalMcc]) return MCC_CATEGORY_MAP[item.originalMcc];
+  return null;
+}
+
 function matchCategory(raw, type){
   if(!raw) return null;
   const clean = raw.trim().toLowerCase();
@@ -2739,22 +2782,9 @@ window.saveMonoFromDateOnly = function(){
   const statusEl = document.getElementById('monoStatus');
   if(!dateStr){ statusEl.textContent = 'Pick a date first.'; statusEl.classList.add('error'); return; }
   saveMonoFromDate(dateStr);
-  applyDisplayRangeFromDate(dateStr);
-  statusEl.textContent = `Saved — future syncs will remember ${dateStr} as the starting point, and your dashboard now shows data from ${dateStr} onward too. Tap "Sync selected" whenever you're ready to actually pull data.`;
+  statusEl.textContent = `Saved — future syncs will remember ${dateStr} as the starting point. Tap "Sync selected" whenever you're ready to actually pull data.`;
   statusEl.classList.remove('error');
 };
-
-// Sets the dashboard's display range to start from a given date — used when
-// you explicitly set a sync-from date in Bank, so what you see matches what
-// you asked to track, without needing to separately open the Date Range
-// picker too. Deliberately NOT called from the silent background auto-sync,
-// since that shouldn't override a view you're actively looking at.
-function applyDisplayRangeFromDate(dateStr){
-  customRangeActive = true;
-  customRangeFrom = dateStr;
-  customRangeTo = null;
-  activeRangePresetLabel = null;
-}
 
 function monoAccountLabel(a){
   const cur = MONO_CURRENCY_MAP[a.currencyCode] || a.currencyCode;
@@ -2912,8 +2942,8 @@ async function autoSyncMonobank(){
             let category;
             if(item.counterIban && myOwnIbans.has(item.counterIban)){
               category = 'Transfer'; // verified: money moved between your own connected accounts
-            } else if(type === 'expense' && item.mcc && MCC_CATEGORY_MAP[item.mcc]){
-              category = MCC_CATEGORY_MAP[item.mcc];
+            } else if(type === 'expense' && mccCategoryFor(item)){
+              category = mccCategoryFor(item);
             } else {
               category = matchCategory(desc, type);
               if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
@@ -2921,7 +2951,7 @@ async function autoSyncMonobank(){
             const occurred_at = new Date(item.time * 1000).toISOString().slice(0,10);
             transactions.unshift({
               id: 't' + (nextId++), monoId: item.id, monoAccountId: account.id, name: desc, category: category,
-              amount: amount, currency: currency, occurred_at: occurred_at
+              amount: amount, currency: currency, occurred_at: occurred_at, mcc: item.mcc || null, originalMcc: item.originalMcc || null
             });
             existingIds.add(item.id);
             imported++;
@@ -2960,7 +2990,6 @@ window.syncMonobank = async function(){
   if(!checkedIds.length){ statusEl.textContent = 'Check at least one account to sync.'; statusEl.classList.add('error'); return; }
 
   saveMonoFromDate(fromDateStr); // remember this choice for next time you open Bank
-  applyDisplayRangeFromDate(fromDateStr); // and show the dashboard from this same date, since you set it explicitly
 
   statusEl.textContent = '';
   statusEl.classList.remove('error');
@@ -3035,8 +3064,8 @@ window.syncMonobank = async function(){
         let category;
         if(item.counterIban && myOwnIbans.has(item.counterIban)){
           category = 'Transfer'; // verified: money moved between your own connected accounts — jars/goals don't count, only accounts you've actually connected
-        } else if(type === 'expense' && item.mcc && MCC_CATEGORY_MAP[item.mcc]){
-          category = MCC_CATEGORY_MAP[item.mcc];
+        } else if(type === 'expense' && mccCategoryFor(item)){
+          category = mccCategoryFor(item);
         } else {
           category = matchCategory(desc, type);
           if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
@@ -3045,7 +3074,7 @@ window.syncMonobank = async function(){
 
         transactions.unshift({
           id: 't' + (nextId++), monoId: item.id, monoAccountId: accountId, name: desc, category: category,
-          amount: amount, currency: currency, occurred_at: occurred_at
+          amount: amount, currency: currency, occurred_at: occurred_at, mcc: item.mcc || null, originalMcc: item.originalMcc || null
         });
         existingIds.add(item.id);
         totalImported++;
