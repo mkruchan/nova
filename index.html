@@ -973,7 +973,11 @@ function cloudConfigured(){
 
 function cloudPayload(){
   return {
-    transactions: transactions,
+    // Monobank transactions stay local to each device — each one auto-syncs
+    // directly from Monobank on its own, so relaying that data through
+    // Supabase too is redundant and was the source of several sync bugs.
+    // Only manually-entered transactions get shared across devices.
+    transactions: transactions.filter(function(t){ return !t.monoId; }),
     budgets: budgets,
     customExpenseCategories: customExpenseCategories,
     customIncomeCategories: customIncomeCategories,
@@ -984,7 +988,15 @@ function cloudPayload(){
 
 function applyCloudPayload(payload){
   if(!payload) return;
-  if(payload.transactions) transactions = payload.transactions;
+  if(payload.transactions){
+    // The cloud payload only ever contains manually-entered transactions
+    // (Monobank data is deliberately excluded, see cloudPayload()) — so
+    // merge those in while preserving this device's own locally-synced
+    // Monobank transactions, rather than overwriting the whole array and
+    // losing them.
+    const localMonoTx = transactions.filter(function(t){ return t.monoId; });
+    transactions = payload.transactions.concat(localMonoTx);
+  }
   if(payload.budgets) budgets = payload.budgets;
   if(payload.customExpenseCategories) customExpenseCategories = payload.customExpenseCategories;
   if(payload.customIncomeCategories) customIncomeCategories = payload.customIncomeCategories;
