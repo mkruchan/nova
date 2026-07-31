@@ -178,6 +178,7 @@
     .cat-pct{ width:auto; }
     .cat-amt{ width:auto; }
     .donut-wrap-mini svg{ width:140px; height:140px; }
+    .detail-donut-large .donut-wrap-mini svg{ width:200px; height:200px; }
   }
 
   .clickable-card{ cursor:pointer; transition:border-color 0.15s ease; }
@@ -195,6 +196,7 @@
   .detail-title{ font-family:'Sora', sans-serif; font-weight:700; font-size:17px; }
   .detail-filters{ margin-bottom:20px; }
   .detail-donut-row{ display:flex; justify-content:center; margin-bottom:20px; }
+  .detail-donut-large .donut-wrap-mini svg{ width:220px; height:220px; }
 
   .month-bars-row{ display:flex; align-items:flex-end; gap:6px; height:80px; margin-bottom:20px; padding:0 2px; }
   .month-bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:6px; height:100%; }
@@ -637,13 +639,16 @@ const INCOME_CATEGORIES = ["Salary","Freelance","Sale","Gifts","Other income","C
 const DONUT_COLORS = ['#5B8CFF', '#8FB2FF', '#C3D3FF', '#2A3A66', '#4A5A8A', '#7A8CC9'];
 
 // Every category gets its own fixed color, so the same category always looks
-// the same regardless of where it ranks in a given month's breakdown.
+// the same regardless of where it ranks in a given month's breakdown. Sized
+// with real headroom above the actual number of categories so none repeat.
 const CATEGORY_COLOR_PALETTE = [
   '#5B8CFF','#34D399','#FBBF24','#FB7185','#A78BFA','#22D3EE',
   '#F97316','#84CC16','#EC4899','#818CF8','#2DD4BF','#F472B6',
   '#EAB308','#60A5FA','#4ADE80','#F87171','#C084FC','#38BDF8',
   '#FB923C','#A3E635','#F0ABFC','#93C5FD','#6EE7B7','#FDE047',
-  '#FCA5A5','#D8B4FE','#7DD3FC','#FDBA74','#BEF264','#F9A8D4'
+  '#FCA5A5','#D8B4FE','#7DD3FC','#FDBA74','#BEF264','#F9A8D4',
+  '#2563EB','#059669','#D97706','#DC2626','#7C3AED','#0891B2',
+  '#EA580C','#65A30D','#DB2777','#4F46E5','#0D9488','#9333EA'
 ];
 const CATEGORY_COLOR = {};
 (function(){
@@ -664,7 +669,16 @@ function colorForCategory(name){
   if(!CATEGORY_COLOR[name]){
     // assign a fresh color to any category we haven't seen before (e.g. a custom one)
     const used = Object.keys(CATEGORY_COLOR).length;
-    CATEGORY_COLOR[name] = CATEGORY_COLOR_PALETTE[used % CATEGORY_COLOR_PALETTE.length];
+    if(used < CATEGORY_COLOR_PALETTE.length){
+      CATEGORY_COLOR[name] = CATEGORY_COLOR_PALETTE[used];
+    } else {
+      // Ran out of curated colors — generate more using the golden-angle
+      // technique (each hue offset ~137.5° from the last), which keeps
+      // producing well-separated, genuinely distinct colors indefinitely
+      // instead of wrapping back around to a color already in use.
+      const hue = (used * 137.508) % 360;
+      CATEGORY_COLOR[name] = `hsl(${hue.toFixed(1)}, 70%, 60%)`;
+    }
   }
   return CATEGORY_COLOR[name];
 }
@@ -1535,7 +1549,7 @@ function expenseDetailScreenHTML(){
       <select class="filter-select" onchange="setBreakdownCategory(this.value)">${catOptions}</select>
     </div>
 
-    ${data.length ? `<div class="detail-donut-row">${donutWithCenterLabel(data, total, breakdownPeriod === 'month' ? rangeLabel() : periodLabel(breakdownPeriod))}</div>` : ''}
+    ${data.length ? `<div class="detail-donut-row detail-donut-large">${donutWithCenterLabel(data, total, breakdownPeriod === 'month' ? rangeLabel() : periodLabel(breakdownPeriod))}</div>` : ''}
 
     ${monthlyExpenseBarsHTML(breakdownType)}
 
@@ -2905,11 +2919,24 @@ function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 // stay current without the user having to remember to open Bank > Sync.
 // Only pulls a short recent window each time, so it stays fast and light
 // on Monobank's 1-request-per-minute limit even with several accounts.
+// Gated behind hasEverManuallySynced — the first sync is always a deliberate
+// action via the Sync button; automatic background syncing only takes over
+// after that, so nothing pulls in behind your back before you've explicitly
+// chosen to connect and sync at least once.
 let autoSyncInProgress = false;
+
+function hasEverManuallySynced(){
+  try{ return localStorage.getItem('nova-mono-manual-sync-done') === 'true'; }catch(e){ return false; }
+}
+function markManuallySyncedOnce(){
+  try{ localStorage.setItem('nova-mono-manual-sync-done', 'true'); }catch(e){}
+}
+
 async function autoSyncMonobank(){
   if(autoSyncInProgress) return;
   const token = loadMonoToken();
   if(!token) return; // never connected — nothing to keep in sync
+  if(!hasEverManuallySynced()) return; // wait for an explicit first Sync before taking over automatically
 
   autoSyncInProgress = true;
   try{
@@ -3105,6 +3132,7 @@ window.syncMonobank = async function(){
   });
   persistMonoSyncStatus();
   renderMonoAccountList();
+  markManuallySyncedOnce(); // unlocks automatic background syncing from now on
 
   progressEl.textContent = '';
   renderView('finance');
