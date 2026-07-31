@@ -1219,7 +1219,7 @@ window.applyRangePreset = function(preset){
     from = fmt10(new Date(now.getFullYear() - 1, 0, 1));
     to = fmt10(new Date(now.getFullYear() - 1, 11, 31));
   } else if(preset === 'allTime'){
-    const earliest = transactions.reduce(function(min, t){ return (!min || t.occurred_at < min) ? t.occurred_at : min; }, null);
+    const earliest = visibleTransactions().reduce(function(min, t){ return (!min || t.occurred_at < min) ? t.occurred_at : min; }, null);
     from = earliest || fmt10(now);
   } else {
     return;
