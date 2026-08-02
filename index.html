@@ -3065,9 +3065,13 @@ async function autoSyncMonobank(){
         // A first-run full history pull needs chunking (Monobank caps each
         // request at ~31 days); the regular lightweight catch-up never
         // needs more than one request since its window is already short.
-        let chunkStart = from;
-        while(chunkStart < to){
-          const chunkEnd = Math.min(chunkStart + MAX_WINDOW, to);
+        // Chunks go from NEWEST to OLDEST — your most recent activity shows
+        // up within the first request or two, while older history keeps
+        // filling in behind it, rather than making today's transactions the
+        // very last thing to arrive after the whole historical pull finishes.
+        let chunkEnd = to;
+        while(chunkEnd > from){
+          const chunkStart = Math.max(chunkEnd - MAX_WINDOW, from);
           const sres = await fetch(`https://api.monobank.ua/personal/statement/${account.id}/${chunkStart}/${chunkEnd}`, { headers: { 'X-Token': token } });
           if(sres.ok){
             const items = await sres.json();
@@ -3115,8 +3119,8 @@ async function autoSyncMonobank(){
             try{ bodyText = await sres.text(); }catch(e2){}
             lastSyncError = `Statement request failed (HTTP ${sres.status})${bodyText ? ': ' + bodyText.slice(0,200) : ''}`;
           }
-          chunkStart = chunkEnd;
-          if(chunkStart < to) await sleep(61000); // respect the 1-request-per-minute limit between chunks
+          chunkEnd = chunkStart;
+          if(chunkEnd > from) await sleep(61000); // respect the 1-request-per-minute limit between chunks
         }
       }catch(e){ lastSyncError = 'Network error reaching Monobank: ' + e.message; }
       if(i < accounts.length - 1) await sleep(61000); // respect the 1-request-per-minute limit across accounts
