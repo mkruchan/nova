@@ -473,7 +473,7 @@
       </div>
 
       <div class="side-label" style="margin:16px 0 4px; color:var(--rose);">Disconnect</div>
-      <div class="empty-note" style="text-align:left; margin-bottom:8px;">Stops automatic syncing and removes your token from this device. Transactions already synced stay exactly as they are — this doesn't delete anything.</div>
+      <div class="empty-note" style="text-align:left; margin-bottom:8px;">Stops automatic syncing, removes your token from this device, and permanently deletes every transaction synced from Monobank. This can't be undone.</div>
       <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
         <button class="tx-del" style="border:1px solid var(--rose); border-radius:8px; padding:8px 14px;" onclick="disconnectMonobank()">Disconnect Monobank</button>
       </div>
@@ -1999,6 +1999,9 @@ function settingsScreenHTML(){
     <div class="settings-row" onclick="recategorizeTransactions()">
       <span>🏷️ Re-categorize transactions</span><span class="chevron">›</span>
     </div>
+    <div class="settings-row" onclick="removeDuplicateMonobankTransactions()">
+      <span>🧹 Remove duplicate transactions</span><span class="chevron">›</span>
+    </div>
 
     <div class="side-label" style="margin:20px 0 8px;">Cloud Sync</div>
     ${cloudConfigured() ? cloudConnectedHTML() : cloudSetupFormHTML()}
@@ -2025,6 +2028,27 @@ window.resetAppData = function(){
 // every transaction still sitting in "Other expense"/"Other income" — useful
 // after improving the matching rules, since Monobank sync only categorizes a
 // transaction once, the first time it's imported, and never touches it again.
+window.removeDuplicateMonobankTransactions = function(){
+  const seen = new Set();
+  const duplicates = [];
+  transactions.forEach(function(t){
+    if(!t.monoId) return; // manual transactions are never considered duplicates of each other
+    if(seen.has(t.monoId)) duplicates.push(t.id);
+    else seen.add(t.monoId);
+  });
+  if(!duplicates.length){
+    customConfirm('No duplicate Monobank transactions found.', function(){}, { title: 'Nothing to clean up', confirmLabel: 'OK' });
+    return;
+  }
+  customConfirm(`Found ${duplicates.length} duplicate Monobank transaction${duplicates.length===1?'':'s'} (same underlying bank transaction imported more than once). Remove the extra copies? The original of each stays.`, function(){
+    const dupSet = new Set(duplicates);
+    transactions = transactions.filter(function(t){ return !dupSet.has(t.id); });
+    persist();
+    renderView('settings');
+    customConfirm(`Removed ${duplicates.length} duplicate transaction${duplicates.length===1?'':'s'}.`, function(){}, { title: 'Cleanup complete', confirmLabel: 'OK' });
+  }, { title: 'Remove duplicates?', confirmLabel: 'Remove' });
+};
+
 window.recategorizeTransactions = function(){
   const candidates = transactions.filter(function(t){ return t.category === 'Other expense' || t.category === 'Other income'; });
   if(!candidates.length){
@@ -2801,17 +2825,26 @@ function saveMonoToken(token){
   try{ localStorage.setItem('nova-mono-token', token); }catch(e){ /* ignore */ }
 }
 window.disconnectMonobank = function(){
-  customConfirm("Stop syncing and remove your Monobank token from this device? Transactions already synced stay exactly as they are — nothing gets deleted.", function(){
+  const count = transactions.filter(function(t){ return t.monoId; }).length;
+  const countText = count > 0 ? ` This will also permanently delete ${count} previously-synced transaction${count===1?'':'s'} — this can't be undone.` : '';
+  customConfirm(`Stop syncing and remove your Monobank token from this device?${countText}`, function(){
     try{
       localStorage.removeItem('nova-mono-token');
       localStorage.removeItem('nova-mono-manual-sync-done'); // reconnecting later starts fresh, pulling full history again
     }catch(e){}
+    transactions = transactions.filter(function(t){ return !t.monoId; }); // actually delete, not just hide
+    persist();
     monoAccounts = [];
+    monoSyncStatus = {};
+    persistMonoSyncStatus();
+    setMonoVisibility(true); // nothing left to hide, so reset to the default state
     document.getElementById('monoToken').value = '';
     document.getElementById('monoAccountRow').style.display = 'none';
-    document.getElementById('monoStatus').textContent = 'Disconnected. Your synced transactions are untouched.';
+    document.getElementById('monoStatus').textContent = count > 0 ? `Disconnected and deleted ${count} synced transaction${count===1?'':'s'}.` : 'Disconnected.';
     document.getElementById('monoStatus').classList.remove('error');
-  }, { title: 'Disconnect Monobank?', confirmLabel: 'Disconnect' });
+    refreshMonoVisibilityLabel();
+    renderView('finance');
+  }, { title: 'Disconnect Monobank?', confirmLabel: 'Disconnect & Delete' });
 };
 function loadMonoSyncStatus(){
   try{ const s = localStorage.getItem('nova-mono-sync-status'); monoSyncStatus = s ? JSON.parse(s) : {}; }
@@ -3028,6 +3061,13 @@ async function autoSyncMonobank(){
               anyImported = true;
               const prevCount = (monoSyncStatus[account.id] && monoSyncStatus[account.id].count) || 0;
               monoSyncStatus[account.id] = { lastSyncedAt: Date.now(), count: prevCount + imported };
+              // Save immediately after every chunk — a long first-run sync can
+              // take many minutes across many chunks, and without this, an
+              // interruption partway through (tab closed, phone locked, page
+              // reloaded) would lose all unsaved progress, causing the next
+              // attempt to re-pull and duplicate everything already imported.
+              persist();
+              persistMonoSyncStatus();
             }
           }
           // if this chunk wasn't ok (e.g. rate-limited), just skip it this round — next scheduled run will retry
@@ -3041,8 +3081,6 @@ async function autoSyncMonobank(){
     if(isFirstRun) markManuallySyncedOnce(); // subsequent runs use the lightweight window from here on
 
     if(anyImported){
-      persist();
-      persistMonoSyncStatus();
       if(currentView === 'finance') renderView('finance');
     }
   }catch(e){ /* offline, CORS, etc. — silently skip, next scheduled run will retry */ }
