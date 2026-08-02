@@ -1232,7 +1232,16 @@ function loadDateRangeState(){
   }catch(e){}
 }
 
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+// toISOString() converts to UTC before formatting, which silently shifts the
+// calendar date by a day for anyone not at UTC+0, depending what time it is
+// locally — exactly the kind of thing that makes "today's" transactions
+// vanish or misfile depending on the hour. This always uses the actual
+// local calendar date instead.
+function localDateStr(date){
+  const d = date || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function todayStr(){ return localDateStr(new Date()); }
 
 function rangeLabel(){
   if(!customRangeActive || !customRangeFrom) return 'This Month';
@@ -1255,7 +1264,7 @@ function thisMonthTx(){
 
 window.applyRangePreset = function(preset){
   const now = new Date();
-  const fmt10 = function(d){ return d.toISOString().slice(0,10); };
+  const fmt10 = function(d){ return localDateStr(d); };
   let from, to = null;
   const presetLabels = {
     thisMonth: 'This Month', lastMonth: 'Last Month', thisQuarter: 'This Quarter',
@@ -1844,7 +1853,7 @@ function trendSVG(height){
     days = 30;
     start = new Date(now); start.setDate(start.getDate() - days);
   }
-  const startStr = start.toISOString().slice(0,10);
+  const startStr = localDateStr(start);
   const trendTx = visibleTransactions();
   const balanceBeforeStart = trendTx.reduce(function(sum, t){
     return t.occurred_at < startStr ? sum + toDisplay(t.amount, t.currency) : sum;
@@ -1938,7 +1947,7 @@ function historyRows(){
   const isTransfer = historyType === 'transfer';
   const isLoan = historyType === 'loan';
   const isIncome = historyType === 'income';
-  const base = visibleTransactions();
+  const base = isLoan ? visibleTransactions() : thisMonthTx(); // loan history intentionally shows a specific loan's full history regardless of the display range
   let list;
   if(isLoan){
     list = base.filter(function(t){ return t.loanId === historyLoanId && t.category === 'Loan'; });
@@ -2356,7 +2365,7 @@ function financeHTML(){
 }
 
 function wireFinanceEvents(){
-  document.getElementById('txDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('txDate').value = localDateStr(new Date());
   wireNova();
 }
 
@@ -2436,7 +2445,7 @@ function openTxModal(type, presetCategory){
   document.getElementById('txModalTitle').textContent = 'Add Transaction';
   document.getElementById('txName').value = '';
   document.getElementById('txAmount').value = '';
-  document.getElementById('txDate').value = new Date().toISOString().slice(0,10);
+  document.getElementById('txDate').value = localDateStr(new Date());
   document.getElementById('txCurrency').value = DEFAULT_INPUT_CURRENCY;
   openModal('txModalOverlay');
   setTxType(type || 'expense');
@@ -2612,7 +2621,7 @@ function parseFlexibleDate(str){
     return m[3] + '-' + pad(a) + '-' + pad(b); // assume MM/DD/YYYY
   }
   const d = new Date(s);
-  if(!isNaN(d.getTime())) return d.toISOString().slice(0,10);
+  if(!isNaN(d.getTime())) return localDateStr(d);
   return null;
 }
 function pad(n){ n = String(n); return n.length < 2 ? '0'+n : n; }
@@ -3121,7 +3130,7 @@ async function autoSyncMonobank(){
                 category = matchCategory(desc, type);
                 if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
               }
-              const occurred_at = new Date(item.time * 1000).toISOString().slice(0,10);
+              const occurred_at = localDateStr(new Date(item.time * 1000));
               transactions.unshift({
                 id: 't' + (nextId++), monoId: item.id, monoAccountId: account.id, name: desc, category: category,
                 amount: amount, currency: currency, occurred_at: occurred_at, mcc: item.mcc || null, originalMcc: item.originalMcc || null
@@ -3207,7 +3216,7 @@ function exportCSV(){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'nova-export-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.download = 'nova-export-' + localDateStr(new Date()) + '.csv';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
