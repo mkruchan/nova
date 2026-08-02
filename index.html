@@ -454,6 +454,7 @@
       <button class="modal-save" onclick="connectMonobank()">Connect</button>
     </div>
     <div id="monoStatus" class="status-msg" style="margin-top:10px;"></div>
+    <div id="monoLastError" class="status-msg error" style="margin-top:6px; display:none;"></div>
     <div id="monoAccountRow" style="display:none; margin-top:14px;">
       <div class="panel-title" style="margin-bottom:8px;">
         <h3 style="font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted-dim); font-weight:600; margin:0;">Accounts</h3>
@@ -2942,6 +2943,14 @@ window.openMonoModal = function(){
   document.getElementById('monoToken').value = token;
   document.getElementById('monoStatus').textContent = '';
   document.getElementById('monoStatus').classList.remove('error');
+  const lastError = (function(){ try{ return localStorage.getItem('nova-mono-last-error'); }catch(e){ return null; } })();
+  const errEl = document.getElementById('monoLastError');
+  if(lastError){
+    errEl.textContent = `Last automatic sync attempt hit an issue: ${lastError}`;
+    errEl.style.display = 'block';
+  } else {
+    errEl.style.display = 'none';
+  }
   document.getElementById('monoAccountRow').style.display = 'none';
   document.getElementById('displayFromDate').value = customRangeActive && customRangeFrom ? customRangeFrom : '';
   loadMonoSyncStatus();
@@ -3040,7 +3049,15 @@ async function autoSyncMonobank(){
     const from = isFirstRun ? (to - (5 * 365 * 24 * 60 * 60)) : (to - (30 * 24 * 60 * 60));
     const MAX_WINDOW = 31 * 24 * 60 * 60 - 3600;
 
+    // Monobank's 1-request-per-minute limit applies across ALL endpoints for
+    // a token, not per-endpoint — without this wait, the very first statement
+    // request right after client-info would get silently rate-limited every
+    // single time, which is exactly what "accounts show up but no
+    // transactions ever appear" looks like from the outside.
+    await sleep(61000);
+
     let anyImported = false;
+    let lastSyncError = null;
     for(let i = 0; i < accounts.length; i++){
       const account = accounts[i];
       const currency = MONO_CURRENCY_MAP[account.currencyCode] || 'UAH';
@@ -3089,13 +3106,26 @@ async function autoSyncMonobank(){
               persist();
               persistMonoSyncStatus();
             }
+          } else {
+            // Track this instead of silently ignoring it — a persistent
+            // failure here (not just routine rate-limiting) is exactly what
+            // makes accounts show up with zero transactions ever appearing,
+            // with no visible explanation.
+            let bodyText = '';
+            try{ bodyText = await sres.text(); }catch(e2){}
+            lastSyncError = `Statement request failed (HTTP ${sres.status})${bodyText ? ': ' + bodyText.slice(0,200) : ''}`;
           }
-          // if this chunk wasn't ok (e.g. rate-limited), just skip it this round — next scheduled run will retry
           chunkStart = chunkEnd;
           if(chunkStart < to) await sleep(61000); // respect the 1-request-per-minute limit between chunks
         }
-      }catch(e){ /* network hiccup — skip this account this round */ }
+      }catch(e){ lastSyncError = 'Network error reaching Monobank: ' + e.message; }
       if(i < accounts.length - 1) await sleep(61000); // respect the 1-request-per-minute limit across accounts
+    }
+
+    if(lastSyncError){
+      try{ localStorage.setItem('nova-mono-last-error', lastSyncError); }catch(e){}
+    } else {
+      try{ localStorage.removeItem('nova-mono-last-error'); }catch(e){}
     }
 
     if(isFirstRun) markManuallySyncedOnce(); // subsequent runs use the lightweight window from here on
