@@ -457,18 +457,20 @@
     <div id="monoAccountRow" style="display:none; margin-top:14px;">
       <div class="panel-title" style="margin-bottom:8px;">
         <h3 style="font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted-dim); font-weight:600; margin:0;">Accounts</h3>
-        <div style="display:flex; gap:8px;">
-          <button class="header-btn" onclick="setAllMonoAccounts(true)">Select all</button>
-          <button class="header-btn" onclick="setAllMonoAccounts(false)">Deselect all</button>
-        </div>
       </div>
+      <div class="empty-note" style="text-align:left; margin-bottom:8px;">All accounts sync automatically — no need to select anything. The first sync grabs your full history; after that it checks for anything new every minute on its own.</div>
       <div id="monoAccountList"></div>
-      <div class="form-row" style="margin-top:12px;"><label>Sync from date</label><input id="monoFromDate" type="date"></div>
-      <div class="modal-actions" style="justify-content:flex-start;">
-        <button class="header-btn" onclick="saveMonoFromDateOnly()">Save date</button>
-        <button class="modal-save" onclick="syncMonobank()">Sync selected</button>
+      <div class="modal-actions" style="justify-content:flex-start; margin-top:12px;">
+        <button class="modal-save" onclick="syncNowManual()">Sync now</button>
       </div>
       <div id="monoProgress" class="status-msg" style="margin-top:8px;"></div>
+
+      <div class="side-label" style="margin:16px 0 4px;">Display</div>
+      <div class="empty-note" style="text-align:left; margin-bottom:8px;">Syncing always pulls your full history automatically every minute — this only controls what your dashboard shows.</div>
+      <div class="form-row"><label>Display from date</label><input id="displayFromDate" type="date"></div>
+      <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
+        <button class="modal-save" onclick="setDisplayFromDate()">Display from date</button>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="modal-cancel" onclick="closeModal('monoModalOverlay')">Close</button>
@@ -1148,7 +1150,7 @@ function init(){
   refreshExchangeRates();
   setInterval(refreshExchangeRates, 24 * 60 * 60 * 1000); // rates only actually change ~once a day on the free API anyway
   autoSyncMonobank();
-  setInterval(autoSyncMonobank, 3 * 60 * 1000); // keep Monobank data current without needing a manual sync
+  setInterval(autoSyncMonobank, 60 * 1000); // keep Monobank data current without needing a manual sync
 
   if(cloudConfigured()){
     pullCloudSync().then(function(){
@@ -1664,7 +1666,8 @@ function progressBar(pct, over){
 function monthlyBudgetSummaryHTML(){
   const now = new Date();
   const target = totalExpenseBudget(now);
-  const spent = monthSpendFor(now);
+  const spent = thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; })
+    .reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
   const pct = target > 0 ? Math.round((spent/target)*100) : 0;
   const over = target > 0 && spent > target;
   const diff = Math.abs(spent - target);
@@ -2214,7 +2217,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
         <div id="txList">
           ${(function(){
-            const exp = visibleTransactions().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; }).slice(0,8);
+            const exp = thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; }).slice(0,8);
             if(!exp.length) return '<div class="empty-note">No expenses logged yet.</div>';
             return exp.map(function(t){
             const icon = CATEGORY_ICON[t.category] || 'ic-wallet';
@@ -2234,7 +2237,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
-            const inc = visibleTransactions().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan'; }).slice(0,8);
+            const inc = thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan'; }).slice(0,8);
             if(!inc.length) return '<div class="empty-note">No income logged yet.</div>';
             return inc.map(function(t){
               const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
@@ -2275,7 +2278,7 @@ function financeHTML(){
     </div>
 
     ${(function(){
-      const transfers = visibleTransactions().filter(function(t){ return t.category === 'Transfer'; });
+      const transfers = thisMonthTx().filter(function(t){ return t.category === 'Transfer'; });
       if(!transfers.length) return '';
       return `<div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
         <div class="panel-card clickable-card" onclick="openHistory('transfer')">
@@ -2798,20 +2801,27 @@ function loadMonoSyncStatus(){
 function persistMonoSyncStatus(){
   try{ localStorage.setItem('nova-mono-sync-status', JSON.stringify(monoSyncStatus)); }catch(e){}
 }
-function loadMonoFromDate(){
-  try{ return localStorage.getItem('nova-mono-from-date') || null; }catch(e){ return null; }
-}
-function saveMonoFromDate(dateStr){
-  try{ localStorage.setItem('nova-mono-from-date', dateStr); }catch(e){}
-}
-window.saveMonoFromDateOnly = function(){
-  const dateStr = document.getElementById('monoFromDate').value;
+
+window.setDisplayFromDate = function(){
+  const dateStr = document.getElementById('displayFromDate').value;
   const statusEl = document.getElementById('monoStatus');
   if(!dateStr){ statusEl.textContent = 'Pick a date first.'; statusEl.classList.add('error'); return; }
-  saveMonoFromDate(dateStr);
-  statusEl.textContent = `Saved — future syncs will remember ${dateStr} as the starting point. Tap "Sync selected" whenever you're ready to actually pull data.`;
+  applyDisplayRangeFromDate(dateStr);
+  statusEl.textContent = `Your dashboard now shows data from ${dateStr} onward. New transactions from your ongoing syncs will keep showing up automatically as long as they fall on or after this date.`;
   statusEl.classList.remove('error');
+  renderView('finance');
 };
+
+// Sets the dashboard's display range to start from a given date — this is
+// the explicit "from when do I want to see this" choice. Separate from
+// syncing itself, which always pulls the complete available history from
+// Monobank regardless of this setting.
+function applyDisplayRangeFromDate(dateStr){
+  customRangeActive = true;
+  customRangeFrom = dateStr;
+  customRangeTo = null;
+  activeRangePresetLabel = null;
+}
 
 function monoAccountLabel(a){
   const cur = MONO_CURRENCY_MAP[a.currencyCode] || a.currencyCode;
@@ -2827,7 +2837,6 @@ function renderMonoAccountList(){
       ? `Synced — ${status.count} transaction${status.count===1?'':'s'}, last ${timeAgo(status.lastSyncedAt)}`
       : 'Not synced yet';
     return `<div class="mono-acct-row">
-      <input type="checkbox" class="mono-acct-check" data-acct="${a.id}" checked>
       <div class="mono-acct-info">
         <div class="mono-acct-label">${escapeHtml(label)}</div>
         <div class="mono-acct-status${status?' synced':''}">${statusText}</div>
@@ -2836,10 +2845,6 @@ function renderMonoAccountList(){
     </div>`;
   }).join('');
 }
-
-window.setAllMonoAccounts = function(checked){
-  document.querySelectorAll('.mono-acct-check').forEach(function(cb){ cb.checked = checked; });
-};
 
 window.removeMonoAccountData = function(accountId){
   const status = monoSyncStatus[accountId];
@@ -2866,6 +2871,7 @@ window.openMonoModal = function(){
   document.getElementById('monoStatus').textContent = '';
   document.getElementById('monoStatus').classList.remove('error');
   document.getElementById('monoAccountRow').style.display = 'none';
+  document.getElementById('displayFromDate').value = customRangeActive && customRangeFrom ? customRangeFrom : '';
   loadMonoSyncStatus();
   openModal('monoModalOverlay');
   refreshMonoVisibilityLabel();
@@ -2913,13 +2919,6 @@ window.connectMonobank = async function(){
 
     statusEl.textContent = 'Connected as ' + (data.name || 'your account') + '.';
     document.getElementById('monoAccountRow').style.display = 'block';
-    const savedFrom = loadMonoFromDate();
-    if(savedFrom){
-      document.getElementById('monoFromDate').value = savedFrom;
-    } else {
-      const defaultFrom = new Date(Date.now() - 30*24*60*60*1000);
-      document.getElementById('monoFromDate').value = defaultFrom.toISOString().slice(0,10);
-    }
   }catch(err){
     statusEl.textContent = "Couldn't reach Monobank from the browser — this is almost certainly a CORS restriction on their API (it isn't designed for direct client-side calls). A small proxy you host yourself would be needed to make this work; the app can't safely route your bank token through anyone else's server.";
     statusEl.classList.add('error');
@@ -2949,7 +2948,6 @@ async function autoSyncMonobank(){
   if(autoSyncInProgress) return;
   const token = loadMonoToken();
   if(!token) return; // never connected — nothing to keep in sync
-  if(!hasEverManuallySynced()) return; // wait for an explicit first Sync before taking over automatically
 
   autoSyncInProgress = true;
   try{
@@ -2963,49 +2961,65 @@ async function autoSyncMonobank(){
     const myOwnIbans = new Set(accounts.filter(function(a){ return a.iban; }).map(function(a){ return a.iban; }));
     const existingIds = new Set(transactions.filter(function(t){ return t.monoId; }).map(function(t){ return t.monoId; }));
     const to = Math.floor(Date.now() / 1000);
-    const from = to - (30 * 24 * 60 * 60); // rolling catch-up window — last 30 days
+    // The very first time this ever runs, pull a broad 5-year history so you
+    // don't need to press any button at all to get your full data — every
+    // run after that just needs a light rolling catch-up window.
+    const isFirstRun = !hasEverManuallySynced();
+    const from = isFirstRun ? (to - (5 * 365 * 24 * 60 * 60)) : (to - (30 * 24 * 60 * 60));
+    const MAX_WINDOW = 31 * 24 * 60 * 60 - 3600;
 
     let anyImported = false;
     for(let i = 0; i < accounts.length; i++){
       const account = accounts[i];
       const currency = MONO_CURRENCY_MAP[account.currencyCode] || 'UAH';
       try{
-        const sres = await fetch(`https://api.monobank.ua/personal/statement/${account.id}/${from}/${to}`, { headers: { 'X-Token': token } });
-        if(sres.ok){
-          const items = await sres.json();
-          let imported = 0;
-          items.forEach(function(item){
-            if(existingIds.has(item.id)) return;
-            const amount = item.amount / 100;
-            const type = amount >= 0 ? 'income' : 'expense';
-            const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
-            let category;
-            if(item.counterIban && myOwnIbans.has(item.counterIban)){
-              category = 'Transfer'; // verified: money moved between your own connected accounts
-            } else if(type === 'expense' && mccCategoryFor(item)){
-              category = mccCategoryFor(item);
-            } else {
-              category = matchCategory(desc, type);
-              if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
-            }
-            const occurred_at = new Date(item.time * 1000).toISOString().slice(0,10);
-            transactions.unshift({
-              id: 't' + (nextId++), monoId: item.id, monoAccountId: account.id, name: desc, category: category,
-              amount: amount, currency: currency, occurred_at: occurred_at, mcc: item.mcc || null, originalMcc: item.originalMcc || null
+        // A first-run full history pull needs chunking (Monobank caps each
+        // request at ~31 days); the regular lightweight catch-up never
+        // needs more than one request since its window is already short.
+        let chunkStart = from;
+        while(chunkStart < to){
+          const chunkEnd = Math.min(chunkStart + MAX_WINDOW, to);
+          const sres = await fetch(`https://api.monobank.ua/personal/statement/${account.id}/${chunkStart}/${chunkEnd}`, { headers: { 'X-Token': token } });
+          if(sres.ok){
+            const items = await sres.json();
+            let imported = 0;
+            items.forEach(function(item){
+              if(existingIds.has(item.id)) return;
+              const amount = item.amount / 100;
+              const type = amount >= 0 ? 'income' : 'expense';
+              const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
+              let category;
+              if(item.counterIban && myOwnIbans.has(item.counterIban)){
+                category = 'Transfer'; // verified: money moved between your own connected accounts
+              } else if(type === 'expense' && mccCategoryFor(item)){
+                category = mccCategoryFor(item);
+              } else {
+                category = matchCategory(desc, type);
+                if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
+              }
+              const occurred_at = new Date(item.time * 1000).toISOString().slice(0,10);
+              transactions.unshift({
+                id: 't' + (nextId++), monoId: item.id, monoAccountId: account.id, name: desc, category: category,
+                amount: amount, currency: currency, occurred_at: occurred_at, mcc: item.mcc || null, originalMcc: item.originalMcc || null
+              });
+              existingIds.add(item.id);
+              imported++;
             });
-            existingIds.add(item.id);
-            imported++;
-          });
-          if(imported > 0){
-            anyImported = true;
-            const prevCount = (monoSyncStatus[account.id] && monoSyncStatus[account.id].count) || 0;
-            monoSyncStatus[account.id] = { lastSyncedAt: Date.now(), count: prevCount + imported };
+            if(imported > 0){
+              anyImported = true;
+              const prevCount = (monoSyncStatus[account.id] && monoSyncStatus[account.id].count) || 0;
+              monoSyncStatus[account.id] = { lastSyncedAt: Date.now(), count: prevCount + imported };
+            }
           }
+          // if this chunk wasn't ok (e.g. rate-limited), just skip it this round — next scheduled run will retry
+          chunkStart = chunkEnd;
+          if(chunkStart < to) await sleep(61000); // respect the 1-request-per-minute limit between chunks
         }
-        // if this one wasn't ok (e.g. rate-limited), just skip it this round — next scheduled run will retry
       }catch(e){ /* network hiccup — skip this account this round */ }
       if(i < accounts.length - 1) await sleep(61000); // respect the 1-request-per-minute limit across accounts
     }
+
+    if(isFirstRun) markManuallySyncedOnce(); // subsequent runs use the lightweight window from here on
 
     if(anyImported){
       persist();
@@ -3016,142 +3030,18 @@ async function autoSyncMonobank(){
   finally{ autoSyncInProgress = false; }
 }
 
-window.syncMonobank = async function(){
-  const token = loadMonoToken();
+window.syncNowManual = async function(){
   const statusEl = document.getElementById('monoStatus');
   const progressEl = document.getElementById('monoProgress');
-  const fromDateStr = document.getElementById('monoFromDate').value;
-
-  const checkedIds = Array.from(document.querySelectorAll('.mono-acct-check'))
-    .filter(function(cb){ return cb.checked; })
-    .map(function(cb){ return cb.getAttribute('data-acct'); });
-
-  if(!token || !fromDateStr){ statusEl.textContent = 'Pick a "sync from" date first.'; statusEl.classList.add('error'); return; }
-  if(!checkedIds.length){ statusEl.textContent = 'Check at least one account to sync.'; statusEl.classList.add('error'); return; }
-
-  saveMonoFromDate(fromDateStr); // remember this choice for next time you open Bank
-
   statusEl.textContent = '';
   statusEl.classList.remove('error');
-
-  const MAX_WINDOW = 31 * 24 * 60 * 60 - 3600; // Monobank's hard cap: 31 days + 1 hour
-  const to = Math.floor(Date.now() / 1000);
-  const from = Math.floor(new Date(fromDateStr + 'T00:00:00').getTime() / 1000);
-  if(from >= to){
-    // A future start date is a deliberate choice (e.g. "start tracking from Aug 1"),
-    // not a mistake — there's just genuinely nothing to import yet.
-    statusEl.textContent = `${fromDateStr} hasn't happened yet, so there's nothing to sync — this date is saved, and syncing again once it arrives will pick up anything from then on.`;
-    return;
-  }
-
-  // Build one shared queue of (accountId, chunkFrom, chunkTo) across every checked account,
-  // since Monobank's 1-request-per-60-seconds limit applies to the token as a whole, not per account.
-  const queue = [];
-  checkedIds.forEach(function(accountId){
-    let chunkStart = from;
-    while(chunkStart < to){
-      const chunkEnd = Math.min(chunkStart + MAX_WINDOW, to);
-      queue.push({ accountId: accountId, from: chunkStart, to: chunkEnd });
-      chunkStart = chunkEnd;
-    }
-  });
-
-  const existingIds = new Set(transactions.filter(function(t){ return t.monoId; }).map(function(t){ return t.monoId; }));
-  const perAccountImported = {};
-  checkedIds.forEach(function(id){ perAccountImported[id] = 0; });
-  let totalImported = 0, totalSeen = 0;
-
-  const myOwnIbans = new Set(monoAccounts.filter(function(a){ return a.iban; }).map(function(a){ return a.iban; }));
-
-  for(let i = 0; i < queue.length; i++){
-    const { accountId, from: chunkFrom, to: chunkTo } = queue[i];
-    const account = monoAccounts.find(function(a){ return a.id === accountId; });
-    const acctLabel = account ? monoAccountLabel(account) : accountId;
-    const currency = MONO_CURRENCY_MAP[account ? account.currencyCode : 980] || 'UAH';
-
-    progressEl.textContent = queue.length > 1
-      ? `Fetching ${acctLabel} — request ${i+1} of ${queue.length}… (Monobank allows one request per minute across all accounts, so this can take a while)`
-      : `Fetching ${acctLabel}…`;
-
-    try{
-      const res = await fetch(`https://api.monobank.ua/personal/statement/${accountId}/${chunkFrom}/${chunkTo}`, {
-        headers: { 'X-Token': token }
-      });
-      if(res.status === 429){
-        progressEl.textContent = '';
-        statusEl.textContent = `Rate-limited by Monobank partway through (completed ${i} of ${queue.length} requests, imported ${totalImported} so far). Wait a minute and sync again — already-synced data won't be duplicated.`;
-        statusEl.classList.add('error');
-        renderMonoAccountList();
-        renderView('finance');
-        return;
-      }
-      if(!res.ok){
-        progressEl.textContent = '';
-        statusEl.textContent = 'Monobank returned an error (status ' + res.status + ') partway through — imported ' + totalImported + ' so far.';
-        statusEl.classList.add('error');
-        renderMonoAccountList();
-        renderView('finance');
-        return;
-      }
-      const items = await res.json();
-      totalSeen += items.length;
-
-      items.forEach(function(item){
-        if(existingIds.has(item.id)) return;
-        const amount = item.amount / 100; // Monobank amounts are in minor units
-        const type = amount >= 0 ? 'income' : 'expense';
-        const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
-        let category;
-        if(item.counterIban && myOwnIbans.has(item.counterIban)){
-          category = 'Transfer'; // verified: money moved between your own connected accounts — jars/goals don't count, only accounts you've actually connected
-        } else if(type === 'expense' && mccCategoryFor(item)){
-          category = mccCategoryFor(item);
-        } else {
-          category = matchCategory(desc, type);
-          if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
-        }
-        const occurred_at = new Date(item.time * 1000).toISOString().slice(0,10);
-
-        transactions.unshift({
-          id: 't' + (nextId++), monoId: item.id, monoAccountId: accountId, name: desc, category: category,
-          amount: amount, currency: currency, occurred_at: occurred_at, mcc: item.mcc || null, originalMcc: item.originalMcc || null
-        });
-        existingIds.add(item.id);
-        totalImported++;
-        perAccountImported[accountId] = (perAccountImported[accountId] || 0) + 1;
-      });
-
-      persist();
-
-      // Monobank allows one statement call per 60 seconds — wait before the next request (not after the last one)
-      if(i < queue.length - 1) await sleep(61000);
-    }catch(err){
-      progressEl.textContent = '';
-      statusEl.textContent = "Couldn't reach Monobank from the browser — likely a CORS restriction on their API. Imported " + totalImported + " before this happened.";
-      statusEl.classList.add('error');
-      renderMonoAccountList();
-      renderView('finance');
-      return;
-    }
-  }
-
-  // Update per-account sync status
-  checkedIds.forEach(function(accountId){
-    const prevCount = (monoSyncStatus[accountId] && monoSyncStatus[accountId].count) || 0;
-    monoSyncStatus[accountId] = {
-      lastSyncedAt: Date.now(),
-      count: prevCount + (perAccountImported[accountId] || 0)
-    };
-  });
-  persistMonoSyncStatus();
-  renderMonoAccountList();
-  markManuallySyncedOnce(); // unlocks automatic background syncing from now on
-
+  progressEl.textContent = 'Syncing…';
+  await autoSyncMonobank();
   progressEl.textContent = '';
-  renderView('finance');
-  statusEl.textContent = 'Synced ' + checkedIds.length + ' account' + (checkedIds.length===1?'':'s') + ' — imported ' + totalImported + ' new transaction' + (totalImported===1?'':'s') +
-    (totalSeen - totalImported > 0 ? ' (' + (totalSeen-totalImported) + ' were already synced before)' : '') + '.';
+  renderMonoAccountList();
+  statusEl.textContent = 'Sync complete.';
 };
+
 
 function exportCSV(){
   const header = ['Date','Name','Category','Type','Amount','Currency'];
