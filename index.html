@@ -2936,6 +2936,7 @@ window.openMonoModal = function(){
     errEl.style.display = 'none';
   }
   document.getElementById('displayFromDate').value = customRangeActive && customRangeFrom ? customRangeFrom : '';
+  document.getElementById('monoProgress').textContent = autoSyncInProgress ? monoSyncLiveStatus : '';
   loadMonoSyncStatus();
   renderMonoAccountList();
   openModal('monoModalOverlay');
@@ -3008,6 +3009,15 @@ function markManuallySyncedOnce(){
   try{ localStorage.setItem('nova-mono-manual-sync-done', 'true'); }catch(e){}
 }
 
+let monoSyncLiveStatus = ''; // last known progress text, shown in the Bank modal even if it wasn't open when a sync started
+function updateMonoProgressUI(text){
+  monoSyncLiveStatus = text;
+  try{
+    const el = document.getElementById('monoProgress');
+    if(el) el.textContent = text;
+  }catch(e){}
+}
+
 async function autoSyncMonobank(){
   if(autoSyncInProgress) return;
   const token = loadMonoToken();
@@ -3015,11 +3025,12 @@ async function autoSyncMonobank(){
 
   autoSyncInProgress = true;
   try{
+    updateMonoProgressUI('Connecting to Monobank…');
     const res = await fetch('https://api.monobank.ua/personal/client-info', { headers: { 'X-Token': token } });
-    if(!res.ok) return; // rate-limited or token issue — just try again next round, no need to surface an error silently in the background
+    if(!res.ok){ updateMonoProgressUI(''); return; } // rate-limited or token issue — just try again next round, no need to surface an error silently in the background
     const data = await res.json();
     const accounts = data.accounts || [];
-    if(!accounts.length) return;
+    if(!accounts.length){ updateMonoProgressUI(''); return; }
     monoAccounts = accounts; // keep this fresh so the Bank modal reflects the same list if opened
 
     const myOwnIbans = new Set(accounts.filter(function(a){ return a.iban; }).map(function(a){ return a.iban; }));
@@ -3031,15 +3042,20 @@ async function autoSyncMonobank(){
     const isFirstRun = !hasEverManuallySynced();
     const from = isFirstRun ? (to - (5 * 365 * 24 * 60 * 60)) : (to - (30 * 24 * 60 * 60));
     const MAX_WINDOW = 31 * 24 * 60 * 60 - 3600;
+    const totalWindow = to - from;
 
     // Monobank's 1-request-per-minute limit applies across ALL endpoints for
     // a token, not per-endpoint — without this wait, the very first statement
     // request right after client-info would get silently rate-limited every
     // single time, which is exactly what "accounts show up but no
     // transactions ever appear" looks like from the outside.
+    updateMonoProgressUI(isFirstRun
+      ? 'Connected. Starting your full history sync in about a minute (this respects Monobank\'s rate limit — it can take a while for 5 years of data, but your recent transactions arrive first)…'
+      : 'Connected. Checking for anything new…');
     await sleep(61000);
 
     let anyImported = false;
+    let totalImportedSoFar = 0;
     let lastSyncError = null;
     for(let i = 0; i < accounts.length; i++){
       const account = accounts[i];
@@ -3055,6 +3071,8 @@ async function autoSyncMonobank(){
         let chunkEnd = to;
         while(chunkEnd > from){
           const chunkStart = Math.max(chunkEnd - MAX_WINDOW, from);
+          const pctDone = isFirstRun ? Math.round(((to - chunkEnd) / totalWindow) * 100) : null;
+          updateMonoProgressUI(`Importing… account ${i+1} of ${accounts.length}${pctDone !== null ? `, ~${pctDone}% through your history` : ''} — ${totalImportedSoFar} transaction${totalImportedSoFar===1?'':'s'} imported so far`);
           const sres = await fetch(`https://api.monobank.ua/personal/statement/${account.id}/${chunkStart}/${chunkEnd}`, { headers: { 'X-Token': token } });
           if(sres.ok){
             const items = await sres.json();
@@ -3080,6 +3098,7 @@ async function autoSyncMonobank(){
               });
               existingIds.add(item.id);
               imported++;
+              totalImportedSoFar++;
             });
             if(imported > 0){
               anyImported = true;
@@ -3092,6 +3111,7 @@ async function autoSyncMonobank(){
               // attempt to re-pull and duplicate everything already imported.
               persist();
               persistMonoSyncStatus();
+              if(currentView === 'finance') renderView('finance'); // update the dashboard live as data comes in, not just at the very end
             }
           } else {
             // Track this instead of silently ignoring it — a persistent
@@ -3111,8 +3131,12 @@ async function autoSyncMonobank(){
 
     if(lastSyncError){
       try{ localStorage.setItem('nova-mono-last-error', lastSyncError); }catch(e){}
+      updateMonoProgressUI(`Sync hit an issue partway through (${totalImportedSoFar} transaction${totalImportedSoFar===1?'':'s'} imported before it happened) — open Bank again to see the error detail.`);
     } else {
       try{ localStorage.removeItem('nova-mono-last-error'); }catch(e){}
+      updateMonoProgressUI(totalImportedSoFar > 0
+        ? `Sync complete — ${totalImportedSoFar} new transaction${totalImportedSoFar===1?'':'s'} imported.`
+        : 'Sync complete — up to date, nothing new.');
     }
 
     if(isFirstRun) markManuallySyncedOnce(); // subsequent runs use the lightweight window from here on
