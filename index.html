@@ -462,12 +462,7 @@
       </div>
       <div id="monoProgress" class="status-msg" style="margin-top:8px;"></div>
 
-      <div class="side-label" style="margin:16px 0 4px;">Display</div>
-      <div class="empty-note" style="text-align:left; margin-bottom:8px;">Syncing always pulls your full history automatically every minute — this only controls what your dashboard shows.</div>
-      <div class="form-row"><label>Display from date</label><input id="displayFromDate" type="date"></div>
-      <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
-        <button class="modal-save" onclick="setDisplayFromDate()">Display from date</button>
-      </div>
+      <div class="empty-note" style="text-align:left; margin:12px 0 8px;">Syncing always pulls your full history automatically every minute. To control what your dashboard shows, use the 📅 date range block at the top of the Finance screen — it's separate from syncing itself.</div>
 
       <div class="side-label" style="margin:16px 0 4px; color:var(--rose);">Remove Data</div>
       <div class="empty-note" style="text-align:left; margin-bottom:8px;">Deletes every currently-synced Monobank transaction, but keeps your connection active — the next sync pulls your full history back in fresh.</div>
@@ -2909,28 +2904,6 @@ function persistMonoSyncStatus(){
   try{ localStorage.setItem('nova-mono-sync-status', JSON.stringify(monoSyncStatus)); }catch(e){}
 }
 
-window.setDisplayFromDate = function(){
-  const dateStr = document.getElementById('displayFromDate').value;
-  const statusEl = document.getElementById('monoStatus');
-  if(!dateStr){ statusEl.textContent = 'Pick a date first.'; statusEl.classList.add('error'); return; }
-  applyDisplayRangeFromDate(dateStr);
-  statusEl.textContent = `Your dashboard now shows data from ${dateStr} onward. New transactions from your ongoing syncs will keep showing up automatically as long as they fall on or after this date.`;
-  statusEl.classList.remove('error');
-  renderView('finance');
-};
-
-// Sets the dashboard's display range to start from a given date — this is
-// the explicit "from when do I want to see this" choice. Separate from
-// syncing itself, which always pulls the complete available history from
-// Monobank regardless of this setting.
-function applyDisplayRangeFromDate(dateStr){
-  customRangeActive = true;
-  customRangeFrom = dateStr;
-  customRangeTo = null;
-  activeRangePresetLabel = null;
-  saveDateRangeState();
-}
-
 function monoAccountLabel(a){
   const cur = MONO_CURRENCY_MAP[a.currencyCode] || a.currencyCode;
   return (a.maskedPan && a.maskedPan[0] ? a.maskedPan[0] : a.type || 'Account') + ' · ' + cur;
@@ -2974,7 +2947,6 @@ window.openMonoModal = function(){
   } else {
     errEl.style.display = 'none';
   }
-  document.getElementById('displayFromDate').value = customRangeActive && customRangeFrom ? customRangeFrom : '';
   document.getElementById('monoProgress').textContent = autoSyncInProgress ? monoSyncLiveStatus : '';
   loadMonoSyncStatus();
   renderMonoAccountList();
