@@ -2445,6 +2445,11 @@ function openTxModal(type, presetCategory){
     if(sel) sel.value = presetCategory;
   }
   toggleLoanPicker();
+  setTimeout(function(){
+    const amtEl = document.getElementById('txAmount');
+    amtEl.focus();
+    amtEl.select();
+  }, 0);
 }
 
 function editTx(id){
@@ -2497,13 +2502,13 @@ function cancelTxModal(){
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 
 function saveTransaction(){
-  const name = document.getElementById('txName').value.trim();
   const category = document.getElementById('txCategory').value;
+  const name = document.getElementById('txName').value.trim() || category;
   const rawAmount = parseAmountInput(document.getElementById('txAmount').value);
   const amount = isNaN(rawAmount) ? rawAmount : (currentTxType === 'income' ? Math.abs(rawAmount) : -Math.abs(rawAmount));
   const occurred_at = document.getElementById('txDate').value;
   const currency = document.getElementById('txCurrency').value || DEFAULT_INPUT_CURRENCY;
-  if(!name || isNaN(amount) || !occurred_at) return;
+  if(isNaN(amount) || !occurred_at) return;
 
   const loanPickerVisible = document.getElementById('loanPickerRow') && document.getElementById('loanPickerRow').style.display !== 'none';
   const loanId = loanPickerVisible ? document.getElementById('txLoanId').value : null;
