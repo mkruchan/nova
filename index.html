@@ -472,6 +472,12 @@
         <button class="modal-save" onclick="setDisplayFromDate()">Display from date</button>
       </div>
 
+      <div class="side-label" style="margin:16px 0 4px; color:var(--rose);">Remove Data</div>
+      <div class="empty-note" style="text-align:left; margin-bottom:8px;">Deletes every currently-synced Monobank transaction, but keeps your connection active — the next sync pulls your full history back in fresh.</div>
+      <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
+        <button class="tx-del" style="border:1px solid var(--rose); border-radius:8px; padding:8px 14px;" onclick="removeAllMonoTransactions()">Remove synced transactions</button>
+      </div>
+
       <div class="side-label" style="margin:16px 0 4px; color:var(--rose);">Disconnect</div>
       <div class="empty-note" style="text-align:left; margin-bottom:8px;">Stops automatic syncing, removes your token from this device, and permanently deletes every transaction synced from Monobank. This can't be undone.</div>
       <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
@@ -1996,12 +2002,6 @@ function settingsScreenHTML(){
     <div class="settings-row" onclick="openRatesDetail()">
       <span>💱 Exchange rates</span><span class="chevron">›</span>
     </div>
-    <div class="settings-row" onclick="recategorizeTransactions()">
-      <span>🏷️ Re-categorize transactions</span><span class="chevron">›</span>
-    </div>
-    <div class="settings-row" onclick="removeDuplicateMonobankTransactions()">
-      <span>🧹 Remove duplicate transactions</span><span class="chevron">›</span>
-    </div>
 
     <div class="side-label" style="margin:20px 0 8px;">Cloud Sync</div>
     ${cloudConfigured() ? cloudConnectedHTML() : cloudSetupFormHTML()}
@@ -2824,6 +2824,26 @@ function loadMonoToken(){
 function saveMonoToken(token){
   try{ localStorage.setItem('nova-mono-token', token); }catch(e){ /* ignore */ }
 }
+window.removeAllMonoTransactions = function(){
+  const count = transactions.filter(function(t){ return t.monoId; }).length;
+  if(!count){
+    customConfirm('No synced Monobank transactions to remove.', function(){}, { title: 'Nothing to remove', confirmLabel: 'OK' });
+    return;
+  }
+  customConfirm(`Permanently delete ${count} synced Monobank transaction${count===1?'':'s'}? Your connection stays active, and the next sync will pull your full history back in fresh. This can't be undone.`, function(){
+    transactions = transactions.filter(function(t){ return !t.monoId; });
+    persist();
+    monoSyncStatus = {};
+    persistMonoSyncStatus();
+    try{ localStorage.removeItem('nova-mono-manual-sync-done'); }catch(e){} // next sync pulls full history again, not just a light catch-up
+    renderMonoAccountList();
+    renderView('finance');
+    const statusEl = document.getElementById('monoStatus');
+    statusEl.textContent = `Removed ${count} transaction${count===1?'':'s'}. Your next sync will re-pull your full history.`;
+    statusEl.classList.remove('error');
+  }, { title: 'Remove synced transactions?', confirmLabel: 'Remove' });
+};
+
 window.disconnectMonobank = function(){
   const count = transactions.filter(function(t){ return t.monoId; }).length;
   const countText = count > 0 ? ` This will also permanently delete ${count} previously-synced transaction${count===1?'':'s'} — this can't be undone.` : '';
