@@ -1155,6 +1155,7 @@ function init(){
   loadMonoSyncStatus();
   loadCloudConfig();
   loadLoans();
+  loadDateRangeState();
   renderView('finance');
   refreshExchangeRates();
   setInterval(refreshExchangeRates, 24 * 60 * 60 * 1000); // rates only actually change ~once a day on the free API anyway
@@ -1210,6 +1211,26 @@ let customRangeActive = false;
 let customRangeFrom = null;
 let customRangeTo = null;
 let activeRangePresetLabel = null; // e.g. 'Last Month' — null means either default or an exact custom range
+
+function saveDateRangeState(){
+  try{
+    localStorage.setItem('nova-date-range', JSON.stringify({
+      customRangeActive: customRangeActive, customRangeFrom: customRangeFrom,
+      customRangeTo: customRangeTo, activeRangePresetLabel: activeRangePresetLabel
+    }));
+  }catch(e){}
+}
+function loadDateRangeState(){
+  try{
+    const saved = localStorage.getItem('nova-date-range');
+    if(!saved) return;
+    const s = JSON.parse(saved);
+    customRangeActive = !!s.customRangeActive;
+    customRangeFrom = s.customRangeFrom || null;
+    customRangeTo = s.customRangeTo || null;
+    activeRangePresetLabel = s.activeRangePresetLabel || null;
+  }catch(e){}
+}
 
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 
@@ -1267,6 +1288,7 @@ window.applyRangePreset = function(preset){
   customRangeFrom = from;
   customRangeTo = to;
   activeRangePresetLabel = presetLabels[preset] || null;
+  saveDateRangeState();
   closeModal('rangeModalOverlay');
   renderView('finance');
 };
@@ -1279,6 +1301,7 @@ window.applyDateRange = function(){
   customRangeFrom = from;
   customRangeTo = to || null;
   activeRangePresetLabel = null; // exact manual dates — shown as 'Custom timeframe', not a named preset
+  saveDateRangeState();
   closeModal('rangeModalOverlay');
   renderView('finance');
 };
@@ -1287,6 +1310,7 @@ window.resetDateRange = function(){
   customRangeFrom = null;
   customRangeTo = null;
   activeRangePresetLabel = null;
+  saveDateRangeState();
   closeModal('rangeModalOverlay');
   renderView('finance');
 };
@@ -2890,6 +2914,7 @@ function applyDisplayRangeFromDate(dateStr){
   customRangeFrom = dateStr;
   customRangeTo = null;
   activeRangePresetLabel = null;
+  saveDateRangeState();
 }
 
 function monoAccountLabel(a){
