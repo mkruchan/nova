@@ -455,13 +455,9 @@
     </div>
     <div id="monoStatus" class="status-msg" style="margin-top:10px;"></div>
     <div id="monoLastError" class="status-msg error" style="margin-top:6px; display:none;"></div>
-    <div id="monoAccountRow" style="display:none; margin-top:14px;">
-      <div class="panel-title" style="margin-bottom:8px;">
-        <h3 style="font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted-dim); font-weight:600; margin:0;">Accounts</h3>
-      </div>
-      <div class="empty-note" style="text-align:left; margin-bottom:8px;">All accounts sync automatically — no need to select anything. The first sync grabs your full history; after that it checks for anything new every minute on its own.</div>
-      <div id="monoAccountList"></div>
-      <div class="modal-actions" style="justify-content:flex-start; margin-top:12px;">
+    <div id="monoAccountRow" style="margin-top:14px;">
+      <div class="empty-note" style="text-align:left; margin-bottom:8px;">All accounts sync automatically — nothing to select. The first sync grabs your full history; after that it checks for anything new every minute on its own.</div>
+      <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
         <button class="modal-save" onclick="syncNowManual()">Sync now</button>
       </div>
       <div id="monoProgress" class="status-msg" style="margin-top:8px;"></div>
@@ -2860,10 +2856,10 @@ window.disconnectMonobank = function(){
     persistMonoSyncStatus();
     setMonoVisibility(true); // nothing left to hide, so reset to the default state
     document.getElementById('monoToken').value = '';
-    document.getElementById('monoAccountRow').style.display = 'none';
     document.getElementById('monoStatus').textContent = count > 0 ? `Disconnected and deleted ${count} synced transaction${count===1?'':'s'}.` : 'Disconnected.';
     document.getElementById('monoStatus').classList.remove('error');
     refreshMonoVisibilityLabel();
+    renderMonoAccountList();
     renderView('finance');
   }, { title: 'Disconnect Monobank?', confirmLabel: 'Disconnect & Delete' });
 };
@@ -2902,21 +2898,9 @@ function monoAccountLabel(a){
 }
 
 function renderMonoAccountList(){
-  const listEl = document.getElementById('monoAccountList');
-  listEl.innerHTML = monoAccounts.map(function(a){
-    const status = monoSyncStatus[a.id];
-    const label = monoAccountLabel(a);
-    const statusText = status
-      ? `Synced — ${status.count} transaction${status.count===1?'':'s'}, last ${timeAgo(status.lastSyncedAt)}`
-      : 'Not synced yet';
-    return `<div class="mono-acct-row">
-      <div class="mono-acct-info">
-        <div class="mono-acct-label">${escapeHtml(label)}</div>
-        <div class="mono-acct-status${status?' synced':''}">${statusText}</div>
-      </div>
-      ${status ? `<button class="mono-acct-remove" onclick="removeMonoAccountData('${a.id}')">Remove data</button>` : ''}
-    </div>`;
-  }).join('');
+  // No longer shown in the UI — everything syncs automatically with no
+  // per-account list needed. Kept as a no-op so existing call sites
+  // elsewhere don't need to be removed individually.
 }
 
 window.removeMonoAccountData = function(accountId){
@@ -2951,9 +2935,9 @@ window.openMonoModal = function(){
   } else {
     errEl.style.display = 'none';
   }
-  document.getElementById('monoAccountRow').style.display = 'none';
   document.getElementById('displayFromDate').value = customRangeActive && customRangeFrom ? customRangeFrom : '';
   loadMonoSyncStatus();
+  renderMonoAccountList();
   openModal('monoModalOverlay');
   refreshMonoVisibilityLabel();
   if(token) connectMonobank();
@@ -2999,7 +2983,6 @@ window.connectMonobank = async function(){
     renderMonoAccountList();
 
     statusEl.textContent = 'Connected as ' + (data.name || 'your account') + '.';
-    document.getElementById('monoAccountRow').style.display = 'block';
   }catch(err){
     statusEl.textContent = "Couldn't reach Monobank from the browser — this is almost certainly a CORS restriction on their API (it isn't designed for direct client-side calls). A small proxy you host yourself would be needed to make this work; the app can't safely route your bank token through anyone else's server.";
     statusEl.classList.add('error');
