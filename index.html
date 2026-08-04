@@ -3151,9 +3151,15 @@ async function autoSyncMonobank(){
               const amount = item.amount / 100;
               const type = amount >= 0 ? 'income' : 'expense';
               const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
+              // "Переказ на картку" (card-to-card transfer) doesn't always get a
+              // populated counterIban from Monobank, even when it genuinely is
+              // a transfer to one of your own cards — so this description is
+              // treated as a reliable enough signal on its own, on top of the
+              // verified counterIban check.
+              const looksLikeCardTransfer = desc.toLowerCase().indexOf('переказ на картку') !== -1;
               let category;
-              if(item.counterIban && myOwnIbans.has(item.counterIban)){
-                category = 'Transfer'; // verified: money moved between your own connected accounts
+              if((item.counterIban && myOwnIbans.has(item.counterIban)) || looksLikeCardTransfer){
+                category = 'Transfer';
               } else if(type === 'expense' && mccCategoryFor(item)){
                 category = mccCategoryFor(item);
               } else {
