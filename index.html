@@ -462,7 +462,15 @@
       </div>
       <div id="monoProgress" class="status-msg" style="margin-top:8px;"></div>
 
-      <div class="empty-note" style="text-align:left; margin:12px 0 8px;">Syncing always pulls your full history automatically every minute. To control what your dashboard shows, use the 📅 date range block at the top of the Finance screen — it's separate from syncing itself.</div>
+      <div class="empty-note" style="text-align:left; margin:12px 0 8px;">Syncing always pulls your full history automatically every minute, regardless of anything below.</div>
+
+      <div class="side-label" style="margin:16px 0 4px;">Monobank Display Filter</div>
+      <div class="empty-note" style="text-align:left; margin-bottom:8px;">Hides Monobank-synced transactions older than this date. Your manually-entered transactions are never affected, and this has no connection to the main dashboard's own date range.</div>
+      <div class="form-row"><label>Show Monobank data from</label><input id="monoDisplayFromDateInput" type="date"></div>
+      <div class="modal-actions" style="justify-content:flex-start; margin-top:0; gap:8px;">
+        <button class="modal-save" onclick="applyMonoDisplayFromDate()">Apply</button>
+        <button class="header-btn" onclick="clearMonoDisplayFromDate()">Show all Monobank data</button>
+      </div>
 
       <div class="side-label" style="margin:16px 0 4px; color:var(--rose);">Remove Data</div>
       <div class="empty-note" style="text-align:left; margin-bottom:8px;">Deletes every currently-synced Monobank transaction, but keeps your connection active — the next sync pulls your full history back in fresh.</div>
@@ -843,8 +851,28 @@ window.toggleMonoVisibility = function(){ setMonoVisibility(!showMonoData); };
 // Everything that DISPLAYS or CALCULATES from transactions should read through
 // this, so hiding Monobank-synced data is a pure view toggle — the underlying
 // data in `transactions` is untouched and comes right back when re-enabled.
+let monoDisplayFromDate = null; // hides Monobank-sourced transactions dated before this — independent of the main dashboard date range
+
+function loadMonoDisplayFromDate(){
+  try{ monoDisplayFromDate = localStorage.getItem('nova-mono-display-from-date') || null; }catch(e){ monoDisplayFromDate = null; }
+}
+function saveMonoDisplayFromDate(dateStr){
+  monoDisplayFromDate = dateStr || null;
+  try{
+    if(dateStr) localStorage.setItem('nova-mono-display-from-date', dateStr);
+    else localStorage.removeItem('nova-mono-display-from-date');
+  }catch(e){}
+}
+
 function visibleTransactions(){
-  return showMonoData ? transactions : transactions.filter(function(t){ return !t.monoId; });
+  let list = showMonoData ? transactions : transactions.filter(function(t){ return !t.monoId; });
+  if(monoDisplayFromDate){
+    // Only affects Monobank-sourced transactions — manual entries are never
+    // touched by this, and it has no relationship to the main dashboard's
+    // own date range (customRangeFrom/customRangeActive).
+    list = list.filter(function(t){ return !t.monoId || t.occurred_at >= monoDisplayFromDate; });
+  }
+  return list;
 }
 
 function loadData(){
@@ -1146,6 +1174,7 @@ function init(){
   loadBudgets();
   loadCachedRates();
   loadMonoVisibility();
+  loadMonoDisplayFromDate();
   loadCustomCategories();
   loadMonoSyncStatus();
   loadCloudConfig();
@@ -1241,7 +1270,7 @@ function todayStr(){ return localDateStr(new Date()); }
 function rangeLabel(){
   if(!customRangeActive || !customRangeFrom) return 'This Month';
   if(activeRangePresetLabel) return activeRangePresetLabel;
-  return 'Custom timeframe';
+  return customRangeTo ? `${customRangeFrom} → ${customRangeTo}` : `Since ${customRangeFrom}`;
 }
 
 function thisMonthTx(){
@@ -2948,11 +2977,40 @@ window.openMonoModal = function(){
     errEl.style.display = 'none';
   }
   document.getElementById('monoProgress').textContent = autoSyncInProgress ? monoSyncLiveStatus : '';
+  document.getElementById('monoDisplayFromDateInput').value = monoDisplayFromDate || '';
   loadMonoSyncStatus();
   renderMonoAccountList();
   openModal('monoModalOverlay');
   refreshMonoVisibilityLabel();
   if(token) connectMonobank();
+};
+
+window.applyMonoDisplayFromDate = function(){
+  const dateStr = document.getElementById('monoDisplayFromDateInput').value;
+  const statusEl = document.getElementById('monoStatus');
+  if(!dateStr){ statusEl.textContent = 'Pick a date first.'; statusEl.classList.add('error'); return; }
+  saveMonoDisplayFromDate(dateStr);
+
+  const monoCount = transactions.filter(function(t){ return t.monoId && t.occurred_at >= dateStr; }).length;
+  let msg = `${monoCount} Monobank transaction${monoCount===1?'':'s'} on or after ${dateStr} will now show.`;
+  if(customRangeActive && customRangeFrom){
+    // The two filters are independent, but their EFFECTS still combine —
+    // if the main dashboard range doesn't overlap with this date at all,
+    // you'd correctly see nothing, even though neither filter is broken.
+    msg += ` Heads up: your main dashboard date range is currently set to "${rangeLabel()}" (from ${customRangeFrom}${customRangeTo ? ' to ' + customRangeTo : ''}) — if that doesn't overlap with ${dateStr} onward, you won't see these there even though this filter is working correctly. Check the 📅 block at the top of Finance if numbers don't match what you expect.`;
+  }
+  statusEl.textContent = msg;
+  statusEl.classList.remove('error');
+  renderView('finance');
+};
+
+window.clearMonoDisplayFromDate = function(){
+  saveMonoDisplayFromDate(null);
+  document.getElementById('monoDisplayFromDateInput').value = '';
+  const statusEl = document.getElementById('monoStatus');
+  statusEl.textContent = 'Showing all Monobank data again.';
+  statusEl.classList.remove('error');
+  renderView('finance');
 };
 
 window.connectMonobank = async function(){
