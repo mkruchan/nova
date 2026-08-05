@@ -3042,6 +3042,18 @@ window.connectMonobank = async function(){
     }
     const data = await res.json();
     monoAccounts = data.accounts || [];
+
+    const previousToken = loadMonoToken();
+    if(previousToken && previousToken !== token){
+      // A genuinely different token means a different (or re-issued) account
+      // connection — treat it as a fresh start so it gets a full history
+      // pull, instead of incorrectly inheriting "already synced before" from
+      // whatever token was connected previously and only doing a light
+      // 30-day catch-up that could easily come back with nothing.
+      try{ localStorage.removeItem('nova-mono-manual-sync-done'); }catch(e){}
+      monoSyncStatus = {};
+      persistMonoSyncStatus();
+    }
     saveMonoToken(token);
 
     if(!monoAccounts.length){
