@@ -1007,11 +1007,11 @@ function cloudConfigured(){
 
 function cloudPayload(){
   return {
-    // Monobank transactions stay local to each device — each one auto-syncs
-    // directly from Monobank on its own, so relaying that data through
-    // Supabase too is redundant and was the source of several sync bugs.
-    // Only manually-entered transactions get shared across devices.
-    transactions: transactions.filter(function(t){ return !t.monoId; }),
+    // Includes Monobank-sourced transactions too — this device might be the
+    // one doing the direct Monobank sync (e.g. Mac), and other devices that
+    // don't sync Monobank directly (e.g. iPhone) rely on this to receive
+    // that data, plus any edits made to it, at all.
+    transactions: transactions,
     budgets: budgets,
     customExpenseCategories: customExpenseCategories,
     customIncomeCategories: customIncomeCategories,
@@ -1022,15 +1022,7 @@ function cloudPayload(){
 
 function applyCloudPayload(payload){
   if(!payload) return;
-  if(payload.transactions){
-    // The cloud payload only ever contains manually-entered transactions
-    // (Monobank data is deliberately excluded, see cloudPayload()) — so
-    // merge those in while preserving this device's own locally-synced
-    // Monobank transactions, rather than overwriting the whole array and
-    // losing them.
-    const localMonoTx = transactions.filter(function(t){ return t.monoId; });
-    transactions = payload.transactions.concat(localMonoTx);
-  }
+  if(payload.transactions) transactions = payload.transactions;
   if(payload.budgets) budgets = payload.budgets;
   if(payload.customExpenseCategories) customExpenseCategories = payload.customExpenseCategories;
   if(payload.customIncomeCategories) customIncomeCategories = payload.customIncomeCategories;
@@ -3019,6 +3011,11 @@ window.connectMonobank = async function(){
   const token = document.getElementById('monoToken').value.trim();
   const statusEl = document.getElementById('monoStatus');
   if(!token){ statusEl.textContent = 'Paste your personal token first.'; statusEl.classList.add('error'); return; }
+  if(isIOSDevice()){
+    statusEl.textContent = "Monobank doesn't sync reliably from this device — connect and sync from your Mac instead. This device will still receive that data (and stay in sync with any edits) through Cloud Sync.";
+    statusEl.classList.add('error');
+    return;
+  }
 
   statusEl.textContent = 'Connecting…';
   statusEl.classList.remove('error');
@@ -3104,7 +3101,12 @@ function updateMonoProgressUI(text){
   }catch(e){}
 }
 
+function isIOSDevice(){
+  return /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
 async function autoSyncMonobank(){
+  if(isIOSDevice()) return; // Monobank's API doesn't sync reliably from this device — it gets Monobank data via Supabase from whichever device (e.g. Mac) does the direct sync instead
   if(autoSyncInProgress) return;
   const token = loadMonoToken();
   if(!token) return; // never connected — nothing to keep in sync
@@ -3250,6 +3252,11 @@ async function autoSyncMonobank(){
 window.syncNowManual = async function(){
   const statusEl = document.getElementById('monoStatus');
   const progressEl = document.getElementById('monoProgress');
+  if(isIOSDevice()){
+    statusEl.textContent = "Monobank doesn't sync directly on this device — connect and sync from your Mac instead, and this device will pick up that data (and any edits you make here) through Cloud Sync.";
+    statusEl.classList.remove('error');
+    return;
+  }
   statusEl.textContent = '';
   statusEl.classList.remove('error');
   progressEl.textContent = 'Syncing…';
