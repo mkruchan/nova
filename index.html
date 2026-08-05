@@ -2911,6 +2911,8 @@ window.disconnectMonobank = function(){
       localStorage.removeItem('nova-mono-token');
       localStorage.removeItem('nova-mono-manual-sync-done'); // reconnecting later starts fresh, pulling full history again
     }catch(e){}
+    monoSyncSessionId++; // invalidate any sync currently mid-flight, so it stops itself instead of continuing with a now-disconnected token and blocking whatever connects next
+    autoSyncInProgress = false; // don't let a stale in-flight run's flag block a fresh connection from syncing right away
     transactions = transactions.filter(function(t){ return !t.monoId; }); // actually delete, not just hide
     persist();
     monoAccounts = [];
@@ -3053,6 +3055,8 @@ window.connectMonobank = async function(){
       try{ localStorage.removeItem('nova-mono-manual-sync-done'); }catch(e){}
       monoSyncStatus = {};
       persistMonoSyncStatus();
+      monoSyncSessionId++; // invalidate any sync still running for the old token
+      autoSyncInProgress = false; // don't let a stale old-token run block the new one from starting
     }
     saveMonoToken(token);
 
@@ -3082,6 +3086,7 @@ function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 // after that, so nothing pulls in behind your back before you've explicitly
 // chosen to connect and sync at least once.
 let autoSyncInProgress = false;
+let monoSyncSessionId = 0; // bumped on disconnect/token-switch so any in-flight sync can detect it's gone stale and stop itself
 
 function hasEverManuallySynced(){
   try{ return localStorage.getItem('nova-mono-manual-sync-done') === 'true'; }catch(e){ return false; }
@@ -3104,12 +3109,15 @@ async function autoSyncMonobank(){
   const token = loadMonoToken();
   if(!token) return; // never connected — nothing to keep in sync
 
+  const mySessionId = monoSyncSessionId; // if this changes mid-run (disconnect/reconnect), this specific run stops itself rather than continuing with stale credentials
   autoSyncInProgress = true;
   try{
     updateMonoProgressUI('Connecting to Monobank…');
     const res = await fetch('https://api.monobank.ua/personal/client-info', { headers: { 'X-Token': token } });
+    if(mySessionId !== monoSyncSessionId) return; // disconnected/reconnected while this was in flight — stop here, a fresh run will have already started or will start soon
     if(!res.ok){ updateMonoProgressUI(''); return; } // rate-limited or token issue — just try again next round, no need to surface an error silently in the background
     const data = await res.json();
+    if(mySessionId !== monoSyncSessionId) return;
     const accounts = data.accounts || [];
     if(!accounts.length){ updateMonoProgressUI(''); return; }
     monoAccounts = accounts; // keep this fresh so the Bank modal reflects the same list if opened
@@ -3134,11 +3142,13 @@ async function autoSyncMonobank(){
       ? 'Connected. Starting your full history sync in about a minute (this respects Monobank\'s rate limit — it can take a while for 5 years of data, but your recent transactions arrive first)…'
       : 'Connected. Checking for anything new…');
     await sleep(61000);
+    if(mySessionId !== monoSyncSessionId) return;
 
     let anyImported = false;
     let totalImportedSoFar = 0;
     let lastSyncError = null;
     for(let i = 0; i < accounts.length; i++){
+      if(mySessionId !== monoSyncSessionId) break; // stale run — stop instead of continuing to sync a disconnected/replaced account
       const account = accounts[i];
       const currency = MONO_CURRENCY_MAP[account.currencyCode] || 'UAH';
       try{
@@ -3151,10 +3161,12 @@ async function autoSyncMonobank(){
         // very last thing to arrive after the whole historical pull finishes.
         let chunkEnd = to;
         while(chunkEnd > from){
+          if(mySessionId !== monoSyncSessionId) break; // stale run — abort this account's chunk loop too
           const chunkStart = Math.max(chunkEnd - MAX_WINDOW, from);
           const pctDone = isFirstRun ? Math.round(((to - chunkEnd) / totalWindow) * 100) : null;
           updateMonoProgressUI(`Importing… account ${i+1} of ${accounts.length}${pctDone !== null ? `, ~${pctDone}% through your history` : ''} — ${totalImportedSoFar} transaction${totalImportedSoFar===1?'':'s'} imported so far`);
           const sres = await fetch(`https://api.monobank.ua/personal/statement/${account.id}/${chunkStart}/${chunkEnd}`, { headers: { 'X-Token': token } });
+          if(mySessionId !== monoSyncSessionId) break; // disconnected mid-request — discard this response rather than importing it under the new session
           if(sres.ok){
             const items = await sres.json();
             let imported = 0;
