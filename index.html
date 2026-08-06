@@ -1022,7 +1022,20 @@ function cloudPayload(){
 
 function applyCloudPayload(payload){
   if(!payload) return;
-  if(payload.transactions) transactions = payload.transactions;
+  if(payload.transactions){
+    const incomingHasAnyMono = payload.transactions.some(function(t){ return t.monoId; });
+    const localMonoTx = transactions.filter(function(t){ return t.monoId; });
+    if(!incomingHasAnyMono && localMonoTx.length > 0){
+      // The incoming payload has no Monobank transactions at all, but we
+      // have some locally — almost certainly means the cloud was last
+      // pushed before Monobank data was included in sync (an older version
+      // of the app deliberately excluded it). Preserve local Monobank data
+      // instead of letting a stale pull silently wipe it out.
+      transactions = payload.transactions.concat(localMonoTx);
+    } else {
+      transactions = payload.transactions;
+    }
+  }
   if(payload.budgets) budgets = payload.budgets;
   if(payload.customExpenseCategories) customExpenseCategories = payload.customExpenseCategories;
   if(payload.customIncomeCategories) customIncomeCategories = payload.customIncomeCategories;
