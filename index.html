@@ -27,6 +27,7 @@
   body{
     background:#050710; font-family:'Inter', sans-serif; color:var(--white);
     min-height:100vh; -webkit-font-smoothing:antialiased;
+    zoom:115%;
   }
   button{ font-family:inherit; cursor:pointer; }
   input, select{ font-family:inherit; }
@@ -292,6 +293,7 @@
   .type-btn{ flex:1; background:var(--panel-2); border:1px solid var(--border-2); color:var(--muted); border-radius:8px; padding:9px 0; font-size:12.5px; font-weight:600; }
   .type-btn.active{ border-color:transparent; }
   .type-btn[data-type="expense"].active{ background:var(--rose); color:#0A0D18; }
+  .type-btn[data-type="transfer"].active{ background:var(--blue); color:#0A0D18; }
   .type-btn[data-type="income"].active{ background:var(--green); color:#0A0D18; }
 
   .amount-currency-row{ display:grid; grid-template-columns:1.4fr 1fr; gap:10px; }
@@ -393,12 +395,20 @@
       <div class="type-toggle">
         <button type="button" class="type-btn" data-type="income" onclick="setTxType('income')">Income</button>
         <button type="button" class="type-btn active" data-type="expense" onclick="setTxType('expense')">Expense</button>
+        <button type="button" class="type-btn" data-type="transfer" onclick="setTxType('transfer')">Transfer</button>
       </div>
     </div>
-    <div class="form-row"><label>Category</label>
+    <div class="form-row" id="txCategoryRow"><label>Category</label>
       <div style="display:flex; gap:8px; align-items:center;">
         <select id="txCategory" onchange="handleCategorySelectChange(this)" style="flex:1;"></select>
         <button type="button" class="header-btn" style="flex-shrink:0; white-space:nowrap;" onclick="markTxAsTransfer()">↔ Transfer</button>
+      </div>
+    </div>
+    <div class="form-row" id="txTransferDirectionRow" style="display:none;">
+      <label>Direction</label>
+      <div class="type-toggle">
+        <button type="button" class="type-btn active" data-dir="out" onclick="setTransferDirection('out')">Money out</button>
+        <button type="button" class="type-btn" data-dir="in" onclick="setTransferDirection('in')">Money in</button>
       </div>
     </div>
     <div class="form-row" id="loanPickerRow" style="display:none;"><label>Which loan is this paying off?</label>
@@ -498,6 +508,10 @@
     <h3>Date Range</h3>
     <div class="side-label" style="margin:0 0 8px;">Quick select</div>
     <div class="range-preset-grid">
+      <button class="range-preset-btn" onclick="applyRangePreset('today')">Today</button>
+      <button class="range-preset-btn" onclick="applyRangePreset('yesterday')">Yesterday</button>
+      <button class="range-preset-btn" onclick="applyRangePreset('thisWeek')">This Week</button>
+      <button class="range-preset-btn" onclick="applyRangePreset('lastWeek')">Last Week</button>
       <button class="range-preset-btn" onclick="applyRangePreset('thisMonth')">This Month</button>
       <button class="range-preset-btn" onclick="applyRangePreset('lastMonth')">Last Month</button>
       <button class="range-preset-btn" onclick="applyRangePreset('thisQuarter')">This Quarter</button>
@@ -1311,11 +1325,30 @@ window.applyRangePreset = function(preset){
   const fmt10 = function(d){ return localDateStr(d); };
   let from, to = null;
   const presetLabels = {
+    today: 'Today', yesterday: 'Yesterday', thisWeek: 'This Week', lastWeek: 'Last Week',
     thisMonth: 'This Month', lastMonth: 'Last Month', thisQuarter: 'This Quarter',
     last6Months: 'Last 6 Months', thisYear: 'This Year', lastYear: 'Last Year', allTime: 'All Time'
   };
 
-  if(preset === 'thisMonth'){
+  if(preset === 'today'){
+    from = fmt10(now);
+    to = fmt10(now);
+  } else if(preset === 'yesterday'){
+    const y = new Date(now); y.setDate(y.getDate() - 1);
+    from = fmt10(y);
+    to = fmt10(y);
+  } else if(preset === 'thisWeek'){
+    const dayOfWeek = (now.getDay() + 6) % 7; // Monday = 0
+    const monday = new Date(now); monday.setDate(now.getDate() - dayOfWeek);
+    from = fmt10(monday);
+  } else if(preset === 'lastWeek'){
+    const dayOfWeek = (now.getDay() + 6) % 7;
+    const thisMonday = new Date(now); thisMonday.setDate(now.getDate() - dayOfWeek);
+    const lastMonday = new Date(thisMonday); lastMonday.setDate(thisMonday.getDate() - 7);
+    const lastSunday = new Date(thisMonday); lastSunday.setDate(thisMonday.getDate() - 1);
+    from = fmt10(lastMonday);
+    to = fmt10(lastSunday);
+  } else if(preset === 'thisMonth'){
     from = fmt10(new Date(now.getFullYear(), now.getMonth(), 1));
   } else if(preset === 'lastMonth'){
     from = fmt10(new Date(now.getFullYear(), now.getMonth() - 1, 1));
@@ -1620,7 +1653,7 @@ function expenseDetailScreenHTML(){
   const rows = data.length ? data.map(function(d,i){
     const pct = total ? Math.round((d[1]/total)*100) : 0;
     const amt = isIncome ? fmt(d[1]) : fmt(-d[1]);
-    return `<div class="cat-row clickable-row" onclick="setBreakdownCategory('${d[0]}')">
+    return `<div class="cat-row clickable-row" onclick="viewCategoryTransactions('${d[0]}')">
       <span class="cat-swatch" style="background:${colorForCategory(d[0])}"></span>
       <span class="cat-name">${d[0]}</span>
       <span class="cat-pct">${pct}%</span>
@@ -1666,6 +1699,14 @@ function expenseDetailScreenHTML(){
 
 window.setBreakdownPeriod = function(v){ breakdownPeriod = v; renderView('finance'); };
 window.setBreakdownCategory = function(v){ breakdownCategory = v; financeSubView = 'expense'; renderView('finance'); };
+
+window.viewCategoryTransactions = function(categoryName){
+  historyType = breakdownType === 'income' ? 'income' : 'expense';
+  historyCategoryFilter = categoryName;
+  historySearch = '';
+  financeSubView = 'history';
+  renderView('finance');
+};
 window.setBreakdownType = function(v){ breakdownType = v; breakdownCategory = 'all'; renderView('finance'); };
 window.toggleBreakdownType = function(){ setBreakdownType(breakdownType === 'income' ? 'expense' : 'income'); };
 window.openExpenseDetail = function(){ breakdownType = 'expense'; breakdownCategory = 'all'; financeSubView = 'expense'; renderView('finance'); };
@@ -2456,12 +2497,29 @@ window.toggleLoanPicker = function(){
   }
 };
 
+let transferDirection = 'out';
+window.setTransferDirection = function(dir){
+  transferDirection = dir;
+  document.querySelectorAll('#txTransferDirectionRow .type-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-dir') === dir);
+  });
+};
+
 function setTxType(type){
   currentTxType = type;
-  document.querySelectorAll('.type-btn').forEach(function(b){
+  document.querySelectorAll('.type-btn[data-type]').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-type') === type);
   });
-  populateCategorySelect(type);
+  const isTransfer = type === 'transfer';
+  document.getElementById('txCategoryRow').style.display = isTransfer ? 'none' : '';
+  document.getElementById('txTransferDirectionRow').style.display = isTransfer ? '' : 'none';
+  if(isTransfer){
+    populateCategorySelect('expense'); // populate something internally even though hidden, so there's always a valid list backing the select
+    document.getElementById('txCategory').value = 'Transfer';
+    setTransferDirection('out');
+  } else {
+    populateCategorySelect(type);
+  }
   toggleLoanPicker();
 }
 
@@ -2517,8 +2575,10 @@ function editTx(id){
   editingTxId = id;
   document.getElementById('txModalTitle').textContent = 'Edit Transaction';
   openModal('txModalOverlay');
-  const type = Number(t.amount) >= 0 ? 'income' : 'expense';
+  const isTransfer = t.category === 'Transfer';
+  const type = isTransfer ? 'transfer' : (Number(t.amount) >= 0 ? 'income' : 'expense');
   setTxType(type);
+  if(isTransfer) setTransferDirection(Number(t.amount) >= 0 ? 'in' : 'out');
   document.getElementById('txName').value = t.name;
   document.getElementById('txAmount').value = Math.abs(Number(t.amount)).toLocaleString('en-US', { maximumFractionDigits: 2 });
   document.getElementById('txDate').value = t.occurred_at;
@@ -2564,7 +2624,8 @@ function saveTransaction(){
   const category = document.getElementById('txCategory').value;
   const name = document.getElementById('txName').value.trim() || category;
   const rawAmount = parseAmountInput(document.getElementById('txAmount').value);
-  const amount = isNaN(rawAmount) ? rawAmount : (currentTxType === 'income' ? Math.abs(rawAmount) : -Math.abs(rawAmount));
+  const isPositive = currentTxType === 'income' || (currentTxType === 'transfer' && transferDirection === 'in');
+  const amount = isNaN(rawAmount) ? rawAmount : (isPositive ? Math.abs(rawAmount) : -Math.abs(rawAmount));
   const occurred_at = document.getElementById('txDate').value;
   const currency = document.getElementById('txCurrency').value || DEFAULT_INPUT_CURRENCY;
   if(isNaN(amount) || !occurred_at) return;
