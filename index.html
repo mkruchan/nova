@@ -252,14 +252,14 @@
   .panel-title h3{ font-family:'Sora', sans-serif; font-weight:700; font-size:16px; margin:0; }
   .add-btn{ background:var(--blue-dim); color:var(--blue-light); border:none; border-radius:7px; padding:5px 10px; font-size:13px; font-weight:600; }
 
-  .tx-row{ display:flex; align-items:center; gap:11px; padding:9px 0; border-bottom:1px solid var(--border); min-height:40px; overflow:hidden; }
+  .tx-row{ display:flex; align-items:center; gap:11px; padding:10px 0; border-bottom:1px solid var(--border); min-height:48px; overflow:hidden; }
   .tx-row:last-child{ border-bottom:none; }
   .tx-icon{ width:28px; height:28px; border-radius:50%; background:var(--panel-2); border:1px solid var(--border-2); display:flex; align-items:center; justify-content:center; color:var(--muted); flex-shrink:0; }
   .tx-icon svg.icon{ width:14px; height:14px; }
   .tx-info{ flex:1; min-width:0; }
-  .tx-name{ font-size:14px; color:var(--white); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .tx-meta{ font-size:12px; color:var(--muted-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .tx-amt{ font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; flex-shrink:0; }
+  .tx-name{ font-size:17px; color:var(--white); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tx-meta{ font-size:14px; color:var(--muted-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tx-amt{ font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; flex-shrink:0; }
   .tx-amt.neg{ color:var(--white); } .tx-amt.pos{ color:var(--green); }
   .tx-del{ background:none; border:none; color:var(--muted-dim); font-size:16px; padding:2px 6px; flex-shrink:0; }
   .tx-edit{ background:none; border:none; color:var(--muted-dim); padding:2px 6px; flex-shrink:0; display:flex; align-items:center; }
@@ -398,10 +398,7 @@
       </div>
     </div>
     <div class="form-row" id="txCategoryRow"><label>Category</label>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <select id="txCategory" onchange="handleCategorySelectChange(this)" style="flex:1;"></select>
-        <button type="button" class="header-btn" style="flex-shrink:0; white-space:nowrap;" onclick="markTxAsTransfer()">↔ Transfer</button>
-      </div>
+      <select id="txCategory" onchange="handleCategorySelectChange(this)"></select>
     </div>
     <div class="form-row" id="txTransferDirectionRow" style="display:none;">
       <label>Direction</label>
@@ -2531,12 +2528,6 @@ function populateCategorySelect(type){
   sel.innerHTML = list.map(function(c){ return `<option>${c}</option>`; }).join('')
     + '<option value="__add_new__">+ Add new category…</option>';
 }
-
-window.markTxAsTransfer = function(){
-  const sel = document.getElementById('txCategory');
-  sel.value = 'Transfer';
-  toggleLoanPicker(); // Transfer never links to a loan, so this correctly hides that picker if it was showing
-};
 
 window.handleCategorySelectChange = function(sel){
   if(sel.value === '__add_new__'){
