@@ -2318,7 +2318,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
         <div id="txList">
           ${(function(){
-            const exp = thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; }).slice(0,8);
+            const exp = thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; }).sort(function(a,b){ return a.occurred_at < b.occurred_at ? 1 : -1; }).slice(0,8);
             if(!exp.length) return '<div class="empty-note">No expenses logged yet.</div>';
             return exp.map(function(t){
             const icon = CATEGORY_ICON[t.category] || 'ic-wallet';
@@ -2338,7 +2338,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
-            const inc = thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan'; }).slice(0,8);
+            const inc = thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan'; }).sort(function(a,b){ return a.occurred_at < b.occurred_at ? 1 : -1; }).slice(0,8);
             if(!inc.length) return '<div class="empty-note">No income logged yet.</div>';
             return inc.map(function(t){
               const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
@@ -2379,7 +2379,7 @@ function financeHTML(){
     </div>
 
     ${(function(){
-      const transfers = thisMonthTx().filter(function(t){ return t.category === 'Transfer'; });
+      const transfers = thisMonthTx().filter(function(t){ return t.category === 'Transfer'; }).sort(function(a,b){ return a.occurred_at < b.occurred_at ? 1 : -1; });
       if(!transfers.length) return '';
       return `<div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
         <div class="panel-card clickable-card" onclick="openHistory('transfer')">
@@ -3202,12 +3202,15 @@ async function autoSyncMonobank(){
               const amount = item.amount / 100;
               const type = amount >= 0 ? 'income' : 'expense';
               const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
-              // "Переказ на картку" (card-to-card transfer) doesn't always get a
-              // populated counterIban from Monobank, even when it genuinely is
-              // a transfer to one of your own cards — so this description is
-              // treated as a reliable enough signal on its own, on top of the
-              // verified counterIban check.
-              const looksLikeCardTransfer = desc.toLowerCase().indexOf('переказ на картку') !== -1;
+              // Card-to-card transfers between your own Monobank cards don't
+              // always get a populated counterIban, even when they genuinely
+              // are transfers — "Переказ на картку" (outgoing) and "З білої/
+              // чорної картки" (incoming, from Monobank's white/black card
+              // products) are treated as reliable signals on their own, on
+              // top of the verified counterIban check.
+              const descLower = desc.toLowerCase();
+              const looksLikeCardTransfer = descLower.indexOf('переказ на картку') !== -1 ||
+                /з\s+(біло|чорно)/i.test(desc);
               let category;
               if((item.counterIban && myOwnIbans.has(item.counterIban)) || looksLikeCardTransfer){
                 category = 'Transfer';
