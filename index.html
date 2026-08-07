@@ -396,7 +396,10 @@
       </div>
     </div>
     <div class="form-row"><label>Category</label>
-      <select id="txCategory" onchange="handleCategorySelectChange(this)"></select>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="txCategory" onchange="handleCategorySelectChange(this)" style="flex:1;"></select>
+        <button type="button" class="header-btn" style="flex-shrink:0; white-space:nowrap;" onclick="markTxAsTransfer()">↔ Transfer</button>
+      </div>
     </div>
     <div class="form-row" id="loanPickerRow" style="display:none;"><label>Which loan is this paying off?</label>
       <select id="txLoanId"></select>
@@ -2419,6 +2422,12 @@ function populateCategorySelect(type){
   sel.innerHTML = list.map(function(c){ return `<option>${c}</option>`; }).join('')
     + '<option value="__add_new__">+ Add new category…</option>';
 }
+
+window.markTxAsTransfer = function(){
+  const sel = document.getElementById('txCategory');
+  sel.value = 'Transfer';
+  toggleLoanPicker(); // Transfer never links to a loan, so this correctly hides that picker if it was showing
+};
 
 window.handleCategorySelectChange = function(sel){
   if(sel.value === '__add_new__'){
