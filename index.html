@@ -1272,6 +1272,18 @@ function localDateStr(date){
 }
 function todayStr(){ return localDateStr(new Date()); }
 
+// Formats a stored YYYY-MM-DD date for display — "Aug 1" for this year,
+// "Aug 1, 2025" for other years, instead of showing the raw ISO string.
+function niceDate(dateStr){
+  if(!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  if(isNaN(d.getTime())) return dateStr;
+  const opts = d.getFullYear() === new Date().getFullYear()
+    ? { month: 'short', day: 'numeric' }
+    : { month: 'short', day: 'numeric', year: 'numeric' };
+  return d.toLocaleDateString(undefined, opts);
+}
+
 function rangeLabel(){
   if(!customRangeActive || !customRangeFrom) return 'This Month';
   if(activeRangePresetLabel) return activeRangePresetLabel;
@@ -2010,7 +2022,7 @@ function historyRows(){
     const metaExtra = isLoan ? ((t.isLoanReceipt || Number(t.amount) > 0) ? ' · Loan received' : ' · Payment') : (isTransfer ? '' : ' · ' + escapeHtml(t.category));
     return `<div class="tx-row">
       <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-      <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at}${metaExtra}</div></div>
+      <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${niceDate(t.occurred_at)}${metaExtra}</div></div>
       <div class="tx-amt ${amtClass}">${sign}${fmtOriginal(t.amount, t.currency)}</div>
       <button class="tx-edit" onclick="editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
       <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
@@ -2313,7 +2325,7 @@ function financeHTML(){
             const isPos = Number(t.amount) > 0;
             return `<div class="tx-row">
               <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-              <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}</div></div>
+              <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${niceDate(t.occurred_at)} · ${escapeHtml(t.category)}</div></div>
               <div class="tx-amt ${isPos?'pos':'neg'}">${isPos?'+':'-'}${fmtOriginal(t.amount, t.currency)}</div>
               <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
               <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
@@ -2332,7 +2344,7 @@ function financeHTML(){
               const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
               return `<div class="tx-row">
                 <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-                <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at} · ${escapeHtml(t.category)}</div></div>
+                <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${niceDate(t.occurred_at)} · ${escapeHtml(t.category)}</div></div>
                 <div class="tx-amt pos">+${fmtOriginal(t.amount, t.currency)}</div>
                 <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
                 <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
@@ -2377,7 +2389,7 @@ function financeHTML(){
             const icon = CATEGORY_ICON['Transfer'] || 'ic-refresh';
             return `<div class="tx-row">
               <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-              <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${t.occurred_at}</div></div>
+              <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${niceDate(t.occurred_at)}</div></div>
               <div class="tx-amt">${Number(t.amount) < 0 ? '-' : ''}${fmtOriginal(t.amount, t.currency)}</div>
               <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
               <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
