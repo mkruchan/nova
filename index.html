@@ -3339,12 +3339,13 @@ async function autoSyncMonobank(){
     // transactions ever appear" looks like from the outside.
     updateMonoProgressUI(isFirstRun
       ? 'Connected. Starting your full history sync in about a minute (this respects Monobank\'s rate limit — it can take a while for 5 years of data, but your recent transactions arrive first)…'
-      : 'Connected. Checking for anything new…');
+      : `Connected. Checking for anything new from ${localDateStr(new Date(from*1000))} through ${localDateStr(new Date(to*1000))}…`);
     await sleep(61000);
     if(mySessionId !== monoSyncSessionId) return;
 
     let anyImported = false;
     let totalImportedSoFar = 0;
+    let totalRawItemsSeen = 0; // how many items Monobank actually returned, regardless of whether they were new — helps tell apart "Monobank didn't send it" from "something here discarded it"
     let lastSyncError = null;
     for(let i = 0; i < accounts.length; i++){
       if(mySessionId !== monoSyncSessionId) break; // stale run — stop instead of continuing to sync a disconnected/replaced account
@@ -3368,6 +3369,7 @@ async function autoSyncMonobank(){
           if(mySessionId !== monoSyncSessionId) break; // disconnected mid-request — discard this response rather than importing it under the new session
           if(sres.ok){
             const items = await sres.json();
+            totalRawItemsSeen += items.length;
             let imported = 0;
             items.forEach(function(item){
               if(existingIds.has(item.id)) return;
@@ -3439,8 +3441,8 @@ async function autoSyncMonobank(){
     } else {
       try{ localStorage.removeItem('nova-mono-last-error'); }catch(e){}
       updateMonoProgressUI(totalImportedSoFar > 0
-        ? `Sync complete — ${totalImportedSoFar} new transaction${totalImportedSoFar===1?'':'s'} imported.`
-        : 'Sync complete — up to date, nothing new.');
+        ? `Sync complete — ${totalImportedSoFar} new transaction${totalImportedSoFar===1?'':'s'} imported (Monobank returned ${totalRawItemsSeen} total for this window).`
+        : `Sync complete — up to date, nothing new. Monobank returned ${totalRawItemsSeen} transaction${totalRawItemsSeen===1?'':'s'} for ${localDateStr(new Date(from*1000))} through ${localDateStr(new Date(to*1000))}${totalRawItemsSeen===0 ? ' — if you expected some, they may not be visible via Monobank\'s API yet.' : ', all already synced.'}`);
     }
 
     if(isFirstRun) markManuallySyncedOnce(); // subsequent runs use the lightweight window from here on
