@@ -294,6 +294,7 @@
   .type-btn.active{ border-color:transparent; }
   .type-btn[data-type="expense"].active{ background:var(--rose); color:#0A0D18; }
   .type-btn[data-type="transfer"].active{ background:var(--blue); color:#0A0D18; }
+  .type-btn[data-type="refund"].active{ background:var(--green); color:#0A0D18; }
   .type-btn[data-type="income"].active{ background:var(--green); color:#0A0D18; }
 
   .amount-currency-row{ display:grid; grid-template-columns:1.4fr 1fr; gap:10px; }
@@ -396,6 +397,7 @@
         <button type="button" class="type-btn" data-type="income" onclick="setTxType('income')">Income</button>
         <button type="button" class="type-btn active" data-type="expense" onclick="setTxType('expense')">Expense</button>
         <button type="button" class="type-btn" data-type="transfer" onclick="setTxType('transfer')">Transfer</button>
+        <button type="button" class="type-btn" data-type="refund" onclick="setTxType('refund')">Refund</button>
       </div>
     </div>
     <div class="form-row" id="txCategoryRow"><label>Category</label>
@@ -1874,8 +1876,12 @@ function monthIncomeFor(date){
     .reduce(function(s,t){ return s + toDisplay(t.amount, t.currency); }, 0);
 }
 function categorySpendFor(category, date){
-  return txForMonth(date).filter(function(t){ return t.category === category && Number(t.amount) < 0; })
-    .reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
+  // Nets every transaction tagged with this category, not just the negative
+  // ones — a refund or partial repayment recorded under the same category
+  // (e.g. Kitsterovna) correctly reduces what you've effectively spent
+  // there, instead of being invisible to budget tracking.
+  return txForMonth(date).filter(function(t){ return t.category === category; })
+    .reduce(function(s,t){ return s - toDisplay(t.amount, t.currency); }, 0);
 }
 
 function progressBar(pct, over){
@@ -2569,9 +2575,13 @@ function wireFinanceEvents(){
 let currentTxType = 'expense';
 
 function populateCategorySelect(type){
-  const list = type === 'income' ? allIncomeCategories() : allExpenseCategories();
+  const primary = type === 'income' ? allIncomeCategories() : allExpenseCategories();
+  const secondary = type === 'income' ? allExpenseCategories() : allIncomeCategories();
+  const secondaryUnique = secondary.filter(function(c){ return primary.indexOf(c) === -1; });
   const sel = document.getElementById('txCategory');
-  sel.innerHTML = list.map(function(c){ return `<option>${c}</option>`; }).join('')
+  sel.innerHTML = primary.map(function(c){ return `<option>${c}</option>`; }).join('')
+    + (secondaryUnique.length ? `<optgroup label="${type==='income' ? 'Expense categories (e.g. a refund tied to that expense)' : 'Income categories'}">`
+        + secondaryUnique.map(function(c){ return `<option>${c}</option>`; }).join('') + '</optgroup>' : '')
     + '<option value="__add_new__">+ Add new category…</option>';
 }
 
@@ -2622,6 +2632,8 @@ function setTxType(type){
     populateCategorySelect('expense'); // populate something internally even though hidden, so there's always a valid list backing the select
     document.getElementById('txCategory').value = 'Transfer';
     setTransferDirection('out');
+  } else if(type === 'refund'){
+    populateCategorySelect('expense'); // pick which expense category this money is being credited back to
   } else {
     populateCategorySelect(type);
   }
@@ -2681,7 +2693,9 @@ function editTx(id){
   document.getElementById('txModalTitle').textContent = 'Edit Transaction';
   openModal('txModalOverlay');
   const isTransfer = t.category === 'Transfer';
-  const type = isTransfer ? 'transfer' : (Number(t.amount) >= 0 ? 'income' : 'expense');
+  const isRefund = !isTransfer && Number(t.amount) >= 0 &&
+    allExpenseCategories().indexOf(t.category) !== -1 && allIncomeCategories().indexOf(t.category) === -1;
+  const type = isTransfer ? 'transfer' : (isRefund ? 'refund' : (Number(t.amount) >= 0 ? 'income' : 'expense'));
   setTxType(type);
   if(isTransfer) setTransferDirection(Number(t.amount) >= 0 ? 'in' : 'out');
   document.getElementById('txName').value = t.name;
@@ -2729,7 +2743,7 @@ function saveTransaction(){
   const category = document.getElementById('txCategory').value;
   const name = document.getElementById('txName').value.trim() || category;
   const rawAmount = parseAmountInput(document.getElementById('txAmount').value);
-  const isPositive = currentTxType === 'income' || (currentTxType === 'transfer' && transferDirection === 'in');
+  const isPositive = currentTxType === 'income' || currentTxType === 'refund' || (currentTxType === 'transfer' && transferDirection === 'in');
   const amount = isNaN(rawAmount) ? rawAmount : (isPositive ? Math.abs(rawAmount) : -Math.abs(rawAmount));
   const occurred_at = document.getElementById('txDate').value;
   const currency = document.getElementById('txCurrency').value || DEFAULT_INPUT_CURRENCY;
