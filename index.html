@@ -3347,9 +3347,8 @@ async function autoSyncMonobank(){
     let totalImportedSoFar = 0;
     let totalRawItemsSeen = 0; // how many items Monobank actually returned, regardless of whether they were new — helps tell apart "Monobank didn't send it" from "something here discarded it"
     let lastSyncError = null;
-    for(let i = 0; i < accounts.length; i++){
-      if(mySessionId !== monoSyncSessionId) break; // stale run — stop instead of continuing to sync a disconnected/replaced account
-      const account = accounts[i];
+
+    async function syncOneAccount(account, accountLabel){
       const currency = MONO_CURRENCY_MAP[account.currencyCode] || 'UAH';
       try{
         // A first-run full history pull needs chunking (Monobank caps each
@@ -3364,7 +3363,7 @@ async function autoSyncMonobank(){
           if(mySessionId !== monoSyncSessionId) break; // stale run — abort this account's chunk loop too
           const chunkStart = Math.max(chunkEnd - MAX_WINDOW, from);
           const pctDone = isFirstRun ? Math.round(((to - chunkEnd) / totalWindow) * 100) : null;
-          updateMonoProgressUI(`Importing… account ${i+1} of ${accounts.length}${pctDone !== null ? `, ~${pctDone}% through your history` : ''} — ${totalImportedSoFar} transaction${totalImportedSoFar===1?'':'s'} imported so far`);
+          updateMonoProgressUI(`Importing… ${accountLabel}${pctDone !== null ? `, ~${pctDone}% through your history` : ''} — ${totalImportedSoFar} transaction${totalImportedSoFar===1?'':'s'} imported so far`);
           const sres = await fetch(`https://api.monobank.ua/personal/statement/${account.id}/${chunkStart}/${chunkEnd}`, { headers: { 'X-Token': token } });
           if(mySessionId !== monoSyncSessionId) break; // disconnected mid-request — discard this response rather than importing it under the new session
           if(sres.ok){
@@ -3429,11 +3428,17 @@ async function autoSyncMonobank(){
             lastSyncError = `Statement request failed (HTTP ${sres.status})${bodyText ? ': ' + bodyText.slice(0,200) : ''}`;
           }
           chunkEnd = chunkStart;
-          if(chunkEnd > from) await sleep(61000); // respect the 1-request-per-minute limit between chunks
+          if(chunkEnd > from) await sleep(61000); // respect the 1-request-per-minute limit for repeated requests to this SAME account's history
         }
       }catch(e){ lastSyncError = 'Network error reaching Monobank: ' + e.message; }
-      if(i < accounts.length - 1) await sleep(61000); // respect the 1-request-per-minute limit across accounts
     }
+
+    // All accounts sync in parallel — each one's own chunk requests still
+    // wait for that account specifically, but different accounts don't
+    // block on each other at all.
+    await Promise.all(accounts.map(function(account, i){
+      return syncOneAccount(account, `account ${i+1} of ${accounts.length}`);
+    }));
 
     if(lastSyncError){
       try{ localStorage.setItem('nova-mono-last-error', lastSyncError); }catch(e){}
