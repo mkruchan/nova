@@ -254,7 +254,8 @@
   .add-btn{ background:var(--blue-dim); color:var(--blue-light); border:none; border-radius:7px; padding:5px 10px; font-size:calc(13px * var(--font-scale, 1)); font-weight:600; }
 
   .tx-row{ display:flex; align-items:center; gap:11px; padding:10px 0; border-bottom:1px solid var(--border); min-height:48px; overflow:hidden; }
-  .day-header{ font-size:calc(11px * var(--font-scale, 1)); font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted-dim); padding:16px 0 6px; }
+  .day-header{ font-size:calc(11px * var(--font-scale, 1)); font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted-dim); padding:16px 0 6px; display:flex; justify-content:space-between; align-items:baseline; }
+  .day-header-total{ font-weight:600; letter-spacing:normal; text-transform:none; color:var(--muted); }
   .day-header:first-child{ padding-top:4px; }
   .tx-row:last-child{ border-bottom:none; }
   .tx-icon{ width:28px; height:28px; border-radius:50%; background:var(--panel-2); border:1px solid var(--border-2); display:flex; align-items:center; justify-content:center; color:var(--muted); flex-shrink:0; }
@@ -1403,26 +1404,37 @@ function niceDate(dateStr){
   return d.toLocaleDateString(undefined, opts);
 }
 
-function dayHeaderLabel(dateStr){
-  if(dateStr === todayStr()) return 'Today';
-  const y = new Date(); y.setDate(y.getDate() - 1);
-  if(dateStr === localDateStr(y)) return 'Yesterday';
-  return niceDate(dateStr);
+function dayHeaderLabel(dateStr, dayTotal){
+  const label = dateStr === todayStr() ? 'Today' : (function(){
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    return dateStr === localDateStr(y) ? 'Yesterday' : niceDate(dateStr);
+  })();
+  return typeof dayTotal === 'number'
+    ? `<span>${label}</span><span class="day-header-total">(${fmt(dayTotal)})</span>`
+    : label;
 }
 
 // Renders a list of transactions (already sorted, most recent first) with a
-// day-header divider inserted before each new day's group — used by the
-// Expenses, Income, Transfers, and Refunds panels alike.
+// day-header divider inserted before each new day's group, showing that
+// day's net total in brackets — used by the Expenses, Income, Transfers,
+// and Refunds panels alike.
 function renderTxRowsGroupedByDay(list, rowFn){
   let html = '';
-  let lastDay = null;
-  list.forEach(function(t){
-    if(t.occurred_at !== lastDay){
-      lastDay = t.occurred_at;
-      html += `<div class="day-header">${dayHeaderLabel(t.occurred_at)}</div>`;
+  let i = 0;
+  while(i < list.length){
+    const day = list[i].occurred_at;
+    let dayTotal = 0;
+    let j = i;
+    while(j < list.length && list[j].occurred_at === day){
+      dayTotal += toDisplay(list[j].amount, list[j].currency);
+      j++;
     }
-    html += rowFn(t);
-  });
+    html += `<div class="day-header">${dayHeaderLabel(day, dayTotal)}</div>`;
+    for(let k = i; k < j; k++){
+      html += rowFn(list[k]);
+    }
+    i = j;
+  }
   return html;
 }
 
@@ -1695,6 +1707,8 @@ let financeSubView = null; // null | 'expense' | 'budget' | 'overview' | 'histor
 let historyType = 'expense'; // 'income' | 'expense' | 'transfer' | 'loan'
 let historyCategoryFilter = 'all';
 let historySearch = '';
+let historyDateFrom = ''; // additional date filter within History, independent of the main dashboard's own date range
+let historyDateTo = '';
 let historyLoanId = null; // which loan's payment history to show, when historyType === 'loan'
 
 function monthlyExpenseBarsHTML(type){
@@ -1836,6 +1850,8 @@ window.viewCategoryTransactions = function(categoryName){
   historyType = breakdownType === 'income' ? 'income' : 'expense';
   historyCategoryFilter = categoryName;
   historySearch = '';
+  historyDateFrom = '';
+  historyDateTo = '';
   financeSubView = 'history';
   renderView('finance');
 };
@@ -2141,6 +2157,8 @@ window.openHistory = function(type, loanId){
   historyType = type;
   historyCategoryFilter = 'all';
   historySearch = '';
+  historyDateFrom = '';
+  historyDateTo = '';
   historyLoanId = loanId || null;
   financeSubView = 'history';
   renderView('finance');
@@ -2156,6 +2174,19 @@ window.setHistoryCategory = function(v){
 window.setHistorySearch = function(v){
   historySearch = v;
   renderHistoryList();
+};
+window.setHistoryDateFrom = function(v){
+  historyDateFrom = v;
+  renderView('finance');
+};
+window.setHistoryDateTo = function(v){
+  historyDateTo = v;
+  renderView('finance');
+};
+window.clearHistoryDateFilter = function(){
+  historyDateFrom = '';
+  historyDateTo = '';
+  renderView('finance');
 };
 
 function renderHistoryList(){
@@ -2181,6 +2212,11 @@ function historyRows(){
     list = base.filter(function(t){ return (isIncome ? Number(t.amount) > 0 : Number(t.amount) < 0) && t.category !== 'Transfer' && t.category !== 'Loan'; });
   }
   if(!isTransfer && !isLoan && !isRefund && historyCategoryFilter !== 'all') list = list.filter(function(t){ return t.category === historyCategoryFilter; });
+  // An additional date filter scoped to this History screen specifically —
+  // independent of the main dashboard's own date range, same relationship
+  // as the Monobank display filter has to it.
+  if(historyDateFrom) list = list.filter(function(t){ return t.occurred_at >= historyDateFrom; });
+  if(historyDateTo) list = list.filter(function(t){ return t.occurred_at <= historyDateTo; });
   if(historySearch.trim()) {
     const q = historySearch.trim().toLowerCase();
     list = list.filter(function(t){ return t.name.toLowerCase().indexOf(q) !== -1; });
@@ -2189,13 +2225,7 @@ function historyRows(){
 
   if(!list.length) return `<div class="empty-note">No ${isLoan?'payments':isTransfer?'transfers':isRefund?'refunds':isIncome?'income':'expenses'} match these filters.</div>`;
 
-  let html = '';
-  let lastDay = null;
-  list.forEach(function(t){
-    if(t.occurred_at !== lastDay){
-      lastDay = t.occurred_at;
-      html += `<div class="day-header">${dayHeaderLabel(t.occurred_at)}</div>`;
-    }
+  return renderTxRowsGroupedByDay(list, function(t){
     const icon = isLoan ? (CATEGORY_ICON['Loan'] || 'ic-wallet') : (CATEGORY_ICON[t.category] || (isIncome || isRefund ? 'ic-dollar' : 'ic-wallet'));
     let amtClass, sign;
     if(isLoan){
@@ -2212,7 +2242,7 @@ function historyRows(){
       sign = isIncome ? '+' : '-';
     }
     const metaExtra = isLoan ? ((t.isLoanReceipt || Number(t.amount) > 0) ? 'Loan received' : 'Payment') : ((isTransfer) ? '' : escapeHtml(t.category));
-    html += `<div class="tx-row">
+    return `<div class="tx-row">
       <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
       <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div>${metaExtra ? `<div class="tx-meta">${metaExtra}</div>` : ''}</div>
       <div class="tx-amt ${amtClass}">${sign}${fmtOriginal(t.amount, t.currency)}</div>
@@ -2220,7 +2250,6 @@ function historyRows(){
       <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
     </div>`;
   });
-  return html;
 }
 
 function historyScreenHTML(){
@@ -2247,6 +2276,12 @@ function historyScreenHTML(){
       ${(isTransfer || isLoan || isRefund) ? '' : `<select class="filter-select" onchange="setHistoryCategory(this.value)">${catOptions}</select>`}
       <input class="filter-select" type="text" placeholder="Search by name…" value="${escapeHtml(historySearch)}" oninput="setHistorySearch(this.value)" style="flex:1;">
     </div>
+    ${isLoan ? '' : `<div class="filter-row detail-filters" style="align-items:center;">
+      <input class="filter-select" type="date" value="${historyDateFrom}" onchange="setHistoryDateFrom(this.value)" style="flex:1;">
+      <span style="color:var(--muted);">–</span>
+      <input class="filter-select" type="date" value="${historyDateTo}" onchange="setHistoryDateTo(this.value)" style="flex:1;">
+      ${(historyDateFrom || historyDateTo) ? '<button class="header-btn" onclick="clearHistoryDateFilter()">Clear</button>' : ''}
+    </div>`}
 
     <div id="historyList">${historyRows()}</div>
   `;
