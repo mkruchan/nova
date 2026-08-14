@@ -169,9 +169,9 @@
   .cat-row{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:calc(14px * var(--font-scale, 1)); }
   .cat-row:last-child{ border-bottom:none; }
   .cat-swatch{ width:10px; height:10px; border-radius:3px; flex-shrink:0; }
-  .cat-name{ flex:1; min-width:0; color:var(--white); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .cat-pct{ color:var(--muted-dim); width:38px; text-align:right; font-variant-numeric:tabular-nums; }
-  .cat-amt{ width:90px; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+  .cat-name{ flex:1; min-width:0; color:var(--white); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:calc(17px * var(--font-scale, 1)); }
+  .cat-pct{ color:var(--muted-dim); width:38px; text-align:right; font-variant-numeric:tabular-nums; font-size:calc(14px * var(--font-scale, 1)); }
+  .cat-amt{ width:105px; text-align:right; font-weight:600; font-variant-numeric:tabular-nums; font-size:calc(17px * var(--font-scale, 1)); }
   @media (max-width: 760px){
     .breakdown-body{ gap:10px; }
     .cat-list{ min-width:120px; }
@@ -1418,6 +1418,21 @@ function dayHeaderLabel(dateStr, dayTotal){
 // day-header divider inserted before each new day's group, showing that
 // day's net total in brackets — used by the Expenses, Income, Transfers,
 // and Refunds panels alike.
+// Transactions only store a date (no time-of-day), so multiple same-day
+// entries can't be ordered by date alone. Breaking ties by the numeric part
+// of each transaction's id (which increases with creation/import order)
+// gives a reliable, explicit "most recent first" order instead of leaving
+// same-day transactions to whatever incidental array order they happened
+// to already be in.
+function sortMostRecentFirst(list){
+  return list.slice().sort(function(a,b){
+    if(a.occurred_at !== b.occurred_at) return a.occurred_at < b.occurred_at ? 1 : -1;
+    const na = parseInt(String(a.id).replace(/\D/g,''), 10) || 0;
+    const nb = parseInt(String(b.id).replace(/\D/g,''), 10) || 0;
+    return nb - na;
+  });
+}
+
 function renderTxRowsGroupedByDay(list, rowFn){
   let html = '';
   let i = 0;
@@ -2223,7 +2238,7 @@ function historyRows(){
     const q = historySearch.trim().toLowerCase();
     list = list.filter(function(t){ return t.name.toLowerCase().indexOf(q) !== -1; });
   }
-  list = list.slice().sort(function(a,b){ return a.occurred_at < b.occurred_at ? 1 : -1; });
+  list = sortMostRecentFirst(list);
 
   if(!list.length) return `<div class="empty-note">No ${isLoan?'payments':isTransfer?'transfers':isRefund?'refunds':isIncome?'income':'expenses'} match these filters.</div>`;
 
@@ -2569,7 +2584,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
         <div id="txList">
           ${(function(){
-            const exp = thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer' && t.category !== 'Loan'; }).sort(function(a,b){ return a.occurred_at < b.occurred_at ? 1 : -1; }).slice(0,8);
+            const exp = sortMostRecentFirst(thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer' && t.category !== 'Loan'; })).slice(0,8);
             if(!exp.length) return '<div class="empty-note">No expenses logged yet.</div>';
             return renderTxRowsGroupedByDay(exp, function(t){
             const icon = CATEGORY_ICON[t.category] || 'ic-wallet';
@@ -2589,7 +2604,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
-            const inc = thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' && !isRefundTx(t); }).sort(function(a,b){ return a.occurred_at < b.occurred_at ? 1 : -1; }).slice(0,8);
+            const inc = sortMostRecentFirst(thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' && !isRefundTx(t); })).slice(0,8);
             if(!inc.length) return '<div class="empty-note">No income logged yet.</div>';
             return renderTxRowsGroupedByDay(inc, function(t){
               const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
@@ -2630,7 +2645,7 @@ function financeHTML(){
     </div>
 
     ${(function(){
-      const transfers = thisMonthTx().filter(function(t){ return t.category === 'Transfer'; }).sort(function(a,b){ return a.occurred_at < b.occurred_at ? 1 : -1; });
+      const transfers = sortMostRecentFirst(thisMonthTx().filter(function(t){ return t.category === 'Transfer'; }));
       if(!transfers.length) return '';
       return `<div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
         <div class="panel-card clickable-card" onclick="openHistory('transfer')">
@@ -2651,7 +2666,7 @@ function financeHTML(){
     })()}
 
     ${(function(){
-      const refunds = thisMonthTx().filter(isRefundTx).sort(function(a,b){ return a.occurred_at < b.occurred_at ? 1 : -1; });
+      const refunds = sortMostRecentFirst(thisMonthTx().filter(isRefundTx));
       if(!refunds.length) return '';
       return `<div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
         <div class="panel-card clickable-card" onclick="openHistory('refund')">
