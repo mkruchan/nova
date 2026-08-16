@@ -1829,6 +1829,7 @@ function expenseDetailScreenHTML(){
       <div class="detail-title">${isIncome?'Income':'Expenses'} by category</div>
       <div style="width:32px;"></div>
     </div>
+    ${lastSyncedSummary() ? `<div class="empty-note" style="text-align:center; margin:-4px 0 8px;">Monobank data synced ${lastSyncedSummary()}</div>` : ''}
 
     <div class="type-toggle" style="margin-bottom:12px;">
       <button type="button" class="type-btn${!isIncome?' active':''}" onclick="setBreakdownType('expense')">Expense</button>
@@ -2024,6 +2025,7 @@ function budgetDetailScreenHTML(){
       <div class="detail-title">Budget</div>
       <button class="header-btn" onclick="openBudgetEdit()">Edit</button>
     </div>
+    ${lastSyncedSummary() ? `<div class="empty-note" style="text-align:center; margin:-4px 0 8px;">Monobank data synced ${lastSyncedSummary()}</div>` : ''}
 
     <div class="month-nav">
       <button class="month-nav-btn" onclick="shiftBudgetMonth(-1)">‹</button>
@@ -2142,12 +2144,22 @@ function trendSVG(height){
 }
 
 // Compact clickable card combining Net Worth / Spent / Income / Savings Rate / Balance Trend
+function lastSyncedSummary(){
+  const timestamps = Object.values(monoSyncStatus).map(function(s){ return s.lastSyncedAt; }).filter(Boolean);
+  if(!timestamps.length) return null;
+  return timeAgo(Math.max.apply(null, timestamps));
+}
+
 function dateRangeBlockHTML(){
+  const syncedLabel = lastSyncedSummary();
   return `
     <div class="chart-card clickable-card" style="grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between;" onclick="openRangeModal()">
       <div style="display:flex; align-items:center; gap:10px;">
         <span style="font-size:20px;">📅</span>
-        <div class="chart-title" style="margin:0;">${rangeLabel()}</div>
+        <div>
+          <div class="chart-title" style="margin:0;">${rangeLabel()}</div>
+          ${syncedLabel ? `<div style="font-size:calc(11px * var(--font-scale, 1)); color:var(--muted-dim); margin-top:2px;">Synced ${syncedLabel}</div>` : ''}
+        </div>
       </div>
       ${customRangeActive ? `<button class="header-btn" onclick="event.stopPropagation(); resetDateRange();">Reset</button>` : `<span class="chevron">›</span>`}
     </div>`;
