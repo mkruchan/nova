@@ -1245,6 +1245,7 @@ async function pullCloudSync(){
     }
     cloudSyncStatus = 'synced';
   }catch(e){ cloudSyncStatus = e.name === 'AbortError' ? 'timeout' : 'error'; cloudSyncErrorDetail = e.message; }
+  if(currentView === 'settings') renderView('settings');
 }
 
 async function pushCloudSyncNow(){
