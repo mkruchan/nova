@@ -1126,22 +1126,39 @@ function cloudPayload(){
   };
 }
 
+// Merges two transaction lists by keeping, for each transaction (matched by
+// monoId when present, otherwise id), whichever copy was edited more
+// recently — rather than blindly replacing one list with the other. This
+// matters now that more than one device can independently sync directly
+// from Monobank: each device's own local copy of a transaction could
+// otherwise silently clobber an edit (like a category change) made on the
+// other device, if a naive "last push wins" replacement were used instead.
+function mergeTransactionArrays(localList, incomingList){
+  const merged = new Map();
+  function keyFor(t){ return t.monoId || t.id; }
+  localList.forEach(function(t){ merged.set(keyFor(t), t); });
+  incomingList.forEach(function(t){
+    const key = keyFor(t);
+    const existing = merged.get(key);
+    if(!existing || (t.editedAt || 0) >= (existing.editedAt || 0)){
+      merged.set(key, t);
+    }
+  });
+  return Array.from(merged.values());
+}
+
 function applyCloudPayload(payload){
   if(!payload) return;
-  if(payload.transactions){
-    const incomingHasAnyMono = payload.transactions.some(function(t){ return t.monoId; });
-    const localMonoTx = transactions.filter(function(t){ return t.monoId; });
-    if(!incomingHasAnyMono && localMonoTx.length > 0){
-      // The incoming payload has no Monobank transactions at all, but we
-      // have some locally — almost certainly means the cloud was last
-      // pushed before Monobank data was included in sync (an older version
-      // of the app deliberately excluded it). Preserve local Monobank data
-      // instead of letting a stale pull silently wipe it out.
-      transactions = payload.transactions.concat(localMonoTx);
-    } else {
-      transactions = payload.transactions;
-    }
-  }
+  if(payload.transactions) mergeInTransactionsFromCloud(payload.transactions);
+  applyCloudPayloadNonTransactionFields(payload);
+}
+
+function mergeInTransactionsFromCloud(incomingTransactions){
+  transactions = mergeTransactionArrays(transactions, incomingTransactions);
+}
+
+function applyCloudPayloadNonTransactionFields(payload){
+  if(!payload) return;
   if(payload.budgets) budgets = payload.budgets;
   if(payload.customExpenseCategories) customExpenseCategories = payload.customExpenseCategories;
   if(payload.customIncomeCategories) customIncomeCategories = payload.customIncomeCategories;
@@ -1205,11 +1222,24 @@ async function pullCloudSync(){
     const rows = await res.json();
     if(rows && rows.length){
       const cloudUpdatedAt = rows[0].updated_at;
-      // Only overwrite local state if the cloud copy is genuinely newer than
-      // whatever we last changed here — otherwise a periodic pull could
-      // silently undo a local edit/deletion made moments earlier.
+      const payload = rows[0].data;
+      // Transactions merge on every pull regardless of the timestamp below —
+      // the merge itself is edit-time-aware per transaction, so it can
+      // never revert a more recent local edit even when called often. This
+      // matters specifically because more than one device can now sync
+      // Monobank directly, so each device's own local transactions can
+      // diverge from the cloud in ways a whole-payload timestamp can't
+      // safely resolve on its own.
+      if(payload && Array.isArray(payload.transactions)){
+        mergeInTransactionsFromCloud(payload.transactions);
+        try{ localStorage.setItem('nova-transactions', JSON.stringify(transactions)); }catch(e){}
+      }
+      // Everything else (budgets, loans, custom categories/rules) doesn't
+      // have per-item edit tracking, so it still relies on whole-payload
+      // "only apply if genuinely newer" — otherwise a periodic pull could
+      // silently undo a local edit made moments earlier.
       if(!localLastModifiedAt || new Date(cloudUpdatedAt) > new Date(localLastModifiedAt)){
-        applyCloudPayload(rows[0].data);
+        applyCloudPayloadNonTransactionFields(payload);
         cloudLastPulledAt = cloudUpdatedAt;
       }
     }
@@ -1222,6 +1252,24 @@ async function pushCloudSyncNow(){
   if(!cloudConfigured()) { cloudSyncStatus = 'unconfigured'; return; }
   cloudSyncStatus = 'syncing';
   try{
+    // Reconcile transactions against whatever's currently in the cloud
+    // FIRST — otherwise this device could push its own local array and
+    // silently overwrite an edit the other device already saved, simply
+    // because this device hasn't pulled that edit down yet.
+    try{
+      const getRes = await fetchWithTimeout(
+        `${cloudConfig.url}/rest/v1/nova_sync?sync_id=eq.${encodeURIComponent(cloudConfig.syncId)}&select=data`,
+        { headers: { 'apikey': cloudConfig.key, 'Authorization': 'Bearer ' + cloudConfig.key } },
+        10000
+      );
+      if(getRes.ok){
+        const rows = await getRes.json();
+        if(rows && rows.length && rows[0].data && Array.isArray(rows[0].data.transactions)){
+          mergeInTransactionsFromCloud(rows[0].data.transactions);
+        }
+      }
+    }catch(e){ /* if this reconcile step fails, still proceed with the push below rather than blocking entirely */ }
+
     const res = await fetchWithTimeout(`${cloudConfig.url}/rest/v1/nova_sync?on_conflict=sync_id`, {
       method: 'POST',
       headers: {
@@ -1326,6 +1374,18 @@ function init(){
     }
   });
   window.addEventListener('focus', function(){
+    autoSyncMonobank();
+    if(cloudConfigured()) pullCloudAndRender();
+  });
+
+  // Extra insurance beyond tab-focus: any tap/click anywhere in the app also
+  // triggers a freshness check, throttled to at most once every 30 seconds
+  // so normal use (scrolling, opening menus) never hammers the network.
+  let lastInteractionCheck = 0;
+  document.addEventListener('click', function(){
+    const now = Date.now();
+    if(now - lastInteractionCheck < 30000) return;
+    lastInteractionCheck = now;
     autoSyncMonobank();
     if(cloudConfigured()) pullCloudAndRender();
   });
@@ -2907,10 +2967,11 @@ function saveTransaction(){
     if(t){
       t.name = name; t.category = category; t.amount = amount; t.currency = currency; t.occurred_at = occurred_at;
       if(loanId) t.loanId = loanId; else delete t.loanId;
+      t.editedAt = Date.now(); // lets a cross-device merge know this copy is the freshest edit
     }
     editingTxId = null;
   } else {
-    const tx = { id: 't' + (nextId++), name, category, amount, currency, occurred_at };
+    const tx = { id: 't' + (nextId++), name, category, amount, currency, occurred_at, editedAt: Date.now() };
     if(loanId) tx.loanId = loanId;
     transactions.unshift(tx);
   }
@@ -3392,11 +3453,6 @@ window.connectMonobank = async function(){
   const token = document.getElementById('monoToken').value.trim();
   const statusEl = document.getElementById('monoStatus');
   if(!token){ statusEl.textContent = 'Paste your personal token first.'; statusEl.classList.add('error'); return; }
-  if(isIOSDevice()){
-    statusEl.textContent = "Monobank doesn't sync reliably from this device — connect and sync from your Mac instead. This device will still receive that data (and stay in sync with any edits) through Cloud Sync.";
-    statusEl.classList.add('error');
-    return;
-  }
 
   statusEl.textContent = 'Connecting…';
   statusEl.classList.remove('error');
@@ -3487,7 +3543,6 @@ function isIOSDevice(){
 }
 
 async function autoSyncMonobank(){
-  if(isIOSDevice()) return; // Monobank's API doesn't sync reliably from this device — it gets Monobank data via Supabase from whichever device (e.g. Mac) does the direct sync instead
   if(autoSyncInProgress) return;
   const token = loadMonoToken();
   if(!token) return; // never connected — nothing to keep in sync
@@ -3583,7 +3638,8 @@ async function autoSyncMonobank(){
               const occurred_at = localDateStr(new Date(item.time * 1000));
               transactions.unshift({
                 id: 't' + (nextId++), monoId: item.id, monoAccountId: account.id, name: desc, category: category,
-                amount: amount, currency: currency, occurred_at: occurred_at, mcc: item.mcc || null, originalMcc: item.originalMcc || null
+                amount: amount, currency: currency, occurred_at: occurred_at, mcc: item.mcc || null, originalMcc: item.originalMcc || null,
+                editedAt: 0 // baseline — any manual edit on either device always outranks a freshly-synced import of the same transaction
               });
               existingIds.add(item.id);
               imported++;
@@ -3646,11 +3702,6 @@ async function autoSyncMonobank(){
 window.syncNowManual = async function(){
   const statusEl = document.getElementById('monoStatus');
   const progressEl = document.getElementById('monoProgress');
-  if(isIOSDevice()){
-    statusEl.textContent = "Monobank doesn't sync directly on this device — connect and sync from your Mac instead, and this device will pick up that data (and any edits you make here) through Cloud Sync.";
-    statusEl.classList.remove('error');
-    return;
-  }
   statusEl.textContent = '';
   statusEl.classList.remove('error');
   progressEl.textContent = 'Syncing…';
