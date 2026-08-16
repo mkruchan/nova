@@ -1301,22 +1301,34 @@ function init(){
   autoSyncMonobank();
   setInterval(autoSyncMonobank, 60 * 1000); // keep Monobank data current without needing a manual sync
 
+  function pullCloudAndRender(){
+    return pullCloudSync().then(function(){ if(currentView === 'finance') renderView('finance'); });
+  }
+
+  if(cloudConfigured()){
+    pullCloudAndRender();
+    setInterval(pullCloudAndRender, 60 * 1000);
+  }
+
   // Background tabs get setInterval throttled by the browser (a standard
   // power-saving behavior in both Safari and Chrome) — a timer set for every
   // 60 seconds can end up firing far less often, or not at all, while the
-  // tab isn't the active one. Catching up the moment you come back to the
-  // tab means a backgrounded period never causes a real, lasting gap.
+  // tab isn't the active one. This affects BOTH the direct Monobank sync
+  // AND the Cloud Sync pull — a device that only ever receives Monobank
+  // data through Cloud Sync (e.g. iPhone, or any tab other than the one
+  // that connected directly) had no remedy at all before this covered pull
+  // too. Catching both up the moment you return to the tab means a
+  // backgrounded period never causes a real, lasting gap on any device.
   document.addEventListener('visibilitychange', function(){
-    if(document.visibilityState === 'visible') autoSyncMonobank();
+    if(document.visibilityState === 'visible'){
+      autoSyncMonobank();
+      if(cloudConfigured()) pullCloudAndRender();
+    }
   });
-  window.addEventListener('focus', function(){ autoSyncMonobank(); });
-
-  if(cloudConfigured()){
-    pullCloudSync().then(function(){
-      if(currentView === 'finance') renderView('finance'); // pick up anything newer from another device
-    });
-    setInterval(function(){ pullCloudSync().then(function(){ if(currentView === 'finance') renderView('finance'); }); }, 60 * 1000);
-  }
+  window.addEventListener('focus', function(){
+    autoSyncMonobank();
+    if(cloudConfigured()) pullCloudAndRender();
+  });
 }
 
 /* ---------- Navigation ---------- */
