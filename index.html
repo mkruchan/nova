@@ -298,7 +298,6 @@
   .type-btn[data-type="expense"].active{ background:var(--rose); color:#0A0D18; }
   .type-btn[data-type="transfer"].active{ background:var(--blue); color:#0A0D18; }
   .type-btn[data-type="refund"].active{ background:var(--green); color:#0A0D18; }
-  .type-btn[data-type="loan"].active{ background:var(--rose); color:#0A0D18; }
   .type-btn[data-type="income"].active{ background:var(--green); color:#0A0D18; }
 
   .amount-currency-row{ display:grid; grid-template-columns:1.4fr 1fr; gap:10px; }
@@ -402,7 +401,6 @@
         <button type="button" class="type-btn active" data-type="expense" onclick="setTxType('expense')">Expense</button>
         <button type="button" class="type-btn" data-type="transfer" onclick="setTxType('transfer')">Transfer</button>
         <button type="button" class="type-btn" data-type="refund" onclick="setTxType('refund')">Refund</button>
-        <button type="button" class="type-btn" data-type="loan" onclick="setTxType('loan')">Loan</button>
       </div>
     </div>
     <div class="form-row" id="txCategoryRow"><label>Category</label>
@@ -417,16 +415,6 @@
         <button type="button" class="type-btn active" data-dir="out" onclick="setTransferDirection('out')">Money out</button>
         <button type="button" class="type-btn" data-dir="in" onclick="setTransferDirection('in')">Money in</button>
       </div>
-    </div>
-    <div class="form-row" id="txLoanDirectionRow" style="display:none;">
-      <label>Direction</label>
-      <div class="type-toggle">
-        <button type="button" class="type-btn active" data-loandir="payment" onclick="setLoanDirection('payment')">Payment (reduces balance)</button>
-        <button type="button" class="type-btn" data-loandir="additional" onclick="setLoanDirection('additional')">Additional funds (increases balance)</button>
-      </div>
-    </div>
-    <div class="form-row" id="loanPickerRow" style="display:none;"><label id="loanPickerLabel">Which loan is this paying off?</label>
-      <select id="txLoanId"></select>
     </div>
     <div class="form-row amount-currency-row">
       <div><label>Amount</label><input id="txAmount" type="text" inputmode="decimal" oninput="formatAmountInput(this)"></div>
@@ -561,25 +549,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="loanModalOverlay" onclick="if(event.target===this) closeModal('loanModalOverlay')">
-  <div class="modal">
-    <h3>Add Loan</h3>
-    <div class="empty-note" style="text-align:left; margin-bottom:12px;">This logs the loan as income right away (you have the money now), then lets you track payments against it separately as you pay it down.</div>
-    <div class="form-row"><label>Loan name</label><input id="loanName" type="text" placeholder="e.g. Car loan from Bank X"></div>
-    <div class="form-row"><label>Principal amount</label><input id="loanPrincipal" type="text" inputmode="decimal" oninput="formatAmountInput(this)"></div>
-    <div class="form-row"><label>Currency</label>
-      <select id="loanCurrency">
-        <option value="EUR">EUR</option><option value="USD">USD</option><option value="UAH">UAH</option><option value="ALL">ALL</option>
-      </select>
-    </div>
-    <div class="form-row"><label>Date received</label><input id="loanDate" type="date"></div>
-    <div class="modal-actions">
-      <button class="modal-cancel" onclick="closeModal('loanModalOverlay')">Cancel</button>
-      <button class="modal-save" onclick="saveNewLoan()">Add Loan</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="confirmModalOverlay" onclick="if(event.target===this) confirmModalNo()">
   <div class="modal">
     <h3 id="confirmModalTitle">Are you sure?</h3>
@@ -701,8 +670,8 @@ const CATEGORY_COLOR_PALETTE = [
 ];
 const CATEGORY_COLOR = {};
 (function(){
-  const names = EXPENSE_CATEGORIES.filter(function(c){ return c !== 'Transfer' && c !== 'Loan'; })
-    .concat(INCOME_CATEGORIES.filter(function(c){ return c !== 'Transfer' && c !== 'Loan'; }));
+  const names = EXPENSE_CATEGORIES.filter(function(c){ return c !== 'Transfer'; })
+    .concat(INCOME_CATEGORIES.filter(function(c){ return c !== 'Transfer'; }));
   const seen = {};
   let i = 0;
   names.forEach(function(name){
@@ -990,7 +959,7 @@ function visibleTransactions(){
 // identified as a positive amount tagged to a category that only exists on
 // the expense side (e.g. Kitsterovna), never the income side.
 function isRefundTx(t){
-  return Number(t.amount) >= 0 && t.category !== 'Transfer' && t.category !== 'Loan' &&
+  return Number(t.amount) >= 0 && t.category !== 'Transfer' &&
     allExpenseCategories().indexOf(t.category) !== -1 && allIncomeCategories().indexOf(t.category) === -1;
 }
 
@@ -1043,93 +1012,6 @@ function totalManualAccountsValue(){
   return sum;
 }
 
-/* ---------- Loans ---------- */
-// A loan is a real entity (name, principal, currency, date) rather than just
-// a category label, so we can actually answer "how much do I still owe" and
-// show payoff progress — not just tag individual transactions.
-let loans = [];
-
-function loadLoans(){
-  try{ const s = localStorage.getItem('nova-loans'); loans = s ? JSON.parse(s) : []; }
-  catch(e){ loans = []; }
-}
-function persistLoans(){
-  localStorage.setItem('nova-loans', JSON.stringify(loans));
-  scheduleCloudPush();
-}
-
-function loanProgress(loan){
-  // Payments (negative amounts) reduce the remaining balance; additional
-  // funds drawn against the same loan later (positive amounts, not the
-  // original receipt) increase it — both net together here.
-  const relevantTx = transactions
-    .filter(function(t){ return t.loanId === loan.id && t.category === 'Loan' && !t.isLoanReceipt; });
-  const paid = relevantTx.reduce(function(s,t){ return s - toDisplay(t.amount, t.currency); }, 0);
-  // Original-currency figures assume payments/draws were made in the loan's
-  // own currency (the normal case) — if you ever pay in a different currency,
-  // that portion won't show here, but the EUR figures above stay accurate regardless.
-  const paidOriginal = relevantTx.filter(function(t){ return (t.currency || DEFAULT_INPUT_CURRENCY) === loan.currency; })
-    .reduce(function(s,t){ return s - Number(t.amount); }, 0);
-  const principal = toDisplay(loan.principal, loan.currency);
-  const remaining = Math.max(0, principal - paid);
-  const pct = principal > 0 ? Math.min(100, Math.round((paid/principal)*100)) : 0;
-  const remainingOriginal = Math.max(0, Number(loan.principal) - paidOriginal);
-  return {
-    paid: paid, principal: principal, remaining: remaining, pct: pct,
-    principalOriginal: Number(loan.principal), remainingOriginal: remainingOriginal, currency: loan.currency
-  };
-}
-
-window.openAddLoanModal = function(){
-  document.getElementById('loanName').value = '';
-  document.getElementById('loanPrincipal').value = '';
-  document.getElementById('loanCurrency').value = DEFAULT_INPUT_CURRENCY;
-  document.getElementById('loanDate').value = todayStr();
-  openModal('loanModalOverlay');
-};
-
-window.saveNewLoan = function(){
-  const name = document.getElementById('loanName').value.trim();
-  const principal = parseAmountInput(document.getElementById('loanPrincipal').value);
-  const currency = document.getElementById('loanCurrency').value || DEFAULT_INPUT_CURRENCY;
-  const date = document.getElementById('loanDate').value;
-  if(!name || !principal || principal <= 0 || !date) return;
-
-  const loanId = 'loan' + Date.now();
-  loans.push({ id: loanId, name: name, principal: principal, currency: currency, startDate: date });
-  persistLoans();
-
-  // Receiving the loan is logged as a real inflow for your records, but it
-  // doesn't count directly toward Net Worth (Loan-category transactions are
-  // excluded from that sum) — instead, the loan's full principal counts
-  // against Net Worth as an outstanding liability from day one, and each
-  // payment reduces that liability, bringing Net Worth back toward neutral
-  // as it's paid off. isLoanReceipt marks this entry so payoff-progress
-  // tracking doesn't mistake it for an actual payment.
-  transactions.unshift({
-    id: 't' + (nextId++), name: 'Loan: ' + name, category: 'Loan',
-    amount: principal, currency: currency, occurred_at: date, loanId: loanId, isLoanReceipt: true
-  });
-  persist();
-
-  closeModal('loanModalOverlay');
-  renderView('finance');
-};
-
-window.deleteLoan = function(loanId){
-  customConfirm("Remove this loan from the list? Its payment history stays in your transactions, just no longer tracked as a loan.", function(){
-    loans = loans.filter(function(l){ return l.id !== loanId; });
-    persistLoans();
-    renderView('finance');
-  }, { confirmLabel: 'Remove' });
-};
-
-window.addLoanPayment = function(loanId){
-  openTxModal('expense', 'Loan');
-  document.getElementById('txLoanId').value = loanId;
-  toggleLoanPicker();
-};
-
 /* ---------- Cloud sync (Supabase) ---------- */
 // Keeps transactions, budgets, and custom categories in sync across devices.
 // Deliberately NOT synced: the Monobank personal token (stays device-local —
@@ -1167,7 +1049,6 @@ function cloudPayload(){
     customIncomeCategories: customIncomeCategories,
     customCategoryRules: customCategoryRules,
     showMonoData: showMonoData,
-    loans: loans,
     manualAccounts: manualAccounts
   };
 }
@@ -1210,7 +1091,6 @@ function applyCloudPayloadNonTransactionFields(payload){
   if(payload.customIncomeCategories) customIncomeCategories = payload.customIncomeCategories;
   if(payload.customCategoryRules) customCategoryRules = payload.customCategoryRules;
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
-  if(payload.loans) loans = payload.loans;
   if(payload.manualAccounts) manualAccounts = payload.manualAccounts;
 
   // Cloud-sourced budgets need the exact same normalization as locally-loaded
@@ -1235,7 +1115,6 @@ function applyCloudPayloadNonTransactionFields(payload){
   localStorage.setItem('nova-custom-expense-categories', JSON.stringify(customExpenseCategories));
   localStorage.setItem('nova-custom-income-categories', JSON.stringify(customIncomeCategories));
   localStorage.setItem('nova-custom-category-rules', JSON.stringify(customCategoryRules));
-  localStorage.setItem('nova-loans', JSON.stringify(loans));
   localStorage.setItem('nova-manual-accounts', JSON.stringify(manualAccounts));
   try{ localStorage.setItem('nova-show-mono-data', String(showMonoData)); }catch(e){}
 }
@@ -1390,7 +1269,6 @@ function init(){
   loadCustomCategoryRules();
   loadMonoSyncStatus();
   loadCloudConfig();
-  loadLoans();
   loadManualAccounts();
   loadDateRangeState();
   renderView('finance');
@@ -1692,31 +1570,18 @@ window.openRatesDetail = function(){
   openModal('ratesModalOverlay');
 };
 
-function totalLoanLiability(){
-  return loans.reduce(function(sum, loan){ return sum + loanProgress(loan).remaining; }, 0);
-}
-
 function netWorth(){
-  // Only the loan's own receipt is excluded here (that principal isn't
-  // counted as "your" asset) — actual payments DO count as real cash leaving,
-  // which is what makes paying down debt net-worth-neutral: cash drops by
-  // the payment, the liability below drops by the exact same amount, and
-  // the two cancel out instead of hitting Net Worth twice. Any positive
-  // Loan-category transaction is a receipt by construction (payments are
-  // always created as negative), so this catches older loans too, even
-  // ones created before isLoanReceipt existed.
   const base = transactions
-    .filter(function(t){ return !(t.isLoanReceipt || (t.category === 'Loan' && Number(t.amount) > 0)); })
     .reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
-  return base - totalLoanLiability() + totalManualAccountsValue();
+  return base + totalManualAccountsValue();
 }
 
 function monthIncome(){
-  return thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' && !isRefundTx(t); })
+  return thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && !isRefundTx(t); })
     .reduce(function(s,t){ return s + toDisplay(t.amount, t.currency); }, 0);
 }
 function monthSpend(){
-  const expenses = thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; })
+  const expenses = thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; })
     .reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
   const refunds = thisMonthTx().filter(isRefundTx)
     .reduce(function(s,t){ return s + toDisplay(t.amount, t.currency); }, 0);
@@ -1773,7 +1638,7 @@ function transactionsForPeriod(period, type){
   const isIncome = type === 'income';
   return visibleTransactions().filter(function(t){
     const rightSign = isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t));
-    if(!rightSign || t.category === 'Transfer' || t.category === 'Loan') return false;
+    if(!rightSign || t.category === 'Transfer') return false;
     const d = new Date(t.occurred_at);
     if(period === 'month') return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
     if(period === 'year') return d.getFullYear() === now.getFullYear();
@@ -1846,7 +1711,6 @@ let historyCategoryFilter = 'all';
 let historySearch = '';
 let historyDateFrom = ''; // additional date filter within History, independent of the main dashboard's own date range
 let historyDateTo = '';
-let historyLoanId = null; // which loan's payment history to show, when historyType === 'loan'
 
 function monthlyExpenseBarsHTML(type){
   const isIncome = type === 'income';
@@ -1859,7 +1723,7 @@ function monthlyExpenseBarsHTML(type){
     return visibleTransactions().filter(function(t){
       const d = new Date(t.occurred_at);
       const rightSign = isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t));
-      return rightSign && t.category !== 'Transfer' && t.category !== 'Loan' && d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth();
+      return rightSign && t.category !== 'Transfer' && d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth();
     }).reduce(function(s,t){ return isIncome ? s + toDisplay(t.amount, t.currency) : s - toDisplay(t.amount, t.currency); }, 0);
   });
   const max = Math.max.apply(null, sums.concat([1]));
@@ -1883,7 +1747,7 @@ function donutWithCenterLabel(data, total, sublabel){
 
 // Compact clickable card shown on the main dashboard
 function expenseCategorySummaryHTML(){
-  const inRange = thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer' && t.category !== 'Loan'; });
+  const inRange = thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer'; });
   const data = categoryBreakdown(inRange);
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
   const top = data.slice(0,4);
@@ -1922,7 +1786,7 @@ function expenseCategorySummaryHTML(){
 function expenseDetailScreenHTML(){
   const isIncome = breakdownType === 'income';
   const periodTx = breakdownPeriod === 'month'
-    ? thisMonthTx().filter(function(t){ const rightSign = isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t)); return rightSign && t.category !== 'Transfer' && t.category !== 'Loan'; })
+    ? thisMonthTx().filter(function(t){ const rightSign = isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t)); return rightSign && t.category !== 'Transfer'; })
     : transactionsForPeriod(breakdownPeriod, breakdownType);
   const filteredTx = breakdownCategory === 'all' ? periodTx : periodTx.filter(function(t){ return t.category === breakdownCategory; });
   const data = categoryBreakdown(filteredTx);
@@ -1930,7 +1794,7 @@ function expenseDetailScreenHTML(){
 
   const catList = isIncome ? allIncomeCategories() : allExpenseCategories();
   const catOptions = ['<option value="all">All categories</option>'].concat(
-    catList.filter(function(c){ return c !== 'Transfer' && c !== 'Loan'; }).map(function(c){ return `<option value="${c}"${breakdownCategory===c?' selected':''}>${c}</option>`; })
+    catList.filter(function(c){ return c !== 'Transfer'; }).map(function(c){ return `<option value="${c}"${breakdownCategory===c?' selected':''}>${c}</option>`; })
   ).join('');
 
   const rows = data.length ? data.map(function(d,i){
@@ -2058,14 +1922,14 @@ function txForMonth(date){
   });
 }
 function monthSpendFor(date){
-  const expenses = txForMonth(date).filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && t.category !== 'Loan'; })
+  const expenses = txForMonth(date).filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; })
     .reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
   const refunds = txForMonth(date).filter(isRefundTx)
     .reduce(function(s,t){ return s + toDisplay(t.amount, t.currency); }, 0);
   return Math.max(0, expenses - refunds);
 }
 function monthIncomeFor(date){
-  return txForMonth(date).filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' && !isRefundTx(t); })
+  return txForMonth(date).filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && !isRefundTx(t); })
     .reduce(function(s,t){ return s + toDisplay(t.amount, t.currency); }, 0);
 }
 function categorySpendFor(category, date){
@@ -2169,7 +2033,20 @@ function accountsDetailScreenHTML(){
     <div class="side-label" style="margin:20px 0 4px;">Manual (Cash, exchanges, etc.)</div>
     ${manualRows || '<div class="empty-note">No manual accounts yet.</div>'}
 
-    <div class="form-row" style="margin-top:12px;"><label>New account name</label><input id="newManualAccountName" type="text" placeholder="e.g. Cash or WhiteBIT"></div>
+    <div class="form-row"><label>New account name</label><input id="newManualAccountName" type="text" placeholder="e.g. Cash or Sense Bank"></div>
+    <div class="form-row amount-currency-row">
+      <div><label>Starting balance</label><input id="newManualAccountBalance" type="text" inputmode="decimal" placeholder="0" oninput="formatAmountInput(this)"></div>
+      <div><label>Currency</label>
+        <select id="newManualAccountCurrency">
+          <option value="EUR" selected>Euro (EUR)</option>
+          <option value="ALL">Lek (ALL)</option>
+          <option value="USD">Dollar (USD)</option>
+          <option value="UAH">Hryvnia (UAH)</option>
+          <option value="USDT">USDT</option>
+          <option value="USDC">USDC</option>
+        </select>
+      </div>
+    </div>
     <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
       <button class="modal-save" onclick="addManualAccount()">Add account</button>
     </div>
@@ -2180,10 +2057,12 @@ window.addManualAccount = function(){
   const nameEl = document.getElementById('newManualAccountName');
   const name = nameEl.value.trim();
   if(!name) return;
-  const currency = (prompt('Currency for this account (e.g. EUR, USD, USDT, USDC):') || DEFAULT_INPUT_CURRENCY).trim().toUpperCase();
-  manualAccounts.push({ id: 'macc' + Date.now(), name: name, balances: [{ currency: currency || DEFAULT_INPUT_CURRENCY, amount: 0 }] });
+  const currency = document.getElementById('newManualAccountCurrency').value;
+  const startingBalance = parseAmountInput(document.getElementById('newManualAccountBalance').value);
+  manualAccounts.push({ id: 'macc' + Date.now(), name: name, balances: [{ currency: currency, amount: isNaN(startingBalance) ? 0 : startingBalance }] });
   persistManualAccounts();
   nameEl.value = '';
+  document.getElementById('newManualAccountBalance').value = '';
   renderView('finance');
 };
 window.removeManualAccount = function(index){
@@ -2194,7 +2073,8 @@ window.removeManualAccount = function(index){
 window.addManualBalance = function(accIndex){
   const currency = (prompt('Currency code (e.g. EUR, USD, USDT, USDC):') || '').trim().toUpperCase();
   if(!currency) return;
-  manualAccounts[accIndex].balances.push({ currency: currency, amount: 0 });
+  const startingBalance = parseAmountInput(prompt('Starting balance for ' + currency + ':') || '0');
+  manualAccounts[accIndex].balances.push({ currency: currency, amount: isNaN(startingBalance) ? 0 : startingBalance });
   persistManualAccounts();
   renderView('finance');
 };
@@ -2302,7 +2182,7 @@ function budgetDetailScreenHTML(){
 
 function budgetEditModalBody(){
   const mb = getBudgetForMonth(budgetViewMonth);
-  return allExpenseCategories().filter(function(cat){ return cat !== 'Transfer' && cat !== 'Loan'; }).map(function(cat){
+  return allExpenseCategories().filter(function(cat){ return cat !== 'Transfer'; }).map(function(cat){
     const val = mb.categoryBudgets[cat] ? Number(mb.categoryBudgets[cat]).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
     return `<div class="form-row budget-edit-row">
       <label>${cat}</label>
@@ -2430,13 +2310,12 @@ function financeOverviewSummaryHTML(){
     </div>`;
 }
 
-window.openHistory = function(type, loanId){
+window.openHistory = function(type){
   historyType = type;
   historyCategoryFilter = 'all';
   historySearch = '';
   historyDateFrom = '';
   historyDateTo = '';
-  historyLoanId = loanId || null;
   financeSubView = 'history';
   renderView('finance');
 };
@@ -2474,21 +2353,18 @@ function renderHistoryList(){
 
 function historyRows(){
   const isTransfer = historyType === 'transfer';
-  const isLoan = historyType === 'loan';
   const isIncome = historyType === 'income';
   const isRefund = historyType === 'refund';
-  const base = isLoan ? transactions : thisMonthTx(); // loan history intentionally shows the loan's true, complete record — regardless of the display range or hide-Monobank-data toggles
+  const base = thisMonthTx();
   let list;
-  if(isLoan){
-    list = base.filter(function(t){ return t.loanId === historyLoanId && t.category === 'Loan'; });
-  } else if(isTransfer){
+  if(isTransfer){
     list = base.filter(function(t){ return t.category === 'Transfer'; });
   } else if(isRefund){
     list = base.filter(isRefundTx);
   } else {
-    list = base.filter(function(t){ return (isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t))) && t.category !== 'Transfer' && t.category !== 'Loan'; });
+    list = base.filter(function(t){ return (isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t))) && t.category !== 'Transfer'; });
   }
-  if(!isTransfer && !isLoan && !isRefund && historyCategoryFilter !== 'all') list = list.filter(function(t){ return t.category === historyCategoryFilter; });
+  if(!isTransfer && !isRefund && historyCategoryFilter !== 'all') list = list.filter(function(t){ return t.category === historyCategoryFilter; });
   // An additional date filter scoped to this History screen specifically —
   // independent of the main dashboard's own date range, same relationship
   // as the Monobank display filter has to it.
@@ -2500,15 +2376,12 @@ function historyRows(){
   }
   list = sortMostRecentFirst(list);
 
-  if(!list.length) return `<div class="empty-note">No ${isLoan?'payments':isTransfer?'transfers':isRefund?'refunds':isIncome?'income':'expenses'} match these filters.</div>`;
+  if(!list.length) return `<div class="empty-note">No ${isTransfer?'transfers':isRefund?'refunds':isIncome?'income':'expenses'} match these filters.</div>`;
 
   return renderTxRowsGroupedByDay(list, function(t){
-    const icon = isLoan ? (CATEGORY_ICON['Loan'] || 'ic-wallet') : (CATEGORY_ICON[t.category] || (isIncome || isRefund ? 'ic-dollar' : 'ic-wallet'));
+    const icon = isTransfer ? (CATEGORY_ICON['Transfer'] || 'ic-wallet') : (CATEGORY_ICON[t.category] || (isIncome || isRefund ? 'ic-dollar' : 'ic-wallet'));
     let amtClass, sign;
-    if(isLoan){
-      amtClass = Number(t.amount) < 0 ? 'neg' : 'pos';
-      sign = Number(t.amount) < 0 ? '-' : '+';
-    } else if(isTransfer){
+    if(isTransfer){
       amtClass = '';
       sign = Number(t.amount) < 0 ? '-' : '';
     } else if(isRefund){
@@ -2521,7 +2394,7 @@ function historyRows(){
       amtClass = isIncome ? 'pos' : 'neg';
       sign = isIncome ? '+' : '-';
     }
-    const metaExtra = isLoan ? ((t.isLoanReceipt || Number(t.amount) > 0) ? 'Loan received' : 'Payment') : ((isTransfer) ? '' : (!isIncome && !isRefund && isRefundTx(t) ? escapeHtml(t.category) + ' · Refund' : escapeHtml(t.category)));
+    const metaExtra = isTransfer ? '' : (!isIncome && !isRefund && isRefundTx(t) ? escapeHtml(t.category) + ' · Refund' : escapeHtml(t.category));
     return `<div class="tx-row">
       <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
       <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div>${metaExtra ? `<div class="tx-meta">${metaExtra}</div>` : ''}</div>
@@ -2534,16 +2407,13 @@ function historyRows(){
 
 function historyScreenHTML(){
   const isTransfer = historyType === 'transfer';
-  const isLoan = historyType === 'loan';
   const isIncome = historyType === 'income';
   const isRefund = historyType === 'refund';
-  const categories = (isIncome ? allIncomeCategories() : allExpenseCategories()).filter(function(c){ return c !== 'Transfer' && c !== 'Loan'; });
+  const categories = (isIncome ? allIncomeCategories() : allExpenseCategories()).filter(function(c){ return c !== 'Transfer'; });
   const catOptions = ['<option value="all">All categories</option>'].concat(
     categories.map(function(c){ return `<option value="${c}"${historyCategoryFilter===c?' selected':''}>${c}</option>`; })
   ).join('');
-  const loanForTitle = isLoan ? loans.find(function(l){ return l.id === historyLoanId; }) : null;
-  const title = isLoan ? (loanForTitle ? escapeHtml(loanForTitle.name) + ' History' : 'Loan History')
-    : isTransfer ? 'Transfer History' : isRefund ? 'Refund History' : (isIncome ? 'Income History' : 'Expense History');
+  const title = isTransfer ? 'Transfer History' : isRefund ? 'Refund History' : (isIncome ? 'Income History' : 'Expense History');
 
   return `
     <div class="detail-header">
@@ -2553,15 +2423,15 @@ function historyScreenHTML(){
     </div>
 
     <div class="filter-row detail-filters">
-      ${(isTransfer || isLoan || isRefund) ? '' : `<select class="filter-select" onchange="setHistoryCategory(this.value)">${catOptions}</select>`}
+      ${(isTransfer || isRefund) ? '' : `<select class="filter-select" onchange="setHistoryCategory(this.value)">${catOptions}</select>`}
       <input class="filter-select" type="text" placeholder="Search by name…" value="${escapeHtml(historySearch)}" oninput="setHistorySearch(this.value)" style="flex:1;">
     </div>
-    ${isLoan ? '' : `<div class="filter-row detail-filters" style="align-items:center;">
+    <div class="filter-row detail-filters" style="align-items:center;">
       <input class="filter-select" type="date" value="${historyDateFrom}" onchange="setHistoryDateFrom(this.value)" style="flex:1;">
       <span style="color:var(--muted);">–</span>
       <input class="filter-select" type="date" value="${historyDateTo}" onchange="setHistoryDateTo(this.value)" style="flex:1;">
       ${(historyDateFrom || historyDateTo) ? '<button class="header-btn" onclick="clearHistoryDateFilter()">Clear</button>' : ''}
-    </div>`}
+    </div>
 
     <div id="historyList">${historyRows()}</div>
   `;
@@ -2845,7 +2715,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
         <div id="txList">
           ${(function(){
-            const exp = sortMostRecentFirst(thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer' && t.category !== 'Loan'; })).slice(0,8);
+            const exp = sortMostRecentFirst(thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer'; })).slice(0,8);
             if(!exp.length) return '<div class="empty-note">No expenses logged yet.</div>';
             return renderTxRowsGroupedByDay(exp, function(t){
             const icon = CATEGORY_ICON[t.category] || 'ic-wallet';
@@ -2865,7 +2735,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
-            const inc = sortMostRecentFirst(thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' && !isRefundTx(t); })).slice(0,8);
+            const inc = sortMostRecentFirst(thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && !isRefundTx(t); })).slice(0,8);
             if(!inc.length) return '<div class="empty-note">No income logged yet.</div>';
             return renderTxRowsGroupedByDay(inc, function(t){
               const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
@@ -2884,29 +2754,6 @@ function financeHTML(){
 
     <div class="charts-row">
       ${accountsSummaryHTML()}
-    </div>
-
-    <div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
-      <div class="panel-card">
-        <div class="panel-title"><h3>Loans</h3><button class="header-btn" onclick="openAddLoanModal()">+ Add Loan</button></div>
-        ${!loans.length ? '<div class="empty-note">No loans tracked. Add one to see payoff progress here.</div>' : loans.map(function(loan){
-          const p = loanProgress(loan);
-          return `<div class="loan-row" style="padding:12px 0; border-bottom:1px solid var(--border);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-              <div>
-                <div style="font-weight:600; font-size:13px;">${escapeHtml(loan.name)}</div>
-                <div class="empty-note" style="padding:0; margin-top:2px;">${fmtOriginal(p.remainingOriginal, p.currency)} remaining of ${fmtOriginal(p.principalOriginal, p.currency)}${p.currency !== DISPLAY_CURRENCY ? ` <span style="opacity:0.7;">(≈ ${fmtShort(p.remaining)} of ${fmtShort(p.principal)})</span>` : ''}</div>
-              </div>
-              <div style="display:flex; gap:6px; align-items:center;">
-                <button class="header-btn" onclick="openHistory('loan','${loan.id}')">History</button>
-                <button class="header-btn" onclick="addLoanPayment('${loan.id}')">+ Payment</button>
-                <button class="tx-del" onclick="deleteLoan('${loan.id}')">✕</button>
-              </div>
-            </div>
-            ${progressBar(p.pct, false)}
-          </div>`;
-        }).join('')}
-      </div>
     </div>
 
     ${(function(){
@@ -3003,24 +2850,6 @@ window.handleCategorySelectChange = function(sel){
       populateCategorySelect(currentTxType); // revert selection back to a real category
     }
   }
-  toggleLoanPicker();
-};
-
-window.toggleLoanPicker = function(){
-  const row = document.getElementById('loanPickerRow');
-  if(!row) return;
-  const cat = document.getElementById('txCategory').value;
-  const showForExpenseCategory = currentTxType === 'expense' && cat === 'Loan';
-  const showForLoanType = currentTxType === 'loan';
-  if((showForExpenseCategory || showForLoanType) && loans.length > 0){
-    const sel = document.getElementById('txLoanId');
-    sel.innerHTML = loans.map(function(l){ return `<option value="${l.id}">${escapeHtml(l.name)}</option>`; }).join('');
-    const labelEl = document.getElementById('loanPickerLabel');
-    if(labelEl) labelEl.textContent = (showForLoanType && loanDirection === 'additional') ? 'Which loan is this adding funds to?' : 'Which loan is this paying off?';
-    row.style.display = 'block';
-  } else {
-    row.style.display = 'none';
-  }
 };
 
 let transferDirection = 'out';
@@ -3031,41 +2860,25 @@ window.setTransferDirection = function(dir){
   });
 };
 
-let loanDirection = 'payment';
-window.setLoanDirection = function(dir){
-  loanDirection = dir;
-  document.querySelectorAll('#txLoanDirectionRow .type-btn').forEach(function(b){
-    b.classList.toggle('active', b.getAttribute('data-loandir') === dir);
-  });
-  toggleLoanPicker(); // refresh the picker label to match the new direction
-};
-
 function setTxType(type){
   currentTxType = type;
   document.querySelectorAll('.type-btn[data-type]').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-type') === type);
   });
   const isTransfer = type === 'transfer';
-  const isLoan = type === 'loan';
-  document.getElementById('txCategoryRow').style.display = (isTransfer || isLoan) ? 'none' : '';
-  document.getElementById('txAccountRow').style.display = (isTransfer || isLoan) ? 'none' : '';
+  document.getElementById('txCategoryRow').style.display = isTransfer ? 'none' : '';
+  document.getElementById('txAccountRow').style.display = isTransfer ? 'none' : '';
   document.getElementById('txTransferDirectionRow').style.display = isTransfer ? '' : 'none';
-  document.getElementById('txLoanDirectionRow').style.display = isLoan ? '' : 'none';
-  if(!isTransfer && !isLoan) populateAccountSelect();
+  if(!isTransfer) populateAccountSelect();
   if(isTransfer){
     populateCategorySelect('expense'); // populate something internally even though hidden, so there's always a valid list backing the select
     document.getElementById('txCategory').value = 'Transfer';
     setTransferDirection('out');
-  } else if(isLoan){
-    populateCategorySelect('expense');
-    document.getElementById('txCategory').value = 'Loan';
-    setLoanDirection('payment');
   } else if(type === 'refund'){
     populateCategorySelect('expense'); // pick which expense category this money is being credited back to
   } else {
     populateCategorySelect(type);
   }
-  toggleLoanPicker();
 }
 
 function openModal(id){ document.getElementById(id).classList.add('open'); }
@@ -3106,7 +2919,6 @@ function openTxModal(type, presetCategory){
     const sel = document.getElementById('txCategory');
     if(sel) sel.value = presetCategory;
   }
-  toggleLoanPicker();
   setTimeout(function(){
     const amtEl = document.getElementById('txAmount');
     amtEl.focus();
@@ -3121,24 +2933,17 @@ function editTx(id){
   document.getElementById('txModalTitle').textContent = 'Edit Transaction';
   openModal('txModalOverlay');
   const isTransfer = t.category === 'Transfer';
-  const isLoanTx = !isTransfer && t.category === 'Loan' && t.loanId && !t.isLoanReceipt;
-  const isRefund = !isTransfer && !isLoanTx && Number(t.amount) >= 0 &&
+  const isRefund = !isTransfer && Number(t.amount) >= 0 &&
     allExpenseCategories().indexOf(t.category) !== -1 && allIncomeCategories().indexOf(t.category) === -1;
-  const type = isTransfer ? 'transfer' : (isLoanTx ? 'loan' : (isRefund ? 'refund' : (Number(t.amount) >= 0 ? 'income' : 'expense')));
+  const type = isTransfer ? 'transfer' : (isRefund ? 'refund' : (Number(t.amount) >= 0 ? 'income' : 'expense'));
   setTxType(type);
   if(isTransfer) setTransferDirection(Number(t.amount) >= 0 ? 'in' : 'out');
-  if(isLoanTx) setLoanDirection(Number(t.amount) >= 0 ? 'additional' : 'payment');
   document.getElementById('txName').value = t.name;
   document.getElementById('txAmount').value = Math.abs(Number(t.amount)).toLocaleString('en-US', { maximumFractionDigits: 2 });
   document.getElementById('txDate').value = t.occurred_at;
   document.getElementById('txCurrency').value = t.currency || DEFAULT_INPUT_CURRENCY;
   const catSel = document.getElementById('txCategory');
   if(catSel) catSel.value = t.category;
-  toggleLoanPicker();
-  if(t.loanId){
-    const loanSel = document.getElementById('txLoanId');
-    if(loanSel) loanSel.value = t.loanId;
-  }
   const accountSel = document.getElementById('txAccountId');
   if(accountSel && t.accountId) accountSel.value = t.accountId;
 }
@@ -3176,16 +2981,11 @@ function saveTransaction(){
   const name = document.getElementById('txName').value.trim() || category;
   const rawAmount = parseAmountInput(document.getElementById('txAmount').value);
   const isPositive = currentTxType === 'income' || currentTxType === 'refund' ||
-    (currentTxType === 'transfer' && transferDirection === 'in') ||
-    (currentTxType === 'loan' && loanDirection === 'additional');
+    (currentTxType === 'transfer' && transferDirection === 'in');
   const amount = isNaN(rawAmount) ? rawAmount : (isPositive ? Math.abs(rawAmount) : -Math.abs(rawAmount));
   const occurred_at = document.getElementById('txDate').value;
   const currency = document.getElementById('txCurrency').value || DEFAULT_INPUT_CURRENCY;
   if(isNaN(amount) || !occurred_at) return;
-
-  const loanPickerVisible = document.getElementById('loanPickerRow') && document.getElementById('loanPickerRow').style.display !== 'none';
-  const loanId = loanPickerVisible ? document.getElementById('txLoanId').value : null;
-  if(currentTxType === 'loan' && !loanId) return; // nothing to attach this to — Add Loan first in the Loans panel
 
   const accountRowVisible = document.getElementById('txAccountRow') && document.getElementById('txAccountRow').style.display !== 'none';
   const accountId = accountRowVisible ? document.getElementById('txAccountId').value : null;
@@ -3194,14 +2994,12 @@ function saveTransaction(){
     const t = transactions.find(function(x){ return x.id === editingTxId; });
     if(t){
       t.name = name; t.category = category; t.amount = amount; t.currency = currency; t.occurred_at = occurred_at;
-      if(loanId) t.loanId = loanId; else delete t.loanId;
       if(accountId) t.accountId = accountId; else if(accountRowVisible) delete t.accountId;
       t.editedAt = Date.now(); // lets a cross-device merge know this copy is the freshest edit
     }
     editingTxId = null;
   } else {
     const tx = { id: 't' + (nextId++), name, category, amount, currency, occurred_at, editedAt: Date.now() };
-    if(loanId) tx.loanId = loanId;
     if(accountId) tx.accountId = accountId;
     transactions.unshift(tx);
   }
