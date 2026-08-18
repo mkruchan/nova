@@ -408,6 +408,9 @@
     <div class="form-row" id="txCategoryRow"><label>Category</label>
       <select id="txCategory" onchange="handleCategorySelectChange(this)"></select>
     </div>
+    <div class="form-row" id="txAccountRow"><label>Account</label>
+      <select id="txAccountId"></select>
+    </div>
     <div class="form-row" id="txTransferDirectionRow" style="display:none;">
       <label>Direction</label>
       <div class="type-toggle">
@@ -815,7 +818,7 @@ const DISPLAY_CURRENCY = 'EUR';   // everything is shown/totaled in this currenc
 const DEFAULT_INPUT_CURRENCY = 'ALL'; // new transactions default to entering amounts in Lek
 const CURRENCY_SYMBOLS = { EUR: '€', USD: '$', UAH: '₴', ALL: 'L' };
 // Fallback rates (EUR base) used only until a live fetch succeeds at least once.
-let exchangeRates = { EUR: 1, USD: 1.08, UAH: 45, ALL: 98.5 };
+let exchangeRates = { EUR: 1, USD: 1.08, UAH: 45, ALL: 98.5, USDT: 1.08, USDC: 1.08 };
 let ratesUpdatedAt = null;
 let ratesLoading = false;
 
@@ -896,6 +899,8 @@ async function refreshExchangeRates(){
   }
 
   if(anySucceeded){
+    exchangeRates.USDT = exchangeRates.USD; // pegged 1:1 to USD — no separate crypto rate source needed
+    exchangeRates.USDC = exchangeRates.USD;
     ratesUpdatedAt = Date.now();
     localStorage.setItem('nova-rates', JSON.stringify({ rates: exchangeRates, updatedAt: ratesUpdatedAt, sources: ratesSourceDetail }));
   }
@@ -1010,6 +1015,34 @@ function persist(){
   scheduleCloudPush();
 }
 
+/* ---------- Manual accounts ---------- */
+// Balances Nova has no way to derive from transactions (cash you're holding,
+// exchange balances like WhiteBIT) — tracked directly rather than inferred,
+// and contribute to Net Worth as their own distinct component alongside the
+// transaction-derived total.
+let manualAccounts = [];
+
+function loadManualAccounts(){
+  try{ const s = localStorage.getItem('nova-manual-accounts'); manualAccounts = s ? JSON.parse(s) : []; }
+  catch(e){ manualAccounts = []; }
+  let needsSave = false;
+  manualAccounts.forEach(function(acc, i){ if(!acc.id){ acc.id = 'macc' + Date.now() + i; needsSave = true; } });
+  if(needsSave) persistManualAccounts();
+}
+function persistManualAccounts(){
+  localStorage.setItem('nova-manual-accounts', JSON.stringify(manualAccounts));
+  scheduleCloudPush();
+}
+function totalManualAccountsValue(){
+  let sum = 0;
+  manualAccounts.forEach(function(acc){
+    (acc.balances || []).forEach(function(b){
+      sum += toDisplay(Number(b.amount) || 0, b.currency);
+    });
+  });
+  return sum;
+}
+
 /* ---------- Loans ---------- */
 // A loan is a real entity (name, principal, currency, date) rather than just
 // a category label, so we can actually answer "how much do I still owe" and
@@ -1029,7 +1062,7 @@ function loanProgress(loan){
   // Payments (negative amounts) reduce the remaining balance; additional
   // funds drawn against the same loan later (positive amounts, not the
   // original receipt) increase it — both net together here.
-  const relevantTx = visibleTransactions()
+  const relevantTx = transactions
     .filter(function(t){ return t.loanId === loan.id && t.category === 'Loan' && !t.isLoanReceipt; });
   const paid = relevantTx.reduce(function(s,t){ return s - toDisplay(t.amount, t.currency); }, 0);
   // Original-currency figures assume payments/draws were made in the loan's
@@ -1134,7 +1167,8 @@ function cloudPayload(){
     customIncomeCategories: customIncomeCategories,
     customCategoryRules: customCategoryRules,
     showMonoData: showMonoData,
-    loans: loans
+    loans: loans,
+    manualAccounts: manualAccounts
   };
 }
 
@@ -1177,6 +1211,7 @@ function applyCloudPayloadNonTransactionFields(payload){
   if(payload.customCategoryRules) customCategoryRules = payload.customCategoryRules;
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
   if(payload.loans) loans = payload.loans;
+  if(payload.manualAccounts) manualAccounts = payload.manualAccounts;
 
   // Cloud-sourced budgets need the exact same normalization as locally-loaded
   // ones — otherwise a budget pulled from an older data shape leaves
@@ -1201,6 +1236,7 @@ function applyCloudPayloadNonTransactionFields(payload){
   localStorage.setItem('nova-custom-income-categories', JSON.stringify(customIncomeCategories));
   localStorage.setItem('nova-custom-category-rules', JSON.stringify(customCategoryRules));
   localStorage.setItem('nova-loans', JSON.stringify(loans));
+  localStorage.setItem('nova-manual-accounts', JSON.stringify(manualAccounts));
   try{ localStorage.setItem('nova-show-mono-data', String(showMonoData)); }catch(e){}
 }
 
@@ -1355,6 +1391,7 @@ function init(){
   loadMonoSyncStatus();
   loadCloudConfig();
   loadLoans();
+  loadManualAccounts();
   loadDateRangeState();
   renderView('finance');
   refreshExchangeRates();
@@ -1668,10 +1705,10 @@ function netWorth(){
   // Loan-category transaction is a receipt by construction (payments are
   // always created as negative), so this catches older loans too, even
   // ones created before isLoanReceipt existed.
-  const base = visibleTransactions()
+  const base = transactions
     .filter(function(t){ return !(t.isLoanReceipt || (t.category === 'Loan' && Number(t.amount) > 0)); })
     .reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
-  return base - totalLoanLiability();
+  return base - totalLoanLiability() + totalManualAccountsValue();
 }
 
 function monthIncome(){
@@ -2046,6 +2083,132 @@ function progressBar(pct, over){
 }
 
 // Compact dashboard card
+// Compact dashboard card showing every account and its current balance
+function accountsSummaryHTML(){
+  const rows = [];
+  monoAccounts.forEach(function(a){
+    const currency = MONO_CURRENCY_MAP[a.currencyCode] || 'UAH';
+    const balance = typeof a.balance === 'number' ? a.balance / 100 : null;
+    rows.push({ name: monoAccountLabel(a), amount: balance, currency: currency, source: 'Monobank' });
+  });
+  manualAccounts.forEach(function(acc){
+    (acc.balances || []).forEach(function(b){
+      rows.push({ name: acc.name, amount: Number(b.amount) || 0, currency: b.currency, source: 'manual' });
+    });
+  });
+
+  if(!rows.length){
+    return `<div class="chart-card clickable-card" style="grid-column:1 / -1;" onclick="openAccountsDetail()">
+      <div class="chart-title">Accounts</div>
+      <div class="empty-note" style="text-align:left; padding-top:6px;">No accounts yet — connect Monobank or add Cash/WhiteBIT manually.</div>
+    </div>`;
+  }
+
+  const total = rows.reduce(function(s,r){ return s + (r.amount !== null ? toDisplay(r.amount, r.currency) : 0); }, 0);
+
+  return `<div class="chart-card clickable-card" style="grid-column:1 / -1;" onclick="openAccountsDetail()">
+    <div class="panel-title"><h3>Accounts</h3><span class="chevron">›</span></div>
+    <div class="mini-stat" style="margin-bottom:8px;"><div class="mini-stat-label">Total</div><div class="mini-stat-num">${fmtShort(total)}</div></div>
+    ${rows.slice(0,5).map(function(r){
+      return `<div class="cat-row">
+        <span class="cat-name">${escapeHtml(r.name)}</span>
+        <span class="cat-amt">${r.amount !== null ? fmtOriginal(r.amount, r.currency) : '—'}</span>
+      </div>`;
+    }).join('')}
+    ${rows.length > 5 ? `<div class="empty-note" style="text-align:left; padding-top:4px;">+${rows.length-5} more</div>` : ''}
+  </div>`;
+}
+
+window.openAccountsDetail = function(){ financeSubView = 'accounts'; renderView('finance'); };
+window.closeAccountsDetail = function(){ financeSubView = null; renderView('finance'); };
+
+function accountsDetailScreenHTML(){
+  const monoRows = monoAccounts.map(function(a){
+    const currency = MONO_CURRENCY_MAP[a.currencyCode] || 'UAH';
+    const balance = typeof a.balance === 'number' ? a.balance / 100 : null;
+    return `<div class="mono-acct-row">
+      <div class="mono-acct-info">
+        <div class="mono-acct-label">${escapeHtml(monoAccountLabel(a))}</div>
+        <div class="mono-acct-status synced">Live from Monobank</div>
+      </div>
+      <div class="cat-amt">${balance !== null ? fmtOriginal(balance, currency) : '—'}</div>
+    </div>`;
+  }).join('') || '<div class="empty-note">No Monobank accounts connected.</div>';
+
+  const manualRows = manualAccounts.map(function(acc, i){
+    const balanceRows = (acc.balances || []).map(function(b, j){
+      return `<div class="cat-row">
+        <span class="cat-name">${escapeHtml(b.currency)}</span>
+        <input class="filter-select" style="width:110px; text-align:right;" type="text" inputmode="decimal"
+          value="${b.amount}" onchange="updateManualBalance(${i}, ${j}, this.value)">
+        <button class="tx-del" onclick="removeManualBalance(${i}, ${j})">✕</button>
+      </div>`;
+    }).join('');
+    return `<div class="mono-acct-row" style="flex-direction:column; align-items:stretch;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div class="mono-acct-label">${escapeHtml(acc.name)}</div>
+        <button class="tx-del" onclick="removeManualAccount(${i})">✕ Remove account</button>
+      </div>
+      ${balanceRows}
+      <div class="modal-actions" style="justify-content:flex-start; margin-top:6px;">
+        <button class="header-btn" onclick="addManualBalance(${i})">+ Add currency</button>
+      </div>
+    </div>`;
+  }).join('') || '';
+
+  return `
+    <div class="detail-header">
+      <button class="back-btn" onclick="closeAccountsDetail()">‹</button>
+      <div class="detail-title">Accounts</div>
+      <div style="width:32px;"></div>
+    </div>
+
+    <div class="side-label" style="margin:8px 0 4px;">Monobank</div>
+    ${monoRows}
+
+    <div class="side-label" style="margin:20px 0 4px;">Manual (Cash, exchanges, etc.)</div>
+    ${manualRows || '<div class="empty-note">No manual accounts yet.</div>'}
+
+    <div class="form-row" style="margin-top:12px;"><label>New account name</label><input id="newManualAccountName" type="text" placeholder="e.g. Cash or WhiteBIT"></div>
+    <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
+      <button class="modal-save" onclick="addManualAccount()">Add account</button>
+    </div>
+  `;
+}
+
+window.addManualAccount = function(){
+  const nameEl = document.getElementById('newManualAccountName');
+  const name = nameEl.value.trim();
+  if(!name) return;
+  const currency = (prompt('Currency for this account (e.g. EUR, USD, USDT, USDC):') || DEFAULT_INPUT_CURRENCY).trim().toUpperCase();
+  manualAccounts.push({ id: 'macc' + Date.now(), name: name, balances: [{ currency: currency || DEFAULT_INPUT_CURRENCY, amount: 0 }] });
+  persistManualAccounts();
+  nameEl.value = '';
+  renderView('finance');
+};
+window.removeManualAccount = function(index){
+  manualAccounts.splice(index, 1);
+  persistManualAccounts();
+  renderView('finance');
+};
+window.addManualBalance = function(accIndex){
+  const currency = (prompt('Currency code (e.g. EUR, USD, USDT, USDC):') || '').trim().toUpperCase();
+  if(!currency) return;
+  manualAccounts[accIndex].balances.push({ currency: currency, amount: 0 });
+  persistManualAccounts();
+  renderView('finance');
+};
+window.removeManualBalance = function(accIndex, balIndex){
+  manualAccounts[accIndex].balances.splice(balIndex, 1);
+  persistManualAccounts();
+  renderView('finance');
+};
+window.updateManualBalance = function(accIndex, balIndex, value){
+  const amount = parseAmountInput(value);
+  manualAccounts[accIndex].balances[balIndex].amount = isNaN(amount) ? 0 : amount;
+  persistManualAccounts();
+};
+
 function monthlyBudgetSummaryHTML(){
   const now = new Date();
   const target = totalExpenseBudget(now);
@@ -2314,7 +2477,7 @@ function historyRows(){
   const isLoan = historyType === 'loan';
   const isIncome = historyType === 'income';
   const isRefund = historyType === 'refund';
-  const base = isLoan ? visibleTransactions() : thisMonthTx(); // loan history intentionally shows a specific loan's full history regardless of the display range
+  const base = isLoan ? transactions : thisMonthTx(); // loan history intentionally shows the loan's true, complete record — regardless of the display range or hide-Monobank-data toggles
   let list;
   if(isLoan){
     list = base.filter(function(t){ return t.loanId === historyLoanId && t.category === 'Loan'; });
@@ -2658,6 +2821,7 @@ function financeHTML(){
   if(financeSubView === 'budget') return budgetDetailScreenHTML();
   if(financeSubView === 'overview') return financeOverviewDetailHTML();
   if(financeSubView === 'history') return historyScreenHTML();
+  if(financeSubView === 'accounts') return accountsDetailScreenHTML();
 
   return `
     <div class="charts-row">
@@ -2716,6 +2880,10 @@ function financeHTML(){
           })()}
         </div>
       </div>
+    </div>
+
+    <div class="charts-row">
+      ${accountsSummaryHTML()}
     </div>
 
     <div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
@@ -2797,6 +2965,22 @@ function wireFinanceEvents(){
 /* ---------- Modals + CRUD ---------- */
 let currentTxType = 'expense';
 
+function populateAccountSelect(){
+  const sel = document.getElementById('txAccountId');
+  if(!sel) return;
+  const options = [];
+  manualAccounts.forEach(function(acc){ options.push({ id: acc.id, label: acc.name }); });
+  monoAccounts.forEach(function(a){ options.push({ id: 'mono:' + a.id, label: monoAccountLabel(a) }); });
+  if(!options.length){
+    sel.innerHTML = '<option value="">No accounts yet — add one in Accounts</option>';
+    return;
+  }
+  sel.innerHTML = options.map(function(o){ return `<option value="${o.id}">${escapeHtml(o.label)}</option>`; }).join('');
+  // Default to Cash if it exists, otherwise just the first available account
+  const cashAccount = manualAccounts.find(function(acc){ return acc.name.trim().toLowerCase() === 'cash'; });
+  sel.value = cashAccount ? cashAccount.id : options[0].id;
+}
+
 function populateCategorySelect(type){
   const primary = type === 'income' ? allIncomeCategories() : allExpenseCategories();
   const secondary = type === 'income' ? allExpenseCategories() : allIncomeCategories();
@@ -2864,8 +3048,10 @@ function setTxType(type){
   const isTransfer = type === 'transfer';
   const isLoan = type === 'loan';
   document.getElementById('txCategoryRow').style.display = (isTransfer || isLoan) ? 'none' : '';
+  document.getElementById('txAccountRow').style.display = (isTransfer || isLoan) ? 'none' : '';
   document.getElementById('txTransferDirectionRow').style.display = isTransfer ? '' : 'none';
   document.getElementById('txLoanDirectionRow').style.display = isLoan ? '' : 'none';
+  if(!isTransfer && !isLoan) populateAccountSelect();
   if(isTransfer){
     populateCategorySelect('expense'); // populate something internally even though hidden, so there's always a valid list backing the select
     document.getElementById('txCategory').value = 'Transfer';
@@ -2953,6 +3139,8 @@ function editTx(id){
     const loanSel = document.getElementById('txLoanId');
     if(loanSel) loanSel.value = t.loanId;
   }
+  const accountSel = document.getElementById('txAccountId');
+  if(accountSel && t.accountId) accountSel.value = t.accountId;
 }
 
 // Formats the amount input live as the user types, e.g. "1234.5" -> "1,234.5",
@@ -2999,17 +3187,22 @@ function saveTransaction(){
   const loanId = loanPickerVisible ? document.getElementById('txLoanId').value : null;
   if(currentTxType === 'loan' && !loanId) return; // nothing to attach this to — Add Loan first in the Loans panel
 
+  const accountRowVisible = document.getElementById('txAccountRow') && document.getElementById('txAccountRow').style.display !== 'none';
+  const accountId = accountRowVisible ? document.getElementById('txAccountId').value : null;
+
   if(editingTxId){
     const t = transactions.find(function(x){ return x.id === editingTxId; });
     if(t){
       t.name = name; t.category = category; t.amount = amount; t.currency = currency; t.occurred_at = occurred_at;
       if(loanId) t.loanId = loanId; else delete t.loanId;
+      if(accountId) t.accountId = accountId; else if(accountRowVisible) delete t.accountId;
       t.editedAt = Date.now(); // lets a cross-device merge know this copy is the freshest edit
     }
     editingTxId = null;
   } else {
     const tx = { id: 't' + (nextId++), name, category, amount, currency, occurred_at, editedAt: Date.now() };
     if(loanId) tx.loanId = loanId;
+    if(accountId) tx.accountId = accountId;
     transactions.unshift(tx);
   }
   persist();
@@ -3604,7 +3797,7 @@ async function autoSyncMonobank(){
     // don't need to press any button at all to get your full data — every
     // run after that just needs a light rolling catch-up window.
     const isFirstRun = !hasEverManuallySynced();
-    const from = isFirstRun ? (to - (5 * 365 * 24 * 60 * 60)) : (to - (90 * 24 * 60 * 60));
+    const from = isFirstRun ? (to - (5 * 365 * 24 * 60 * 60)) : (to - (14 * 24 * 60 * 60));
     const MAX_WINDOW = 31 * 24 * 60 * 60 - 3600;
     const totalWindow = to - from;
 
