@@ -298,6 +298,7 @@
   .type-btn[data-type="expense"].active{ background:var(--rose); color:#0A0D18; }
   .type-btn[data-type="transfer"].active{ background:var(--blue); color:#0A0D18; }
   .type-btn[data-type="refund"].active{ background:var(--green); color:#0A0D18; }
+  .type-btn[data-type="loan"].active{ background:var(--rose); color:#0A0D18; }
   .type-btn[data-type="income"].active{ background:var(--green); color:#0A0D18; }
 
   .amount-currency-row{ display:grid; grid-template-columns:1.4fr 1fr; gap:10px; }
@@ -401,6 +402,7 @@
         <button type="button" class="type-btn active" data-type="expense" onclick="setTxType('expense')">Expense</button>
         <button type="button" class="type-btn" data-type="transfer" onclick="setTxType('transfer')">Transfer</button>
         <button type="button" class="type-btn" data-type="refund" onclick="setTxType('refund')">Refund</button>
+        <button type="button" class="type-btn" data-type="loan" onclick="setTxType('loan')">Loan</button>
       </div>
     </div>
     <div class="form-row" id="txCategoryRow"><label>Category</label>
@@ -413,7 +415,14 @@
         <button type="button" class="type-btn" data-dir="in" onclick="setTransferDirection('in')">Money in</button>
       </div>
     </div>
-    <div class="form-row" id="loanPickerRow" style="display:none;"><label>Which loan is this paying off?</label>
+    <div class="form-row" id="txLoanDirectionRow" style="display:none;">
+      <label>Direction</label>
+      <div class="type-toggle">
+        <button type="button" class="type-btn active" data-loandir="payment" onclick="setLoanDirection('payment')">Payment (reduces balance)</button>
+        <button type="button" class="type-btn" data-loandir="additional" onclick="setLoanDirection('additional')">Additional funds (increases balance)</button>
+      </div>
+    </div>
+    <div class="form-row" id="loanPickerRow" style="display:none;"><label id="loanPickerLabel">Which loan is this paying off?</label>
       <select id="txLoanId"></select>
     </div>
     <div class="form-row amount-currency-row">
@@ -1017,14 +1026,17 @@ function persistLoans(){
 }
 
 function loanProgress(loan){
-  const paidTx = visibleTransactions()
-    .filter(function(t){ return t.loanId === loan.id && t.category === 'Loan' && !t.isLoanReceipt && Number(t.amount) < 0; });
-  const paid = paidTx.reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
-  // Original-currency figures assume payments were made in the loan's own
-  // currency (the normal case) — if you ever pay in a different currency,
+  // Payments (negative amounts) reduce the remaining balance; additional
+  // funds drawn against the same loan later (positive amounts, not the
+  // original receipt) increase it — both net together here.
+  const relevantTx = visibleTransactions()
+    .filter(function(t){ return t.loanId === loan.id && t.category === 'Loan' && !t.isLoanReceipt; });
+  const paid = relevantTx.reduce(function(s,t){ return s - toDisplay(t.amount, t.currency); }, 0);
+  // Original-currency figures assume payments/draws were made in the loan's
+  // own currency (the normal case) — if you ever pay in a different currency,
   // that portion won't show here, but the EUR figures above stay accurate regardless.
-  const paidOriginal = paidTx.filter(function(t){ return (t.currency || DEFAULT_INPUT_CURRENCY) === loan.currency; })
-    .reduce(function(s,t){ return s + Math.abs(Number(t.amount)); }, 0);
+  const paidOriginal = relevantTx.filter(function(t){ return (t.currency || DEFAULT_INPUT_CURRENCY) === loan.currency; })
+    .reduce(function(s,t){ return s - Number(t.amount); }, 0);
   const principal = toDisplay(loan.principal, loan.currency);
   const remaining = Math.max(0, principal - paid);
   const pct = principal > 0 ? Math.min(100, Math.round((paid/principal)*100)) : 0;
@@ -2814,9 +2826,13 @@ window.toggleLoanPicker = function(){
   const row = document.getElementById('loanPickerRow');
   if(!row) return;
   const cat = document.getElementById('txCategory').value;
-  if(currentTxType === 'expense' && cat === 'Loan' && loans.length > 0){
+  const showForExpenseCategory = currentTxType === 'expense' && cat === 'Loan';
+  const showForLoanType = currentTxType === 'loan';
+  if((showForExpenseCategory || showForLoanType) && loans.length > 0){
     const sel = document.getElementById('txLoanId');
     sel.innerHTML = loans.map(function(l){ return `<option value="${l.id}">${escapeHtml(l.name)}</option>`; }).join('');
+    const labelEl = document.getElementById('loanPickerLabel');
+    if(labelEl) labelEl.textContent = (showForLoanType && loanDirection === 'additional') ? 'Which loan is this adding funds to?' : 'Which loan is this paying off?';
     row.style.display = 'block';
   } else {
     row.style.display = 'none';
@@ -2831,18 +2847,33 @@ window.setTransferDirection = function(dir){
   });
 };
 
+let loanDirection = 'payment';
+window.setLoanDirection = function(dir){
+  loanDirection = dir;
+  document.querySelectorAll('#txLoanDirectionRow .type-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-loandir') === dir);
+  });
+  toggleLoanPicker(); // refresh the picker label to match the new direction
+};
+
 function setTxType(type){
   currentTxType = type;
   document.querySelectorAll('.type-btn[data-type]').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-type') === type);
   });
   const isTransfer = type === 'transfer';
-  document.getElementById('txCategoryRow').style.display = isTransfer ? 'none' : '';
+  const isLoan = type === 'loan';
+  document.getElementById('txCategoryRow').style.display = (isTransfer || isLoan) ? 'none' : '';
   document.getElementById('txTransferDirectionRow').style.display = isTransfer ? '' : 'none';
+  document.getElementById('txLoanDirectionRow').style.display = isLoan ? '' : 'none';
   if(isTransfer){
     populateCategorySelect('expense'); // populate something internally even though hidden, so there's always a valid list backing the select
     document.getElementById('txCategory').value = 'Transfer';
     setTransferDirection('out');
+  } else if(isLoan){
+    populateCategorySelect('expense');
+    document.getElementById('txCategory').value = 'Loan';
+    setLoanDirection('payment');
   } else if(type === 'refund'){
     populateCategorySelect('expense'); // pick which expense category this money is being credited back to
   } else {
@@ -2904,11 +2935,13 @@ function editTx(id){
   document.getElementById('txModalTitle').textContent = 'Edit Transaction';
   openModal('txModalOverlay');
   const isTransfer = t.category === 'Transfer';
-  const isRefund = !isTransfer && Number(t.amount) >= 0 &&
+  const isLoanTx = !isTransfer && t.category === 'Loan' && t.loanId && !t.isLoanReceipt;
+  const isRefund = !isTransfer && !isLoanTx && Number(t.amount) >= 0 &&
     allExpenseCategories().indexOf(t.category) !== -1 && allIncomeCategories().indexOf(t.category) === -1;
-  const type = isTransfer ? 'transfer' : (isRefund ? 'refund' : (Number(t.amount) >= 0 ? 'income' : 'expense'));
+  const type = isTransfer ? 'transfer' : (isLoanTx ? 'loan' : (isRefund ? 'refund' : (Number(t.amount) >= 0 ? 'income' : 'expense')));
   setTxType(type);
   if(isTransfer) setTransferDirection(Number(t.amount) >= 0 ? 'in' : 'out');
+  if(isLoanTx) setLoanDirection(Number(t.amount) >= 0 ? 'additional' : 'payment');
   document.getElementById('txName').value = t.name;
   document.getElementById('txAmount').value = Math.abs(Number(t.amount)).toLocaleString('en-US', { maximumFractionDigits: 2 });
   document.getElementById('txDate').value = t.occurred_at;
@@ -2954,7 +2987,9 @@ function saveTransaction(){
   const category = document.getElementById('txCategory').value;
   const name = document.getElementById('txName').value.trim() || category;
   const rawAmount = parseAmountInput(document.getElementById('txAmount').value);
-  const isPositive = currentTxType === 'income' || currentTxType === 'refund' || (currentTxType === 'transfer' && transferDirection === 'in');
+  const isPositive = currentTxType === 'income' || currentTxType === 'refund' ||
+    (currentTxType === 'transfer' && transferDirection === 'in') ||
+    (currentTxType === 'loan' && loanDirection === 'additional');
   const amount = isNaN(rawAmount) ? rawAmount : (isPositive ? Math.abs(rawAmount) : -Math.abs(rawAmount));
   const occurred_at = document.getElementById('txDate').value;
   const currency = document.getElementById('txCurrency').value || DEFAULT_INPUT_CURRENCY;
@@ -2962,6 +2997,7 @@ function saveTransaction(){
 
   const loanPickerVisible = document.getElementById('loanPickerRow') && document.getElementById('loanPickerRow').style.display !== 'none';
   const loanId = loanPickerVisible ? document.getElementById('txLoanId').value : null;
+  if(currentTxType === 'loan' && !loanId) return; // nothing to attach this to — Add Loan first in the Loans panel
 
   if(editingTxId){
     const t = transactions.find(function(x){ return x.id === editingTxId; });
