@@ -1571,9 +1571,26 @@ window.openRatesDetail = function(){
 };
 
 function netWorth(){
+  // Monobank-synced transactions are excluded here — their contribution is
+  // already captured by each account's live balance below, which is always
+  // accurate straight from the bank. Relying on summing transactions instead
+  // only works if every single one since the account was ever opened has
+  // been synced, which usually isn't the case (and can never account for a
+  // credit account's actual debt, which depends on balance vs credit limit,
+  // not transaction history at all). Manually-entered transactions that
+  // aren't from Monobank still count normally, since nothing else reflects them.
   const base = transactions
+    .filter(function(t){ return !t.monoId; })
     .reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
-  return base + totalManualAccountsValue();
+
+  let monoTotal = 0;
+  monoAccounts.forEach(function(a){
+    const currency = MONO_CURRENCY_MAP[a.currencyCode] || 'UAH';
+    const balance = monoAccountNetBalance(a);
+    if(balance !== null) monoTotal += toDisplay(balance, currency);
+  });
+
+  return base + monoTotal + totalManualAccountsValue();
 }
 
 function monthIncome(){
@@ -1948,11 +1965,22 @@ function progressBar(pct, over){
 
 // Compact dashboard card
 // Compact dashboard card showing every account and its current balance
+// For a normal debit account, Monobank's balance field is simply the money
+// you have. For a credit account, balance instead reflects total available
+// spending power (your own funds plus unused credit), so the actual amount
+// you owe (or have, if you've deposited beyond the credit line) is the
+// difference against the credit limit — negative when you're carrying debt.
+function monoAccountNetBalance(a){
+  if(typeof a.balance !== 'number') return null;
+  const creditLimit = typeof a.creditLimit === 'number' ? a.creditLimit : 0;
+  return (a.balance - creditLimit) / 100;
+}
+
 function accountsSummaryHTML(){
   const rows = [];
   monoAccounts.forEach(function(a){
     const currency = MONO_CURRENCY_MAP[a.currencyCode] || 'UAH';
-    const balance = typeof a.balance === 'number' ? a.balance / 100 : null;
+    const balance = monoAccountNetBalance(a);
     rows.push({ name: monoAccountLabel(a), amount: balance, currency: currency, source: 'Monobank' });
   });
   manualAccounts.forEach(function(acc){
@@ -1974,9 +2002,10 @@ function accountsSummaryHTML(){
     <div class="panel-title"><h3>Accounts</h3><span class="chevron">›</span></div>
     <div class="mini-stat" style="margin-bottom:8px;"><div class="mini-stat-label">Total</div><div class="mini-stat-num">${fmtShort(total)}</div></div>
     ${rows.slice(0,5).map(function(r){
+      const amtClass = (r.amount !== null && r.amount < 0) ? 'neg' : '';
       return `<div class="cat-row">
         <span class="cat-name">${escapeHtml(r.name)}</span>
-        <span class="cat-amt">${r.amount !== null ? fmtOriginal(r.amount, r.currency) : '—'}</span>
+        <span class="cat-amt ${amtClass}">${r.amount !== null ? fmtOriginal(r.amount, r.currency) : '—'}</span>
       </div>`;
     }).join('')}
     ${rows.length > 5 ? `<div class="empty-note" style="text-align:left; padding-top:4px;">+${rows.length-5} more</div>` : ''}
@@ -1989,33 +2018,38 @@ window.closeAccountsDetail = function(){ financeSubView = null; renderView('fina
 function accountsDetailScreenHTML(){
   const monoRows = monoAccounts.map(function(a){
     const currency = MONO_CURRENCY_MAP[a.currencyCode] || 'UAH';
-    const balance = typeof a.balance === 'number' ? a.balance / 100 : null;
+    const balance = monoAccountNetBalance(a);
+    const isCredit = typeof a.creditLimit === 'number' && a.creditLimit > 0;
+    const creditNote = isCredit
+      ? `<div class="mono-acct-status synced">Credit limit ${fmtOriginal(a.creditLimit/100, currency)}${balance !== null && balance < 0 ? ` — ${fmtOriginal(Math.abs(balance), currency)} owed` : (balance !== null && balance > 0 ? ` — ${fmtOriginal(balance, currency)} of your own on top` : '')}</div>`
+      : `<div class="mono-acct-status synced">Live from Monobank</div>`;
     return `<div class="mono-acct-row">
       <div class="mono-acct-info">
         <div class="mono-acct-label">${escapeHtml(monoAccountLabel(a))}</div>
-        <div class="mono-acct-status synced">Live from Monobank</div>
+        ${creditNote}
       </div>
-      <div class="cat-amt">${balance !== null ? fmtOriginal(balance, currency) : '—'}</div>
+      <div class="cat-amt${balance !== null && balance < 0 ? ' neg' : ''}">${balance !== null ? fmtOriginal(balance, currency) : '—'}</div>
     </div>`;
   }).join('') || '<div class="empty-note">No Monobank accounts connected.</div>';
 
   const manualRows = manualAccounts.map(function(acc, i){
     const balanceRows = (acc.balances || []).map(function(b, j){
-      return `<div class="cat-row">
-        <span class="cat-name">${escapeHtml(b.currency)}</span>
-        <input class="filter-select" style="width:110px; text-align:right;" type="text" inputmode="decimal"
-          value="${b.amount}" onchange="updateManualBalance(${i}, ${j}, this.value)">
+      const isNeg = Number(b.amount) < 0;
+      return `<div class="mono-acct-row">
+        <div class="mono-acct-info">
+          <div class="mono-acct-label">${escapeHtml(b.currency)}</div>
+        </div>
+        <div class="cat-amt${isNeg ? ' neg' : ''}">${fmtOriginal(Number(b.amount) || 0, b.currency)}</div>
+        <button class="tx-edit" onclick="editManualBalance(${i}, ${j})"><svg class="icon"><use href="#ic-edit"/></svg></button>
         <button class="tx-del" onclick="removeManualBalance(${i}, ${j})">✕</button>
       </div>`;
     }).join('');
-    return `<div class="mono-acct-row" style="flex-direction:column; align-items:stretch;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div class="mono-acct-label">${escapeHtml(acc.name)}</div>
-        <button class="tx-del" onclick="removeManualAccount(${i})">✕ Remove account</button>
-      </div>
+    return `<div style="margin-bottom:10px;">
+      <div class="mono-acct-label" style="margin:10px 0 2px;">${escapeHtml(acc.name)}</div>
       ${balanceRows}
-      <div class="modal-actions" style="justify-content:flex-start; margin-top:6px;">
+      <div class="modal-actions" style="justify-content:flex-start; margin-top:2px; gap:8px;">
         <button class="header-btn" onclick="addManualBalance(${i})">+ Add currency</button>
+        <button class="header-btn" style="color:var(--rose);" onclick="removeManualAccount(${i})">Remove account</button>
       </div>
     </div>`;
   }).join('') || '';
@@ -2087,6 +2121,13 @@ window.updateManualBalance = function(accIndex, balIndex, value){
   const amount = parseAmountInput(value);
   manualAccounts[accIndex].balances[balIndex].amount = isNaN(amount) ? 0 : amount;
   persistManualAccounts();
+};
+window.editManualBalance = function(accIndex, balIndex){
+  const bal = manualAccounts[accIndex].balances[balIndex];
+  const input = prompt('New balance for ' + bal.currency + ':', bal.amount);
+  if(input === null) return; // cancelled
+  updateManualBalance(accIndex, balIndex, input);
+  renderView('finance');
 };
 
 function monthlyBudgetSummaryHTML(){
