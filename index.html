@@ -244,6 +244,13 @@
   .mono-acct-info{ flex:1; min-width:0; }
   .mono-acct-label{ font-size:calc(15px * var(--font-scale, 1)); color:var(--white); }
   .mono-acct-status{ font-size:calc(13px * var(--font-scale, 1)); color:var(--muted-dim); margin-top:2px; }
+  .manual-acct-group{ background:var(--panel-2); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:12px; }
+  .manual-acct-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:2px; }
+  .manual-acct-name{ font-size:calc(15px * var(--font-scale, 1)); font-weight:700; color:var(--white); display:flex; align-items:center; gap:8px; }
+  .manual-acct-total{ font-size:calc(13px * var(--font-scale, 1)); color:var(--muted-dim); }
+  .manual-curr-row{ display:flex; align-items:center; gap:10px; padding:8px 0 8px 20px; border-top:1px solid var(--border); position:relative; }
+  .manual-curr-row::before{ content:''; position:absolute; left:6px; top:0; bottom:0; width:1px; background:var(--border-2); }
+  .manual-curr-code{ font-size:calc(13px * var(--font-scale, 1)); color:var(--muted); font-weight:600; letter-spacing:0.03em; flex:1; }
   .mono-acct-status.synced{ color:var(--green); }
   .mono-acct-remove{ background:none; border:none; color:var(--rose); font-size:calc(13px * var(--font-scale, 1)); padding:4px 8px; flex-shrink:0; }
 
@@ -559,6 +566,18 @@
     <div id="currencyCalcBody"></div>
     <div class="modal-actions">
       <button class="modal-cancel" onclick="closeModal('currencyCalcModalOverlay')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="netWorthBreakdownModalOverlay" onclick="if(event.target===this) closeModal('netWorthBreakdownModalOverlay')">
+  <div class="modal" style="max-height:80vh; overflow-y:auto;">
+    <h3>Net Worth Breakdown</h3>
+    <div class="empty-note" style="text-align:left; margin-bottom:10px;">The sum of every account you have — nothing else counts toward this total.</div>
+    <div id="netWorthBreakdownBody"></div>
+    <div class="modal-actions">
+      <button class="header-btn" onclick="recalculateEverything()">🔄 Recalculate</button>
+      <button class="modal-cancel" onclick="closeModal('netWorthBreakdownModalOverlay')">Close</button>
     </div>
   </div>
 </div>
@@ -1657,27 +1676,50 @@ window.openRatesDetail = function(){
 };
 
 function netWorth(){
-  // Monobank-synced transactions are excluded here — their contribution is
-  // already captured by each account's live balance below, which is always
-  // accurate straight from the bank. Relying on summing transactions instead
-  // only works if every single one since the account was ever opened has
-  // been synced, which usually isn't the case (and can never account for a
-  // credit account's actual debt, which depends on balance vs credit limit,
-  // not transaction history at all). Manually-entered transactions that
-  // aren't from Monobank still count normally, since nothing else reflects them.
-  const base = transactions
-    .filter(function(t){ return !t.monoId; })
-    .reduce(function(sum, t){ return sum + toDisplay(t.amount, t.currency); }, 0);
+  return netWorthBreakdown().reduce(function(sum, item){ return sum + item.amount; }, 0);
+}
 
-  let monoTotal = 0;
+// Returns each individual contributing source (one row per account) so Net
+// Worth can be fully explained, not just shown as one opaque total — this is
+// the definition: Net Worth = sum of every account you have, nothing else.
+function netWorthBreakdown(){
+  const items = [];
   monoAccounts.forEach(function(a){
     const currency = MONO_CURRENCY_MAP[a.currencyCode] || 'UAH';
     const balance = monoAccountNetBalance(a);
-    if(balance !== null) monoTotal += toDisplay(balance, currency);
+    if(balance !== null){
+      items.push({ name: monoAccountLabel(a), source: 'Monobank', currency: currency, originalAmount: balance, amount: toDisplay(balance, currency) });
+    }
   });
-
-  return base + monoTotal + totalManualAccountsValue();
+  manualAccounts.forEach(function(acc){
+    (acc.balances || []).forEach(function(b){
+      const amt = Number(b.amount) || 0;
+      items.push({ name: acc.name + ' (' + b.currency + ')', source: 'Manual', currency: b.currency, originalAmount: amt, amount: toDisplay(amt, b.currency) });
+    });
+  });
+  return items;
 }
+
+window.showNetWorthBreakdown = function(){
+  const items = netWorthBreakdown();
+  const body = document.getElementById('netWorthBreakdownBody');
+  if(!items.length){
+    body.innerHTML = '<div class="empty-note">No accounts yet — add one in Accounts to see it counted here.</div>';
+  } else {
+    const total = items.reduce(function(s,it){ return s + it.amount; }, 0);
+    body.innerHTML = items.map(function(it){
+      const isNeg = it.originalAmount < 0;
+      return `<div class="cat-row">
+        <span class="cat-name">${escapeHtml(it.name)} <span style="color:var(--muted-dim); font-size:calc(12px * var(--font-scale, 1));">· ${it.source}</span></span>
+        <span class="cat-amt${isNeg?' neg':''}">${(isNeg?'-':'')+fmtOriginal(it.originalAmount, it.currency)}</span>
+      </div>`;
+    }).join('') + `<div class="cat-row total-row">
+        <span class="cat-name">Total (Net Worth)</span>
+        <span class="cat-amt${total<0?' neg':''}">${fmt(total)}</span>
+      </div>`;
+  }
+  openModal('netWorthBreakdownModalOverlay');
+};
 
 function monthIncome(){
   return thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && !isRefundTx(t); })
@@ -1716,8 +1758,9 @@ function fmt(n){
 // and History, where seeing the real original amount matters more than a
 // single unified currency (that's what Overview/Top Expense Categories are for).
 function fmtOriginal(amount, currency){
-  const sym = CURRENCY_SYMBOLS[currency] || currency || '';
-  return sym + Math.abs(Number(amount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const hasSymbol = !!CURRENCY_SYMBOLS[currency];
+  const prefix = hasSymbol ? CURRENCY_SYMBOLS[currency] : (currency ? currency + ' ' : '');
+  return prefix + Math.abs(Number(amount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtShort(n){
   const sym = CURRENCY_SYMBOLS[DISPLAY_CURRENCY] || '';
@@ -1874,10 +1917,7 @@ function expenseCategorySummaryHTML(){
     <div class="chart-card clickable-card" style="grid-column:1 / -1;" onclick="openExpenseDetail()">
       <div class="chart-title-row">
         <div class="chart-title">Top Expense Categories, ${rangeLabel()}</div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span onclick="event.stopPropagation(); showCurrencyCalc(${total}, 'Total expenses in other currencies');" style="cursor:pointer;">💱</span>
-          <span class="chevron">›</span>
-        </div>
+        <span class="chevron">›</span>
       </div>
       ${data.length ? `
         <div class="breakdown-body">
@@ -1943,7 +1983,7 @@ function expenseDetailScreenHTML(){
 
     <div class="cat-list-full">
       <div class="cat-row total-row">
-        <span class="cat-name">Total ${isIncome?'income':'expenses'} <span onclick="showCurrencyCalc(${total}, 'Total ${isIncome?'income':'expenses'} in other currencies')" style="cursor:pointer; font-weight:400;">💱</span></span>
+        <span class="cat-name">Total ${isIncome?'income':'expenses'}</span>
         <span class="cat-amt">${fmt(total)}</span>
       </div>
       ${rows}
@@ -2157,21 +2197,23 @@ function accountsDetailScreenHTML(){
   }).join('') || '<div class="empty-note">No Monobank accounts connected.</div>';
 
   const manualRows = manualAccounts.map(function(acc, i){
+    const groupTotal = (acc.balances || []).reduce(function(s,b){ return s + toDisplay(Number(b.amount) || 0, b.currency); }, 0);
     const balanceRows = (acc.balances || []).map(function(b, j){
       const isNeg = Number(b.amount) < 0;
-      return `<div class="mono-acct-row">
-        <div class="mono-acct-info">
-          <div class="mono-acct-label">${escapeHtml(b.currency)}</div>
-        </div>
-        <div class="cat-amt${isNeg ? ' neg' : ''}">${fmtOriginal(Number(b.amount) || 0, b.currency)}</div>
+      return `<div class="manual-curr-row">
+        <span class="manual-curr-code">${escapeHtml(b.currency)}</span>
+        <span class="cat-amt${isNeg ? ' neg' : ''}">${fmtOriginal(Number(b.amount) || 0, b.currency)}</span>
         <button class="tx-edit" onclick="editManualBalance(${i}, ${j})"><svg class="icon"><use href="#ic-edit"/></svg></button>
         <button class="tx-del" onclick="removeManualBalance(${i}, ${j})">✕</button>
       </div>`;
     }).join('');
-    return `<div style="margin-bottom:10px;">
-      <div class="mono-acct-label" style="margin:10px 0 2px;">${escapeHtml(acc.name)}</div>
+    return `<div class="manual-acct-group">
+      <div class="manual-acct-header">
+        <div class="manual-acct-name">💼 ${escapeHtml(acc.name)}</div>
+        <div class="manual-acct-total">≈ ${fmtShort(groupTotal)}</div>
+      </div>
       ${balanceRows}
-      <div class="modal-actions" style="justify-content:flex-start; margin-top:2px; gap:8px;">
+      <div class="modal-actions" style="justify-content:flex-start; margin-top:8px; gap:8px;">
         <button class="header-btn" onclick="addManualBalance(${i})">+ Add currency</button>
         <button class="header-btn" style="color:var(--rose);" onclick="removeManualAccount(${i})">Remove account</button>
       </div>
@@ -2471,9 +2513,9 @@ function financeOverviewSummaryHTML(){
         <span class="chevron">›</span>
       </div>
       <div class="mini-stats-grid">
-        <div class="mini-stat"><div class="mini-stat-label">Net Worth (All-time) <span onclick="event.stopPropagation(); showCurrencyCalc(netWorth(), 'Net Worth in other currencies');" style="cursor:pointer;">💱</span></div><div class="mini-stat-num">${fmtShort(netWorth())}</div></div>
-        <div class="mini-stat"><div class="mini-stat-label">Spent <span onclick="event.stopPropagation(); showCurrencyCalc(monthSpend(), 'Amount spent in other currencies');" style="cursor:pointer;">💱</span></div><div class="mini-stat-num">${fmtShort(-monthSpend())}</div></div>
-        <div class="mini-stat"><div class="mini-stat-label">Income <span onclick="event.stopPropagation(); showCurrencyCalc(monthIncome(), 'Income in other currencies');" style="cursor:pointer;">💱</span></div><div class="mini-stat-num">${fmtShort(monthIncome())}</div></div>
+        <div class="mini-stat" onclick="event.stopPropagation(); showNetWorthBreakdown();" style="cursor:pointer;"><div class="mini-stat-label">Net Worth (All-time) <span class="chevron" style="font-size:12px;">›</span></div><div class="mini-stat-num">${fmtShort(netWorth())}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Spent</div><div class="mini-stat-num">${fmtShort(-monthSpend())}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Income</div><div class="mini-stat-num">${fmtShort(monthIncome())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Savings</div><div class="mini-stat-num">${rate===null?'—':rate+'%'}</div></div>
       </div>
     </div>`;
@@ -2847,7 +2889,7 @@ function financeOverviewDetailHTML(){
     </div>
 
     <div class="stats-row">
-      <div class="stat-card"><div class="stat-label">Net Worth</div><div class="stat-num">${fmtShort(netWorth())}</div><div class="stat-delta">All-time total</div></div>
+      <div class="stat-card" onclick="showNetWorthBreakdown()" style="cursor:pointer;"><div class="stat-label">Net Worth ›</div><div class="stat-num">${fmtShort(netWorth())}</div><div class="stat-delta">All-time total — tap for breakdown</div></div>
       <div class="stat-card"><div class="stat-label">Spent — ${label}</div><div class="stat-num">${fmtShort(-monthSpend())}</div><div class="stat-delta">&nbsp;</div></div>
       <div class="stat-card"><div class="stat-label">Income — ${label}</div><div class="stat-num">${fmtShort(monthIncome())}</div><div class="stat-delta">&nbsp;</div></div>
       <div class="stat-card"><div class="stat-label">Savings Rate</div><div class="stat-num">${rate===null?'—':rate+'%'}</div><div class="stat-delta">&nbsp;</div></div>
@@ -2891,7 +2933,7 @@ function financeHTML(){
 
     <div class="bottom-row">
       <div class="panel-card clickable-card" onclick="openHistory('expense')">
-        <div class="panel-title"><div style="display:flex; align-items:center; gap:8px;"><h3>Expenses</h3><span onclick="event.stopPropagation(); showCurrencyCalc(monthSpend(), 'Total expenses in other currencies');" style="cursor:pointer;">💱</span></div><span class="chevron">›</span></div>
+        <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
         <div id="txList">
           ${(function(){
             const exp = sortMostRecentFirst(thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer'; })).slice(0,8);
@@ -2911,7 +2953,7 @@ function financeHTML(){
         </div>
       </div>
       <div class="panel-card clickable-card" onclick="openHistory('income')">
-        <div class="panel-title"><div style="display:flex; align-items:center; gap:8px;"><h3>Income</h3><span onclick="event.stopPropagation(); showCurrencyCalc(monthIncome(), 'Total income in other currencies');" style="cursor:pointer;">💱</span></div><span class="chevron">›</span></div>
+        <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
             const inc = sortMostRecentFirst(thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && !isRefundTx(t); })).slice(0,8);
