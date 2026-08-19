@@ -1076,6 +1076,11 @@ function loadData(){
   }
   // backfill currency for older locally-saved / imported rows that predate multi-currency support
   transactions.forEach(function(t){ if(!t.currency) t.currency = DISPLAY_CURRENCY; });
+  // backfill accountId for Monobank-synced transactions that existed before
+  // the account system was added — they already had monoAccountId, just not
+  // the standard accountId field the rest of the app (Transfers, the account
+  // selector) uses to connect a transaction to an account.
+  transactions.forEach(function(t){ if(!t.accountId && t.monoAccountId) t.accountId = 'mono:' + t.monoAccountId; });
   const maxId = transactions.reduce(function(m,t){
     const n = parseInt(String(t.id).replace(/\D/g,''), 10);
     return isNaN(n) ? m : Math.max(m, n);
@@ -3994,7 +3999,7 @@ async function autoSyncMonobank(){
               }
               const occurred_at = localDateStr(new Date(item.time * 1000));
               transactions.unshift({
-                id: 't' + (nextId++), monoId: item.id, monoAccountId: account.id, name: desc, category: category,
+                id: 't' + (nextId++), monoId: item.id, monoAccountId: account.id, accountId: 'mono:' + account.id, name: desc, category: category,
                 amount: amount, currency: currency, occurred_at: occurred_at, mcc: item.mcc || null, originalMcc: item.originalMcc || null,
                 editedAt: 0 // baseline — any manual edit on either device always outranks a freshly-synced import of the same transaction
               });
