@@ -2184,15 +2184,19 @@ function accountsDetailScreenHTML(){
     const currency = MONO_CURRENCY_MAP[a.currencyCode] || 'UAH';
     const balance = monoAccountNetBalance(a);
     const isCredit = typeof a.creditLimit === 'number' && a.creditLimit > 0;
-    const creditNote = isCredit
-      ? `<div class="mono-acct-status synced">Credit limit ${fmtOriginal(a.creditLimit/100, currency)}${balance !== null && balance < 0 ? ` — ${fmtOriginal(Math.abs(balance), currency)} owed` : (balance !== null && balance > 0 ? ` — ${fmtOriginal(balance, currency)} of your own on top` : '')}</div>`
-      : `<div class="mono-acct-status synced">Live from Monobank</div>`;
-    return `<div class="mono-acct-row">
-      <div class="mono-acct-info">
-        <div class="mono-acct-label">${escapeHtml(monoAccountLabel(a))}</div>
-        ${creditNote}
+    const isNeg = balance !== null && balance < 0;
+    const statusText = isCredit
+      ? `Credit limit ${fmtOriginal(a.creditLimit/100, currency)}${isNeg ? ` — ${fmtOriginal(Math.abs(balance), currency)} owed` : (balance !== null && balance > 0 ? ` — ${fmtOriginal(balance, currency)} of your own on top` : '')}`
+      : 'Live from Monobank';
+    return `<div class="manual-acct-group">
+      <div class="manual-acct-header">
+        <div class="manual-acct-name">🏦 ${escapeHtml(monoAccountLabel(a))}</div>
+        <div class="cat-amt${isNeg ? ' neg' : ''}">${balance !== null ? (isNeg ? '-' : '') + fmtOriginal(balance, currency) : '—'}</div>
       </div>
-      <div class="cat-amt${balance !== null && balance < 0 ? ' neg' : ''}">${balance !== null ? (balance < 0 ? '-' : '') + fmtOriginal(balance, currency) : '—'}</div>
+      <div class="mono-acct-status synced" style="padding-left:20px; position:relative;">
+        <span style="position:absolute; left:6px; top:0; bottom:0; width:1px; background:var(--border-2);"></span>
+        ${statusText}
+      </div>
     </div>`;
   }).join('') || '<div class="empty-note">No Monobank accounts connected.</div>';
 
