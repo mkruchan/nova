@@ -797,13 +797,26 @@ function addCustomCategory(name, type){
 }
 
 /* ---------- Currency ---------- */
-const DISPLAY_CURRENCY = 'EUR';   // everything is shown/totaled in this currency
+let DISPLAY_CURRENCY = 'EUR';   // everything is shown/totaled in this currency — user-selectable, see loadDisplayCurrency
 const DEFAULT_INPUT_CURRENCY = 'ALL'; // new transactions default to entering amounts in Lek
 const CURRENCY_SYMBOLS = { EUR: '€', USD: '$', UAH: '₴', ALL: 'L' };
 // Fallback rates (EUR base) used only until a live fetch succeeds at least once.
 let exchangeRates = { EUR: 1, USD: 1.08, UAH: 45, ALL: 98.5, USDT: 1.08, USDC: 1.08 };
 let ratesUpdatedAt = null;
 let ratesLoading = false;
+
+function loadDisplayCurrency(){
+  try{
+    const saved = localStorage.getItem('nova-display-currency');
+    if(saved && CURRENCY_SYMBOLS[saved]) DISPLAY_CURRENCY = saved;
+  }catch(e){}
+}
+window.setDisplayCurrency = function(currency){
+  if(!CURRENCY_SYMBOLS[currency]) return;
+  DISPLAY_CURRENCY = currency;
+  try{ localStorage.setItem('nova-display-currency', currency); }catch(e){}
+  renderView('finance');
+};
 
 function loadCachedRates(){
   try{
@@ -892,37 +905,47 @@ async function refreshExchangeRates(){
 }
 
 // Convert an amount from its own currency into the display currency (EUR)
-function toDisplay(amount, currency){
+// exchangeRates is always EUR-based (rate = units of that currency per 1
+// EUR), regardless of what DISPLAY_CURRENCY is currently set to — so any
+// conversion between two arbitrary currencies routes through EUR first.
+function toEUR(amount, currency){
   const c = currency || DISPLAY_CURRENCY;
-  if(c === DISPLAY_CURRENCY) return Number(amount);
+  if(c === 'EUR') return Number(amount);
   const rate = exchangeRates[c];
   return rate ? Number(amount) / rate : Number(amount);
 }
-
-// Converts FROM the display currency (EUR) INTO another currency — the
-// inverse of toDisplay, needed for showing "this amount in every currency".
-function fromDisplay(eurAmount, currency){
+function fromEUR(eurAmount, currency){
   const c = currency || DISPLAY_CURRENCY;
-  if(c === DISPLAY_CURRENCY) return Number(eurAmount);
+  if(c === 'EUR') return Number(eurAmount);
   const rate = exchangeRates[c];
   return rate ? Number(eurAmount) * rate : Number(eurAmount);
 }
 
+function toDisplay(amount, currency){
+  return fromEUR(toEUR(amount, currency), DISPLAY_CURRENCY);
+}
+
+// Converts FROM the current display currency INTO another currency — the
+// inverse of toDisplay, needed for showing "this amount in every currency".
+function fromDisplay(displayAmount, currency){
+  return fromEUR(toEUR(displayAmount, DISPLAY_CURRENCY), currency);
+}
+
 const CALC_CURRENCIES = ['EUR', 'USD', 'UAH', 'ALL', 'USDT', 'USDC'];
 
-function currencyBreakdownHTML(eurAmount){
+function currencyBreakdownHTML(displayAmount){
   return CALC_CURRENCIES.map(function(c){
     return `<div class="cat-row">
       <span class="cat-name">${c}</span>
-      <span class="cat-amt">${fmtOriginal(fromDisplay(eurAmount, c), c)}</span>
+      <span class="cat-amt">${fmtOriginal(fromDisplay(displayAmount, c), c)}</span>
     </div>`;
   }).join('');
 }
 
-window.showCurrencyCalc = function(eurAmount, label){
-  if(isNaN(eurAmount)) return;
+window.showCurrencyCalc = function(displayAmount, label){
+  if(isNaN(displayAmount)) return;
   document.getElementById('currencyCalcTitle').textContent = label || 'Currency breakdown';
-  document.getElementById('currencyCalcBody').innerHTML = currencyBreakdownHTML(eurAmount);
+  document.getElementById('currencyCalcBody').innerHTML = currencyBreakdownHTML(displayAmount);
   openModal('currencyCalcModalOverlay');
 };
 
@@ -1326,6 +1349,7 @@ function init(){
   loadCachedRates();
   loadMonoVisibility();
   loadFontScale();
+  loadDisplayCurrency();
   loadMonoDisplayFromDate();
   loadCustomCategories();
   loadCustomCategoryRules();
@@ -2059,6 +2083,7 @@ window.recalculateEverything = async function(){
       if(res.ok){
         const data = await res.json();
         if(data.accounts) monoAccounts = data.accounts;
+        try{ localStorage.setItem('nova-mono-last-sync-attempt', String(Date.now())); }catch(e){}
       }
     }
   }catch(e){ /* fall through — still recompute with whatever data is already available */ }
@@ -2104,7 +2129,7 @@ function accountsSummaryHTML(){
       const amtClass = (r.amount !== null && r.amount < 0) ? 'neg' : '';
       return `<div class="cat-row">
         <span class="cat-name">${escapeHtml(r.name)}</span>
-        <span class="cat-amt ${amtClass}">${r.amount !== null ? fmtOriginal(r.amount, r.currency) : '—'}</span>
+        <span class="cat-amt ${amtClass}">${r.amount !== null ? (r.amount < 0 ? '-' : '') + fmtOriginal(r.amount, r.currency) : '—'}</span>
       </div>`;
     }).join('')}
     ${rows.length > 5 ? `<div class="empty-note" style="text-align:left; padding-top:4px;">+${rows.length-5} more</div>` : ''}
@@ -2127,7 +2152,7 @@ function accountsDetailScreenHTML(){
         <div class="mono-acct-label">${escapeHtml(monoAccountLabel(a))}</div>
         ${creditNote}
       </div>
-      <div class="cat-amt${balance !== null && balance < 0 ? ' neg' : ''}">${balance !== null ? fmtOriginal(balance, currency) : '—'}</div>
+      <div class="cat-amt${balance !== null && balance < 0 ? ' neg' : ''}">${balance !== null ? (balance < 0 ? '-' : '') + fmtOriginal(balance, currency) : '—'}</div>
     </div>`;
   }).join('') || '<div class="empty-note">No Monobank accounts connected.</div>';
 
@@ -2415,6 +2440,9 @@ function trendSVG(height){
 // Compact clickable card combining Net Worth / Spent / Income / Savings Rate / Balance Trend
 function lastSyncedSummary(){
   const timestamps = Object.values(monoSyncStatus).map(function(s){ return s.lastSyncedAt; }).filter(Boolean);
+  let lastAttempt = null;
+  try{ lastAttempt = parseInt(localStorage.getItem('nova-mono-last-sync-attempt') || '', 10); }catch(e){}
+  if(lastAttempt && !isNaN(lastAttempt)) timestamps.push(lastAttempt);
   if(!timestamps.length) return null;
   return timeAgo(Math.max.apply(null, timestamps));
 }
@@ -2602,6 +2630,14 @@ function settingsScreenHTML(){
       <span style="color:var(--muted); min-width:48px; text-align:center;">${Math.round(fontScale*100)}%</span>
       <button class="header-btn" onclick="adjustFontScale(0.1)">A+</button>
       <button class="header-btn" onclick="resetFontScale()">Reset</button>
+    </div>
+
+    <div class="side-label" style="margin:20px 0 8px;">Display Currency</div>
+    <div class="empty-note" style="text-align:left; margin-bottom:8px;">Net Worth, Budget, Income/Expense totals, and category breakdowns are all shown and totaled in this currency. Individual transactions still show their own original currency.</div>
+    <div class="modal-actions" style="justify-content:flex-start; margin-top:0; gap:8px;">
+      ${['EUR','USD','UAH','ALL'].map(function(c){
+        return `<button class="header-btn${c===DISPLAY_CURRENCY?' active':''}" onclick="setDisplayCurrency('${c}')" style="${c===DISPLAY_CURRENCY?'background:var(--blue); color:#0A0D18;':''}">${c}</button>`;
+      }).join('')}
     </div>
 
     <div class="side-label" style="margin:20px 0 8px;">Auto Categorization Rules</div>
@@ -2855,7 +2891,7 @@ function financeHTML(){
 
     <div class="bottom-row">
       <div class="panel-card clickable-card" onclick="openHistory('expense')">
-        <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
+        <div class="panel-title"><div style="display:flex; align-items:center; gap:8px;"><h3>Expenses</h3><span onclick="event.stopPropagation(); showCurrencyCalc(monthSpend(), 'Total expenses in other currencies');" style="cursor:pointer;">💱</span></div><span class="chevron">›</span></div>
         <div id="txList">
           ${(function(){
             const exp = sortMostRecentFirst(thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer'; })).slice(0,8);
@@ -2875,7 +2911,7 @@ function financeHTML(){
         </div>
       </div>
       <div class="panel-card clickable-card" onclick="openHistory('income')">
-        <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
+        <div class="panel-title"><div style="display:flex; align-items:center; gap:8px;"><h3>Income</h3><span onclick="event.stopPropagation(); showCurrencyCalc(monthIncome(), 'Total income in other currencies');" style="cursor:pointer;">💱</span></div><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
             const inc = sortMostRecentFirst(thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && !isRefundTx(t); })).slice(0,8);
@@ -3927,6 +3963,8 @@ async function autoSyncMonobank(){
     await Promise.all(accounts.map(function(account, i){
       return syncOneAccount(account, `account ${i+1} of ${accounts.length}`);
     }));
+
+    try{ localStorage.setItem('nova-mono-last-sync-attempt', String(Date.now())); }catch(e){}
 
     if(lastSyncError){
       try{ localStorage.setItem('nova-mono-last-error', lastSyncError); }catch(e){}
