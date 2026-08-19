@@ -1104,7 +1104,10 @@ function loadManualAccounts(){
   try{ const s = localStorage.getItem('nova-manual-accounts'); manualAccounts = s ? JSON.parse(s) : []; }
   catch(e){ manualAccounts = []; }
   let needsSave = false;
-  manualAccounts.forEach(function(acc, i){ if(!acc.id){ acc.id = 'macc' + Date.now() + i; needsSave = true; } });
+  manualAccounts.forEach(function(acc, i){
+    if(!acc.id){ acc.id = 'macc' + Date.now() + i; needsSave = true; }
+    if(!acc.editedAt){ acc.editedAt = 0; needsSave = true; } // baseline — treated as "never explicitly edited", so any real edit anywhere always wins the merge
+  });
   if(needsSave) persistManualAccounts();
 }
 function persistManualAccounts(){
@@ -1114,18 +1117,24 @@ function persistManualAccounts(){
 
 // A manual account's stored amount is its STARTING balance — the actual
 // current balance is that starting point plus every transfer that's moved
-// money into or out of it since, computed fresh each time rather than
-// mutated in place. This means editing or deleting a transfer just works
-// correctly automatically, the same way loan payoff progress used to be
-// derived from transaction history rather than tracked as a running total.
+// money into or out of it since, PLUS every regular Expense/Income/Refund
+// tagged directly to it (using the transaction's own signed amount — expenses
+// are already negative, income/refunds already positive). All computed fresh
+// each time rather than mutated in place, so editing or deleting a
+// transaction just works correctly automatically — the same principle loan
+// payoff progress used to use, derived from transaction history rather than
+// tracked as a running total that could drift out of sync.
 function manualAccountCurrentBalance(accountId, currency, startingAmount){
   let net = Number(startingAmount) || 0;
   transactions.forEach(function(t){
-    if(t.category !== 'Transfer') return;
     if((t.currency || DEFAULT_INPUT_CURRENCY) !== currency) return;
-    const magnitude = Math.abs(Number(t.amount));
-    if(t.toAccountId === accountId) net += magnitude;
-    if(t.fromAccountId === accountId) net -= magnitude;
+    if(t.category === 'Transfer'){
+      const magnitude = Math.abs(Number(t.amount));
+      if(t.toAccountId === accountId) net += magnitude;
+      if(t.fromAccountId === accountId) net -= magnitude;
+    } else if(t.accountId === accountId){
+      net += Number(t.amount);
+    }
   });
   return net;
 }
@@ -1202,9 +1211,78 @@ function mergeTransactionArrays(localList, incomingList){
   return Array.from(merged.values());
 }
 
+// Same principle as transaction merging — manual accounts (Cash, WhiteBIT,
+// a loan tracked as a negative balance) need the same protection, since a
+// balance edit on one device shouldn't be silently overwritten by another
+// device pushing its own, older copy of the same account.
+function mergeManualAccountArrays(localList, incomingList){
+  // Merge by id first, same as before — this correctly handles the normal
+  // case where an account was created once and just edited on both devices.
+  const byId = new Map();
+  localList.forEach(function(acc){ byId.set(acc.id, acc); });
+  incomingList.forEach(function(acc){
+    const existing = byId.get(acc.id);
+    if(!existing || (acc.editedAt || 0) >= (existing.editedAt || 0)){
+      byId.set(acc.id, acc);
+    }
+  });
+
+  // Then also collapse accounts that share the same name but have different
+  // ids — this happens when the same account (e.g. "Cash") gets created
+  // independently on two devices before they've ever synced with each
+  // other, which would otherwise show up as two separate duplicate accounts
+  // forever after. Balances are merged per-currency (freshest edit wins),
+  // rather than just keeping one side's account and discarding the other's data.
+  const byName = new Map();
+  const idRemap = {}; // discarded id -> surviving id, so transactions referencing it can be fixed up
+  Array.from(byId.values()).forEach(function(acc){
+    const key = (acc.name || '').trim().toLowerCase();
+    const existing = byName.get(key);
+    if(!existing){
+      byName.set(key, JSON.parse(JSON.stringify(acc)));
+      return;
+    }
+    // Keep the earlier-created id for stability, and merge balances by currency
+    const keepAsBase = (existing.id < acc.id) ? existing : acc;
+    const other = (keepAsBase === existing) ? acc : existing;
+    idRemap[other.id] = keepAsBase.id;
+    const merged = JSON.parse(JSON.stringify(keepAsBase));
+    const balByCurrency = new Map();
+    (merged.balances || []).forEach(function(b){ balByCurrency.set(b.currency, b); });
+    (other.balances || []).forEach(function(b){
+      const existingBal = balByCurrency.get(b.currency);
+      if(!existingBal || (b.editedAt || acc.editedAt || 0) >= (existingBal.editedAt || existing.editedAt || 0)){
+        balByCurrency.set(b.currency, b);
+      }
+    });
+    merged.balances = Array.from(balByCurrency.values());
+    merged.editedAt = Math.max(existing.editedAt || 0, acc.editedAt || 0);
+    byName.set(key, merged);
+  });
+
+  return { accounts: Array.from(byName.values()), idRemap: idRemap };
+}
+
+// Applies an id remap (from mergeManualAccountArrays deduplicating same-named
+// accounts) to every transaction that referenced the now-discarded id, so
+// transfers into/out of that account still count toward the surviving one.
+function applyManualAccountIdRemap(idRemap){
+  if(!idRemap || !Object.keys(idRemap).length) return;
+  transactions.forEach(function(t){
+    if(t.accountId && idRemap[t.accountId]) t.accountId = idRemap[t.accountId];
+    if(t.fromAccountId && idRemap[t.fromAccountId]) t.fromAccountId = idRemap[t.fromAccountId];
+    if(t.toAccountId && idRemap[t.toAccountId]) t.toAccountId = idRemap[t.toAccountId];
+  });
+}
+
 function applyCloudPayload(payload){
   if(!payload) return;
   if(payload.transactions) mergeInTransactionsFromCloud(payload.transactions);
+  if(payload.manualAccounts){
+    const result = mergeManualAccountArrays(manualAccounts, payload.manualAccounts);
+    manualAccounts = result.accounts;
+    applyManualAccountIdRemap(result.idRemap);
+  }
   applyCloudPayloadNonTransactionFields(payload);
 }
 
@@ -1219,7 +1297,6 @@ function applyCloudPayloadNonTransactionFields(payload){
   if(payload.customIncomeCategories) customIncomeCategories = payload.customIncomeCategories;
   if(payload.customCategoryRules) customCategoryRules = payload.customCategoryRules;
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
-  if(payload.manualAccounts) manualAccounts = payload.manualAccounts;
 
   // Cloud-sourced budgets need the exact same normalization as locally-loaded
   // ones — otherwise a budget pulled from an older data shape leaves
@@ -1289,9 +1366,18 @@ async function pullCloudSync(){
         mergeInTransactionsFromCloud(payload.transactions);
         try{ localStorage.setItem('nova-transactions', JSON.stringify(transactions)); }catch(e){}
       }
-      // Everything else (budgets, loans, custom categories/rules) doesn't
-      // have per-item edit tracking, so it still relies on whole-payload
-      // "only apply if genuinely newer" — otherwise a periodic pull could
+      if(payload && Array.isArray(payload.manualAccounts)){
+        const result = mergeManualAccountArrays(manualAccounts, payload.manualAccounts);
+        manualAccounts = result.accounts;
+        applyManualAccountIdRemap(result.idRemap);
+        try{
+          localStorage.setItem('nova-manual-accounts', JSON.stringify(manualAccounts));
+          localStorage.setItem('nova-transactions', JSON.stringify(transactions));
+        }catch(e){}
+      }
+      // Everything else (budgets, custom categories/rules) doesn't have
+      // per-item edit tracking, so it still relies on whole-payload "only
+      // apply if genuinely newer" — otherwise a periodic pull could
       // silently undo a local edit made moments earlier.
       if(!localLastModifiedAt || new Date(cloudUpdatedAt) > new Date(localLastModifiedAt)){
         applyCloudPayloadNonTransactionFields(payload);
@@ -1320,8 +1406,15 @@ async function pushCloudSyncNow(){
       );
       if(getRes.ok){
         const rows = await getRes.json();
-        if(rows && rows.length && rows[0].data && Array.isArray(rows[0].data.transactions)){
-          mergeInTransactionsFromCloud(rows[0].data.transactions);
+        if(rows && rows.length && rows[0].data){
+          if(Array.isArray(rows[0].data.transactions)){
+            mergeInTransactionsFromCloud(rows[0].data.transactions);
+          }
+          if(Array.isArray(rows[0].data.manualAccounts)){
+            const result = mergeManualAccountArrays(manualAccounts, rows[0].data.manualAccounts);
+            manualAccounts = result.accounts;
+            applyManualAccountIdRemap(result.idRemap);
+          }
         }
       }
     }catch(e){ /* if this reconcile step fails, still proceed with the push below rather than blocking entirely */ }
@@ -2290,7 +2383,7 @@ window.addManualAccount = function(){
   if(!name) return;
   const currency = document.getElementById('newManualAccountCurrency').value;
   const startingBalance = parseAmountInput(document.getElementById('newManualAccountBalance').value);
-  manualAccounts.push({ id: 'macc' + Date.now(), name: name, balances: [{ currency: currency, amount: isNaN(startingBalance) ? 0 : startingBalance }] });
+  manualAccounts.push({ id: 'macc' + Date.now(), name: name, balances: [{ currency: currency, amount: isNaN(startingBalance) ? 0 : startingBalance }], editedAt: Date.now() });
   persistManualAccounts();
   nameEl.value = '';
   document.getElementById('newManualAccountBalance').value = '';
@@ -2306,17 +2399,20 @@ window.addManualBalance = function(accIndex){
   if(!currency) return;
   const startingBalance = parseAmountInput(prompt('Starting balance for ' + currency + ':') || '0');
   manualAccounts[accIndex].balances.push({ currency: currency, amount: isNaN(startingBalance) ? 0 : startingBalance });
+  manualAccounts[accIndex].editedAt = Date.now();
   persistManualAccounts();
   renderView('finance');
 };
 window.removeManualBalance = function(accIndex, balIndex){
   manualAccounts[accIndex].balances.splice(balIndex, 1);
+  manualAccounts[accIndex].editedAt = Date.now();
   persistManualAccounts();
   renderView('finance');
 };
 window.updateManualBalance = function(accIndex, balIndex, value){
   const amount = parseAmountInput(value);
   manualAccounts[accIndex].balances[balIndex].amount = isNaN(amount) ? 0 : amount;
+  manualAccounts[accIndex].editedAt = Date.now();
   persistManualAccounts();
 };
 window.editManualBalance = function(accIndex, balIndex){
