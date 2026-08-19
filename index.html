@@ -1106,11 +1106,30 @@ function persistManualAccounts(){
   localStorage.setItem('nova-manual-accounts', JSON.stringify(manualAccounts));
   scheduleCloudPush();
 }
+
+// A manual account's stored amount is its STARTING balance — the actual
+// current balance is that starting point plus every transfer that's moved
+// money into or out of it since, computed fresh each time rather than
+// mutated in place. This means editing or deleting a transfer just works
+// correctly automatically, the same way loan payoff progress used to be
+// derived from transaction history rather than tracked as a running total.
+function manualAccountCurrentBalance(accountId, currency, startingAmount){
+  let net = Number(startingAmount) || 0;
+  transactions.forEach(function(t){
+    if(t.category !== 'Transfer') return;
+    if((t.currency || DEFAULT_INPUT_CURRENCY) !== currency) return;
+    const magnitude = Math.abs(Number(t.amount));
+    if(t.toAccountId === accountId) net += magnitude;
+    if(t.fromAccountId === accountId) net -= magnitude;
+  });
+  return net;
+}
+
 function totalManualAccountsValue(){
   let sum = 0;
   manualAccounts.forEach(function(acc){
     (acc.balances || []).forEach(function(b){
-      sum += toDisplay(Number(b.amount) || 0, b.currency);
+      sum += toDisplay(manualAccountCurrentBalance(acc.id, b.currency, b.amount), b.currency);
     });
   });
   return sum;
@@ -1693,7 +1712,7 @@ function netWorthBreakdown(){
   });
   manualAccounts.forEach(function(acc){
     (acc.balances || []).forEach(function(b){
-      const amt = Number(b.amount) || 0;
+      const amt = manualAccountCurrentBalance(acc.id, b.currency, b.amount);
       items.push({ name: acc.name + ' (' + b.currency + ')', source: 'Manual', currency: b.currency, originalAmount: amt, amount: toDisplay(amt, b.currency) });
     });
   });
@@ -2142,7 +2161,7 @@ function accountsSummaryHTML(){
   });
   manualAccounts.forEach(function(acc){
     (acc.balances || []).forEach(function(b){
-      rows.push({ name: acc.name, amount: Number(b.amount) || 0, currency: b.currency, source: 'manual' });
+      rows.push({ name: acc.name, amount: manualAccountCurrentBalance(acc.id, b.currency, b.amount), currency: b.currency, source: 'manual' });
     });
   });
 
@@ -2201,12 +2220,14 @@ function accountsDetailScreenHTML(){
   }).join('') || '<div class="empty-note">No Monobank accounts connected.</div>';
 
   const manualRows = manualAccounts.map(function(acc, i){
-    const groupTotal = (acc.balances || []).reduce(function(s,b){ return s + toDisplay(Number(b.amount) || 0, b.currency); }, 0);
-    const balanceRows = (acc.balances || []).map(function(b, j){
-      const isNeg = Number(b.amount) < 0;
+    const currentBalances = (acc.balances || []).map(function(b){ return { currency: b.currency, current: manualAccountCurrentBalance(acc.id, b.currency, b.amount), starting: Number(b.amount) || 0 }; });
+    const groupTotal = currentBalances.reduce(function(s,b){ return s + toDisplay(b.current, b.currency); }, 0);
+    const balanceRows = currentBalances.map(function(cb, j){
+      const isNeg = cb.current < 0;
+      const hasMoved = Math.abs(cb.current - cb.starting) > 0.005;
       return `<div class="manual-curr-row">
-        <span class="manual-curr-code">${escapeHtml(b.currency)}</span>
-        <span class="cat-amt${isNeg ? ' neg' : ''}">${fmtOriginal(Number(b.amount) || 0, b.currency)}</span>
+        <span class="manual-curr-code">${escapeHtml(cb.currency)}${hasMoved ? ` <span style="color:var(--muted-dim); font-weight:400;">(started ${fmtOriginal(cb.starting, cb.currency)})</span>` : ''}</span>
+        <span class="cat-amt${isNeg ? ' neg' : ''}">${(isNeg?'-':'')+fmtOriginal(cb.current, cb.currency)}</span>
         <button class="tx-edit" onclick="editManualBalance(${i}, ${j})"><svg class="icon"><use href="#ic-edit"/></svg></button>
         <button class="tx-del" onclick="removeManualBalance(${i}, ${j})">✕</button>
       </div>`;
@@ -2294,8 +2315,14 @@ window.updateManualBalance = function(accIndex, balIndex, value){
   persistManualAccounts();
 };
 window.editManualBalance = function(accIndex, balIndex){
-  const bal = manualAccounts[accIndex].balances[balIndex];
-  const input = prompt('New balance for ' + bal.currency + ':', bal.amount);
+  const acc = manualAccounts[accIndex];
+  const bal = acc.balances[balIndex];
+  const current = manualAccountCurrentBalance(acc.id, bal.currency, bal.amount);
+  const hasMoved = Math.abs(current - bal.amount) > 0.005;
+  const promptText = hasMoved
+    ? `Starting balance for ${bal.currency} (current, including transfers, is ${fmtOriginal(current, bal.currency)}):`
+    : `Starting balance for ${bal.currency}:`;
+  const input = prompt(promptText, bal.amount);
   if(input === null) return; // cancelled
   updateManualBalance(accIndex, balIndex, input);
   renderView('finance');
