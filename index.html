@@ -257,6 +257,8 @@
   .bottom-row{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; margin-bottom:18px; }
   .panel-card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
   .panel-title{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .panel-total{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(20px * var(--font-scale, 1)); color:var(--white); }
+  .panel-total.neg{ color:var(--white); } .panel-total.pos{ color:var(--green); }
   .panel-title h3{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(16px * var(--font-scale, 1)); margin:0; }
   .add-btn{ background:var(--blue-dim); color:var(--blue-light); border:none; border-radius:7px; padding:5px 10px; font-size:calc(13px * var(--font-scale, 1)); font-weight:600; }
 
@@ -457,7 +459,7 @@
     </div>
     <div class="side-label" id="budgetModalMonthLabel" style="margin-bottom:14px;"></div>
     <div class="form-row"><label>Currency</label>
-      <select id="budgetCurrency">
+      <select id="budgetCurrency" onchange="convertBudgetEditCurrency()">
         <option value="EUR">Euro (EUR)</option>
         <option value="USD">Dollar (USD)</option>
         <option value="UAH">Hryvnia (UAH)</option>
@@ -2325,13 +2327,12 @@ function accountsDetailScreenHTML(){
   }).join('') || '<div class="empty-note">No Monobank accounts connected.</div>';
 
   const manualRows = manualAccounts.map(function(acc, i){
-    const currentBalances = (acc.balances || []).map(function(b){ return { currency: b.currency, current: manualAccountCurrentBalance(acc.id, b.currency, b.amount), starting: Number(b.amount) || 0 }; });
+    const currentBalances = (acc.balances || []).map(function(b){ return { currency: b.currency, current: manualAccountCurrentBalance(acc.id, b.currency, b.amount) }; });
     const groupTotal = currentBalances.reduce(function(s,b){ return s + toDisplay(b.current, b.currency); }, 0);
     const balanceRows = currentBalances.map(function(cb, j){
       const isNeg = cb.current < 0;
-      const hasMoved = Math.abs(cb.current - cb.starting) > 0.005;
       return `<div class="manual-curr-row">
-        <span class="manual-curr-code">${escapeHtml(cb.currency)}${hasMoved ? ` <span style="color:var(--muted-dim); font-weight:400;">(started ${fmtOriginal(cb.starting, cb.currency)})</span>` : ''}</span>
+        <span class="manual-curr-code">${escapeHtml(cb.currency)}</span>
         <span class="cat-amt${isNeg ? ' neg' : ''}">${(isNeg?'-':'')+fmtOriginal(cb.current, cb.currency)}</span>
         <button class="tx-edit" onclick="editManualBalance(${i}, ${j})"><svg class="icon"><use href="#ic-edit"/></svg></button>
         <button class="tx-del" onclick="removeManualBalance(${i}, ${j})">✕</button>
@@ -2466,7 +2467,7 @@ function monthlyBudgetSummaryHTML(){
         <div class="budget-headline">
           <span class="budget-headline-num ${over?'over':''}">${fmtShort(diff)}</span>
           <span class="budget-headline-sub">${over?'overspent':'available'}</span>
-          <span class="budget-headline-target">Real ${fmtShort(spent)} · Projected ${fmtShort(target)}</span>
+          <span class="budget-headline-target">${fmtShort(spent)} / ${fmtShort(target)}</span>
         </div>
         ${progressBar(pct, over)}
         ${over ? '<div class="budget-warning">⚠ Total budget overspent</div>' : ''}
@@ -2499,7 +2500,7 @@ function budgetDetailScreenHTML(){
       <div class="budget-cat-head">
         <span class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></span>
         <span class="budget-cat-name">${cat}</span>
-        <span class="budget-cat-amt">Real ${fmtShort(actual)} · Projected ${fmtShort(budget)}</span>
+        <span class="budget-cat-amt">${fmtShort(actual)} / ${fmtShort(budget)}</span>
       </div>
       ${progressBar(pct, over)}
       <div class="budget-cat-status${over?' over':''}">${over ? fmtShort(actual-budget)+' overspent' : fmtShort(budget-actual)+' available'}</div>
@@ -2523,16 +2524,16 @@ function budgetDetailScreenHTML(){
     <div class="panel-title" style="margin-top:6px;"><h3>Total budget</h3></div>
     ${mb.currency !== DISPLAY_CURRENCY ? `<div class="empty-note" style="margin-bottom:8px;">This month's budget was set in ${mb.currency}, converted here to ${DISPLAY_CURRENCY}.</div>` : ''}
     <div class="budget-total-row">
-      <div class="budget-total-head"><span>Total income</span><span>Real ${fmt(income)} · Projected ${fmt(incomeTarget)}</span></div>
+      <div class="budget-total-head"><span>Total income</span><span>${fmt(income)} / ${fmt(incomeTarget)}</span></div>
       ${progressBar(incomePct, false)}
     </div>
     <div class="budget-total-row">
-      <div class="budget-total-head"><span>Total expenses</span><span>Real ${fmt(spent)} · Projected ${fmt(expenseTarget)}</span></div>
+      <div class="budget-total-head"><span>Total expenses</span><span>${fmt(spent)} / ${fmt(expenseTarget)}</span></div>
       ${progressBar(expensePct, expenseOver)}
       ${expenseOver ? `<div class="budget-cat-status over">${fmt(spent-expenseTarget)} overspent</div>` : ''}
     </div>
     <div class="budget-total-row">
-      <div class="budget-total-head"><span>Profit</span><span>Real ${fmt(profit)} · Projected ${fmt(profitTarget)}</span></div>
+      <div class="budget-total-head"><span>Profit</span><span>${fmt(profit)} / ${fmt(profitTarget)}</span></div>
     </div>
 
     <div class="panel-title" style="margin-top:20px;"><h3>Expense budgets</h3></div>
@@ -2557,15 +2558,48 @@ window.shiftBudgetMonth = function(delta){
   budgetViewMonth = new Date(budgetViewMonth.getFullYear(), budgetViewMonth.getMonth() + delta, 1);
   renderView('finance');
 };
+let budgetEditPrevCurrency = DISPLAY_CURRENCY;
 window.openBudgetEdit = function(){
   const mb = getBudgetForMonth(budgetViewMonth);
   document.getElementById('budgetModalMonthLabel').textContent = budgetViewMonth.toLocaleString(undefined, { month:'long', year:'numeric' });
   document.getElementById('budgetCurrency').value = mb.currency;
+  budgetEditPrevCurrency = mb.currency;
   document.getElementById('budgetIncomeTarget').value = mb.incomeTarget ? Number(mb.incomeTarget).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
   document.getElementById('budgetExpenseTarget').value = mb.expenseTarget ? Number(mb.expenseTarget).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
   document.getElementById('budgetCategoryRows').innerHTML = budgetEditModalBody();
   openModal('budgetModalOverlay');
 };
+
+// Switching the currency dropdown on its own would otherwise silently
+// reinterpret whatever numbers are already typed as being in the new
+// currency without changing them — e.g. "50,000" tagged ALL becomes
+// "50,000" tagged EUR, a wildly different real amount. This converts every
+// already-entered number (income target, expense target, each category
+// budget) from the old currency to the new one, so the real value stays
+// the same and the displayed number actually changes to match.
+window.convertBudgetEditCurrency = function(){
+  const newCurrency = document.getElementById('budgetCurrency').value;
+  const oldCurrency = budgetEditPrevCurrency;
+  if(newCurrency === oldCurrency) return;
+
+  const convert = function(val){ return fromEUR(toEUR(val, oldCurrency), newCurrency); };
+
+  const incomeEl = document.getElementById('budgetIncomeTarget');
+  const incomeVal = parseAmountInput(incomeEl.value);
+  if(!isNaN(incomeVal) && incomeVal !== 0) incomeEl.value = convert(incomeVal).toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+  const expenseEl = document.getElementById('budgetExpenseTarget');
+  const expenseVal = parseAmountInput(expenseEl.value);
+  if(!isNaN(expenseVal) && expenseVal !== 0) expenseEl.value = convert(expenseVal).toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+  document.querySelectorAll('[data-budget-cat]').forEach(function(input){
+    const val = parseAmountInput(input.value);
+    if(!isNaN(val) && val !== 0) input.value = convert(val).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  });
+
+  budgetEditPrevCurrency = newCurrency;
+};
+
 window.saveBudgetEdit = function(){
   const mb = getBudgetForMonth(budgetViewMonth);
   mb.currency = document.getElementById('budgetCurrency').value || DISPLAY_CURRENCY;
@@ -3087,7 +3121,7 @@ function financeHTML(){
 
     <div class="bottom-row">
       <div class="panel-card clickable-card" onclick="openHistory('expense')">
-        <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
+        <div class="panel-title"><div style="display:flex; align-items:center; gap:10px;"><h3>Expenses</h3><span class="panel-total neg">${fmtShort(-monthSpend())}</span></div><span class="chevron">›</span></div>
         <div id="txList">
           ${(function(){
             const exp = sortMostRecentFirst(thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer'; })).slice(0,8);
@@ -3107,7 +3141,7 @@ function financeHTML(){
         </div>
       </div>
       <div class="panel-card clickable-card" onclick="openHistory('income')">
-        <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
+        <div class="panel-title"><div style="display:flex; align-items:center; gap:10px;"><h3>Income</h3><span class="panel-total pos">${fmtShort(monthIncome())}</span></div><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
             const inc = sortMostRecentFirst(thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && !isRefundTx(t); })).slice(0,8);
