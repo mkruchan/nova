@@ -263,7 +263,7 @@
   .add-btn{ background:var(--blue-dim); color:var(--blue-light); border:none; border-radius:7px; padding:5px 10px; font-size:calc(13px * var(--font-scale, 1)); font-weight:600; }
 
   .tx-row{ display:flex; align-items:center; gap:11px; padding:9px 0; border-bottom:1px solid var(--border); min-height:44px; overflow:hidden; }
-  .day-header{ font-size:calc(15px * var(--font-scale, 1)); font-weight:700; letter-spacing:normal; text-transform:none; color:var(--white); padding:16px 0 6px; display:flex; gap:8px; align-items:baseline; }
+  .day-header{ font-size:calc(15px * var(--font-scale, 1)); font-weight:700; letter-spacing:normal; text-transform:none; color:var(--white); padding:16px 0 6px; display:flex; justify-content:space-between; align-items:baseline; }
   .day-header-total{ font-size:calc(15px * var(--font-scale, 1)); font-weight:700; letter-spacing:normal; text-transform:none; color:var(--white); }
   .day-header-total.neg{ color:var(--white); } .day-header-total.pos{ color:var(--green); }
   .day-header:first-child{ padding-top:4px; }
@@ -2695,6 +2695,19 @@ function dateRangeBlockHTML(){
     </div>`;
 }
 
+function avgDailySpend(){
+  const spent = monthSpend();
+  let days;
+  if(customRangeActive && customRangeFrom){
+    const from = new Date(customRangeFrom + 'T00:00:00');
+    const to = new Date((customRangeTo || todayStr()) + 'T00:00:00');
+    days = Math.max(1, Math.round((to - from) / (1000*60*60*24)) + 1);
+  } else {
+    days = new Date().getDate(); // days elapsed so far this month
+  }
+  return spent / days;
+}
+
 function financeOverviewSummaryHTML(){
   const rate = savingsRate();
   const netProfit = monthIncome() - monthSpend();
@@ -2710,6 +2723,7 @@ function financeOverviewSummaryHTML(){
         <div class="mini-stat"><div class="mini-stat-label">Spent</div><div class="mini-stat-num">${fmtShort(monthSpend())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Income</div><div class="mini-stat-num">${fmtShort(monthIncome())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">${isProfit?'Net Profit':'Net Loss'}</div><div class="mini-stat-num" style="color:${isProfit?'var(--green)':'var(--rose)'};">${fmtShort(netProfit)}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">Avg Daily Spend</div><div class="mini-stat-num">${fmtShort(avgDailySpend())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Savings</div><div class="mini-stat-num">${rate===null?'—':rate+'%'}</div></div>
       </div>
     </div>`;
