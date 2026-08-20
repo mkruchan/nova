@@ -264,7 +264,8 @@
 
   .tx-row{ display:flex; align-items:center; gap:11px; padding:9px 0; border-bottom:1px solid var(--border); min-height:44px; overflow:hidden; }
   .day-header{ font-size:calc(11px * var(--font-scale, 1)); font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted-dim); padding:16px 0 6px; display:flex; justify-content:space-between; align-items:baseline; }
-  .day-header-total{ font-weight:600; letter-spacing:normal; text-transform:none; color:var(--muted); }
+  .day-header-total{ font-size:calc(14px * var(--font-scale, 1)); font-weight:700; letter-spacing:normal; text-transform:none; color:var(--white); }
+  .day-header-total.neg{ color:var(--white); } .day-header-total.pos{ color:var(--green); }
   .day-header:first-child{ padding-top:4px; }
   .tx-row:last-child{ border-bottom:none; }
   .tx-icon{ width:28px; height:28px; border-radius:50%; background:var(--panel-2); border:1px solid var(--border-2); display:flex; align-items:center; justify-content:center; color:var(--muted); flex-shrink:0; }
@@ -1502,6 +1503,7 @@ function init(){
   loadCustomCategories();
   loadCustomCategoryRules();
   loadMonoSyncStatus();
+  loadMonoAccounts();
   loadCloudConfig();
   loadManualAccounts();
   loadDateRangeState();
@@ -1643,9 +1645,10 @@ function dayHeaderLabel(dateStr, dayTotal){
     const y = new Date(); y.setDate(y.getDate() - 1);
     return dateStr === localDateStr(y) ? 'Yesterday' : niceDate(dateStr);
   })();
-  return typeof dayTotal === 'number'
-    ? `<span>${label}</span><span class="day-header-total">(${fmt(dayTotal)})</span>`
-    : label;
+  if(typeof dayTotal !== 'number') return label;
+  const isPos = dayTotal > 0;
+  const sign = isPos ? '+' : (dayTotal < 0 ? '-' : '');
+  return `<span>${label}</span><span class="day-header-total${isPos?' pos':' neg'}">${sign}${fmt(Math.abs(dayTotal))}</span>`;
 }
 
 // Renders a list of transactions (already sorted, most recent first) with a
@@ -2255,7 +2258,7 @@ window.recalculateEverything = async function(){
       const res = await fetch('https://api.monobank.ua/personal/client-info', { headers: { 'X-Token': token } });
       if(res.ok){
         const data = await res.json();
-        if(data.accounts) monoAccounts = data.accounts;
+        if(data.accounts){ monoAccounts = data.accounts; persistMonoAccounts(); }
         try{ localStorage.setItem('nova-mono-last-sync-attempt', String(Date.now())); }catch(e){}
       }
     }
@@ -2694,6 +2697,8 @@ function dateRangeBlockHTML(){
 
 function financeOverviewSummaryHTML(){
   const rate = savingsRate();
+  const netProfit = monthIncome() - monthSpend();
+  const isProfit = netProfit >= 0;
   return `
     <div class="chart-card clickable-card" style="grid-column:1 / -1;" onclick="openOverviewDetail()">
       <div class="chart-title-row">
@@ -2704,6 +2709,7 @@ function financeOverviewSummaryHTML(){
         <div class="mini-stat" onclick="event.stopPropagation(); showNetWorthBreakdown();" style="cursor:pointer;"><div class="mini-stat-label">Net Worth (All-time) <span class="chevron" style="font-size:12px;">›</span></div><div class="mini-stat-num">${fmtShort(netWorth())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Spent</div><div class="mini-stat-num">${fmtShort(-monthSpend())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Income</div><div class="mini-stat-num">${fmtShort(monthIncome())}</div></div>
+        <div class="mini-stat"><div class="mini-stat-label">${isProfit?'Net Profit':'Net Loss'}</div><div class="mini-stat-num" style="color:${isProfit?'var(--green)':'var(--rose)'};">${fmtShort(netProfit)}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Savings</div><div class="mini-stat-num">${rate===null?'—':rate+'%'}</div></div>
       </div>
     </div>`;
@@ -3121,7 +3127,7 @@ function financeHTML(){
 
     <div class="bottom-row">
       <div class="panel-card clickable-card" onclick="openHistory('expense')">
-        <div class="panel-title"><div style="display:flex; align-items:center; gap:10px;"><h3>Expenses</h3><span class="panel-total neg">${fmtShort(-monthSpend())}</span></div><span class="chevron">›</span></div>
+        <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
         <div id="txList">
           ${(function(){
             const exp = sortMostRecentFirst(thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer'; })).slice(0,8);
@@ -3141,7 +3147,7 @@ function financeHTML(){
         </div>
       </div>
       <div class="panel-card clickable-card" onclick="openHistory('income')">
-        <div class="panel-title"><div style="display:flex; align-items:center; gap:10px;"><h3>Income</h3><span class="panel-total pos">${fmtShort(monthIncome())}</span></div><span class="chevron">›</span></div>
+        <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
             const inc = sortMostRecentFirst(thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && !isRefundTx(t); })).slice(0,8);
@@ -3813,6 +3819,20 @@ const MONO_CURRENCY_MAP = { 980: 'UAH', 978: 'EUR', 840: 'USD', 8: 'ALL' };
 let monoAccounts = [];
 let monoSyncStatus = {}; // { [accountId]: { lastSyncedAt, count, label } }
 
+// monoAccounts previously only ever lived in memory, populated by a live
+// client-info fetch — so on every fresh page load it started empty and
+// stayed that way until the next sync succeeded, making connected accounts
+// appear to have vanished from Accounts in the meantime. Persisting the last
+// known list means it's immediately available on load, then gets refreshed
+// the moment a new sync actually completes.
+function loadMonoAccounts(){
+  try{ const s = localStorage.getItem('nova-mono-accounts'); monoAccounts = s ? JSON.parse(s) : []; }
+  catch(e){ monoAccounts = []; }
+}
+function persistMonoAccounts(){
+  try{ localStorage.setItem('nova-mono-accounts', JSON.stringify(monoAccounts)); }catch(e){}
+}
+
 function loadMonoToken(){
   try{ return localStorage.getItem('nova-mono-token') || ''; }catch(e){ return ''; }
 }
@@ -3852,6 +3872,7 @@ window.disconnectMonobank = function(){
     transactions = transactions.filter(function(t){ return !t.monoId; }); // actually delete, not just hide
     persist();
     monoAccounts = [];
+    persistMonoAccounts();
     monoSyncStatus = {};
     persistMonoSyncStatus();
     setMonoVisibility(true); // nothing left to hide, so reset to the default state
@@ -3997,6 +4018,7 @@ window.connectMonobank = async function(){
     }
     const data = await res.json();
     monoAccounts = data.accounts || [];
+    persistMonoAccounts();
 
     const previousToken = loadMonoToken();
     if(previousToken && previousToken !== token){
@@ -4078,6 +4100,7 @@ async function autoSyncMonobank(){
     const accounts = data.accounts || [];
     if(!accounts.length){ updateMonoProgressUI(''); return; }
     monoAccounts = accounts; // keep this fresh so the Bank modal reflects the same list if opened
+    persistMonoAccounts();
 
     const myOwnIbans = new Set(accounts.filter(function(a){ return a.iban; }).map(function(a){ return a.iban; }));
     const existingIds = new Set(transactions.filter(function(t){ return t.monoId; }).map(function(t){ return t.monoId; }));
