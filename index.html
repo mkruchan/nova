@@ -2421,13 +2421,20 @@ window.editManualBalance = function(accIndex, balIndex){
   const acc = manualAccounts[accIndex];
   const bal = acc.balances[balIndex];
   const current = manualAccountCurrentBalance(acc.id, bal.currency, bal.amount);
-  const hasMoved = Math.abs(current - bal.amount) > 0.005;
-  const promptText = hasMoved
-    ? `Starting balance for ${bal.currency} (current, including transfers, is ${fmtOriginal(current, bal.currency)}):`
-    : `Starting balance for ${bal.currency}:`;
-  const input = prompt(promptText, bal.amount);
+  const input = prompt(`Correct balance for ${bal.currency}:`, current);
   if(input === null) return; // cancelled
-  updateManualBalance(accIndex, balIndex, input);
+  const desiredCurrent = parseAmountInput(input);
+  if(isNaN(desiredCurrent)) return;
+  // Work backwards: whatever transfers/tagged transactions have already
+  // applied on top of the starting balance stays as-is — only the starting
+  // point itself shifts, by exactly enough that the current balance comes
+  // out to what was just entered. This means correcting for something like
+  // a duplicate deduction doesn't require doing that math by hand.
+  const netAdjustments = current - (Number(bal.amount) || 0);
+  bal.amount = desiredCurrent - netAdjustments;
+  bal.editedAt = Date.now();
+  acc.editedAt = Date.now();
+  persistManualAccounts();
   renderView('finance');
 };
 
