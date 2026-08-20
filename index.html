@@ -1049,7 +1049,8 @@ function saveMonoDisplayFromDate(dateStr){
 }
 
 function visibleTransactions(){
-  let list = showMonoData ? transactions : transactions.filter(function(t){ return !t.monoId; });
+  let list = transactions.filter(function(t){ return !t.deleted; });
+  if(!showMonoData) list = list.filter(function(t){ return !t.monoId; });
   if(monoDisplayFromDate){
     // Only affects Monobank-sourced transactions — manual entries are never
     // touched by this, and it has no relationship to the main dashboard's
@@ -1127,6 +1128,7 @@ function persistManualAccounts(){
 function manualAccountCurrentBalance(accountId, currency, startingAmount){
   let net = Number(startingAmount) || 0;
   transactions.forEach(function(t){
+    if(t.deleted) return;
     if((t.currency || DEFAULT_INPUT_CURRENCY) !== currency) return;
     if(t.category === 'Transfer'){
       const magnitude = Math.abs(Number(t.amount));
@@ -2870,7 +2872,7 @@ window.removeDuplicateMonobankTransactions = function(){
 };
 
 window.recategorizeTransactions = function(){
-  const candidates = transactions.filter(function(t){ return t.category === 'Other expense' || t.category === 'Other income'; });
+  const candidates = transactions.filter(function(t){ return !t.deleted && (t.category === 'Other expense' || t.category === 'Other income'); });
   if(!candidates.length){
     customConfirm('No transactions are currently sitting in "Other expense" or "Other income" — nothing to re-categorize.', function(){}, { title: 'Nothing to do', confirmLabel: 'OK' });
     return;
@@ -3447,9 +3449,14 @@ function deleteTx(id){
   const label = t.name ? `"${t.name}"` : 'this transaction';
   customConfirm(`Delete ${label}? This can't be undone.`, function(){
     try{
-      const idx = transactions.findIndex(function(x){ return x.id === id; });
-      if(idx === -1) return;
-      transactions.splice(idx, 1);
+      // Marked as a tombstone rather than spliced out — a hard removal has
+      // no way to tell the sync merge "this was intentionally deleted", so
+      // the very next sync (which happens automatically right after this,
+      // via persist()) would just merge the old copy back in from the cloud
+      // and silently resurrect it. Tombstones propagate through the same
+      // edit-time-aware merge every other change already uses.
+      t.deleted = true;
+      t.editedAt = Date.now();
       persist();
       renderView('finance');
     }catch(e){
@@ -3885,7 +3892,7 @@ window.applyMonoDisplayFromDate = function(){
   if(!dateStr){ statusEl.textContent = 'Pick a date first.'; statusEl.classList.add('error'); return; }
   saveMonoDisplayFromDate(dateStr);
 
-  const monoCount = transactions.filter(function(t){ return t.monoId && t.occurred_at >= dateStr; }).length;
+  const monoCount = transactions.filter(function(t){ return !t.deleted && t.monoId && t.occurred_at >= dateStr; }).length;
   let msg = `${monoCount} Monobank transaction${monoCount===1?'':'s'} on or after ${dateStr} will now show.`;
   if(customRangeActive && customRangeFrom){
     // The two filters are independent, but their EFFECTS still combine —
@@ -4175,7 +4182,7 @@ window.syncNowManual = async function(){
 function exportCSV(){
   const header = ['Date','Name','Category','Type','Amount','Currency'];
   const lines = [header.join(',')];
-  transactions.forEach(function(t){
+  transactions.filter(function(t){ return !t.deleted; }).forEach(function(t){
     const type = Number(t.amount) > 0 ? 'Income' : 'Expense';
     const amt = Math.abs(Number(t.amount)).toFixed(2);
     const safe = function(v){
