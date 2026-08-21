@@ -2470,7 +2470,7 @@ function monthlyBudgetSummaryHTML(){
         <div class="budget-headline">
           <span class="budget-headline-num ${over?'over':''}">${fmtShort(diff)}</span>
           <span class="budget-headline-sub">${over?'overspent':'available'}</span>
-          <span class="budget-headline-target">Real ${fmtShort(spent)} · Projected ${fmtShort(target)}</span>
+          <span class="budget-headline-target">${fmtShort(spent)} / ${fmtShort(target)}</span>
         </div>
         ${progressBar(pct, over)}
         ${over ? '<div class="budget-warning">⚠ Total budget overspent</div>' : ''}
@@ -2503,7 +2503,7 @@ function budgetDetailScreenHTML(){
       <div class="budget-cat-head">
         <span class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></span>
         <span class="budget-cat-name">${cat}</span>
-        <span class="budget-cat-amt">Real ${fmtShort(actual)} · Projected ${fmtShort(budget)}</span>
+        <span class="budget-cat-amt">${fmtShort(actual)} / ${fmtShort(budget)}</span>
       </div>
       ${progressBar(pct, over)}
       <div class="budget-cat-status${over?' over':''}">${over ? fmtShort(actual-budget)+' overspent' : fmtShort(budget-actual)+' available'}</div>
@@ -2527,16 +2527,16 @@ function budgetDetailScreenHTML(){
     <div class="panel-title" style="margin-top:6px;"><h3>Total budget</h3></div>
     ${mb.currency !== DISPLAY_CURRENCY ? `<div class="empty-note" style="margin-bottom:8px;">This month's budget was set in ${mb.currency}, converted here to ${DISPLAY_CURRENCY}.</div>` : ''}
     <div class="budget-total-row">
-      <div class="budget-total-head"><span>Total income</span><span>Real ${fmt(income)} · Projected ${fmt(incomeTarget)}</span></div>
+      <div class="budget-total-head"><span>Total income</span><span>${fmt(income)} / ${fmt(incomeTarget)}</span></div>
       ${progressBar(incomePct, false)}
     </div>
     <div class="budget-total-row">
-      <div class="budget-total-head"><span>Total expenses</span><span>Real ${fmt(spent)} · Projected ${fmt(expenseTarget)}</span></div>
+      <div class="budget-total-head"><span>Total expenses</span><span>${fmt(spent)} / ${fmt(expenseTarget)}</span></div>
       ${progressBar(expensePct, expenseOver)}
       ${expenseOver ? `<div class="budget-cat-status over">${fmt(spent-expenseTarget)} overspent</div>` : ''}
     </div>
     <div class="budget-total-row">
-      <div class="budget-total-head"><span>Profit</span><span>Real ${fmt(profit)} · Projected ${fmt(profitTarget)}</span></div>
+      <div class="budget-total-head"><span>Profit</span><span>${fmt(profit)} / ${fmt(profitTarget)}</span></div>
     </div>
 
     <div class="panel-title" style="margin-top:20px;"><h3>Expense budgets</h3></div>
