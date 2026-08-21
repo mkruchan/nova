@@ -3444,6 +3444,7 @@ function editTx(id){
 // same thousand-separator style used everywhere else amounts are displayed.
 window.formatAmountInput = function(el){
   const cursorFromEnd = el.value.length - el.selectionStart;
+  const isNegative = el.value.trim().charAt(0) === '-';
   let raw = el.value.replace(/[^0-9.]/g, '');
   const firstDot = raw.indexOf('.');
   if(firstDot !== -1){
@@ -3453,7 +3454,7 @@ window.formatAmountInput = function(el){
   let intPart = parts[0].replace(/^0+(?=\d)/, '');
   const decPart = parts.length > 1 ? parts[1].slice(0, 2) : null;
   const intFormatted = intPart ? Number(intPart).toLocaleString('en-US') : '';
-  el.value = intFormatted + (decPart !== null ? '.' + decPart : (raw.endsWith('.') ? '.' : ''));
+  el.value = (isNegative ? '-' : '') + intFormatted + (decPart !== null ? '.' + decPart : (raw.endsWith('.') ? '.' : ''));
   const pos = Math.max(0, el.value.length - cursorFromEnd);
   el.setSelectionRange(pos, pos);
 };
