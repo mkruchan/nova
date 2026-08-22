@@ -434,6 +434,8 @@
           <option value="EUR">Euro (EUR)</option>
           <option value="USD">Dollar (USD)</option>
           <option value="UAH">Hryvnia (UAH)</option>
+          <option value="CAD">Canadian Dollar (CAD)</option>
+          <option value="PLN">Polish Zloty (PLN)</option>
         </select>
       </div>
     </div>
@@ -465,6 +467,8 @@
         <option value="USD">Dollar (USD)</option>
         <option value="UAH">Hryvnia (UAH)</option>
         <option value="ALL">Lek (ALL)</option>
+        <option value="CAD">Canadian Dollar (CAD)</option>
+        <option value="PLN">Polish Zloty (PLN)</option>
       </select>
     </div>
     <div class="form-row"><label>Monthly income target</label><input id="budgetIncomeTarget" type="text" inputmode="decimal" placeholder="0" oninput="formatAmountInput(this)"></div>
@@ -829,9 +833,9 @@ function addCustomCategory(name, type){
 /* ---------- Currency ---------- */
 let DISPLAY_CURRENCY = 'EUR';   // everything is shown/totaled in this currency — user-selectable, see loadDisplayCurrency
 const DEFAULT_INPUT_CURRENCY = 'ALL'; // new transactions default to entering amounts in Lek
-const CURRENCY_SYMBOLS = { EUR: '€', USD: '$', UAH: '₴', ALL: 'L' };
+const CURRENCY_SYMBOLS = { EUR: '€', USD: '$', UAH: '₴', ALL: 'L', CAD: 'C$', ETH: 'Ξ', PLN: 'zł' };
 // Fallback rates (EUR base) used only until a live fetch succeeds at least once.
-let exchangeRates = { EUR: 1, USD: 1.08, UAH: 45, ALL: 98.5, USDT: 1.08, USDC: 1.08 };
+let exchangeRates = { EUR: 1, USD: 1.08, UAH: 45, ALL: 98.5, CAD: 1.47, PLN: 4.3, USDT: 1.08, USDC: 1.08, ETH: 1/2000 };
 let ratesUpdatedAt = null;
 let ratesLoading = false;
 
@@ -855,6 +859,7 @@ function loadCachedRates(){
       const parsed = JSON.parse(saved);
       if(parsed && parsed.rates){
         exchangeRates = parsed.rates;
+        if(!exchangeRates.ETH) exchangeRates.ETH = 1/2000; // cached rates from before ETH existed wouldn't have this
         ratesUpdatedAt = parsed.updatedAt || null;
         if(parsed.sources) ratesSourceDetail = parsed.sources;
       }
@@ -897,7 +902,7 @@ async function fetchMonoRates(){
   }catch(e){ return null; }
 }
 
-let ratesSourceDetail = { EUR: 'base', USD: 'fallback', UAH: 'fallback', ALL: 'fallback' };
+let ratesSourceDetail = { EUR: 'base', USD: 'fallback', UAH: 'fallback', ALL: 'fallback', CAD: 'fallback', PLN: 'fallback' };
 
 async function refreshExchangeRates(){
   ratesLoading = true;
@@ -906,10 +911,12 @@ async function refreshExchangeRates(){
     const res = await fetch('https://open.er-api.com/v6/latest/EUR');
     const data = await res.json();
     if(data && data.result === 'success' && data.rates){
-      exchangeRates = { EUR: 1, USD: data.rates.USD, UAH: data.rates.UAH, ALL: data.rates.ALL };
+      exchangeRates = { EUR: 1, USD: data.rates.USD, UAH: data.rates.UAH, ALL: data.rates.ALL, CAD: data.rates.CAD, PLN: data.rates.PLN, ETH: exchangeRates.ETH || (1/2000) };
+      ratesSourceDetail.PLN = 'fallback';
       ratesSourceDetail.USD = 'fallback';
       ratesSourceDetail.UAH = 'fallback';
       ratesSourceDetail.ALL = 'fallback';
+      ratesSourceDetail.CAD = 'fallback';
       anySucceeded = true;
     }
   }catch(e){
@@ -961,7 +968,7 @@ function fromDisplay(displayAmount, currency){
   return fromEUR(toEUR(displayAmount, DISPLAY_CURRENCY), currency);
 }
 
-const CALC_CURRENCIES = ['EUR', 'USD', 'UAH', 'ALL', 'USDT', 'USDC'];
+const CALC_CURRENCIES = ['EUR', 'USD', 'UAH', 'ALL', 'CAD', 'PLN', 'USDT', 'USDC', 'ETH'];
 
 function currencyBreakdownHTML(displayAmount){
   return CALC_CURRENCIES.map(function(c){
@@ -1799,12 +1806,24 @@ window.openRangeModal = function(){
   openModal('rangeModalOverlay');
 };
 
-const CURRENCY_FLAG = { EUR: '🇪🇺', USD: '🇺🇸', UAH: '🇺🇦', ALL: '🇦🇱' };
-const CURRENCY_NAMES = { EUR: 'Euro', USD: 'US Dollar', UAH: 'Ukrainian Hryvnia', ALL: 'Albanian Lek' };
+const CURRENCY_FLAG = { EUR: '🇪🇺', USD: '🇺🇸', UAH: '🇺🇦', ALL: '🇦🇱', CAD: '🇨🇦', PLN: '🇵🇱' };
+const CURRENCY_NAMES = { EUR: 'Euro', USD: 'US Dollar', UAH: 'Ukrainian Hryvnia', ALL: 'Albanian Lek', CAD: 'Canadian Dollar', PLN: 'Polish Zloty' };
 
 window.openRatesDetail = function(){
   document.getElementById('ratesModalBody').innerHTML = ratesModalContentHTML();
   openModal('ratesModalOverlay');
+};
+
+window.editEthRate = function(){
+  const currentPrice = exchangeRates.ETH ? (1 / exchangeRates.ETH) : 2000;
+  const input = prompt('Current ETH price in EUR (check a source like CoinGecko or your exchange):', currentPrice.toFixed(2));
+  if(input === null) return; // cancelled
+  const price = parseAmountInput(input);
+  if(isNaN(price) || price <= 0) return;
+  exchangeRates.ETH = 1 / price;
+  try{ localStorage.setItem('nova-rates', JSON.stringify({ rates: exchangeRates, updatedAt: ratesUpdatedAt, sources: ratesSourceDetail })); }catch(e){}
+  document.getElementById('ratesModalBody').innerHTML = ratesModalContentHTML();
+  if(currentView === 'finance') renderView('finance');
 };
 
 function netWorth(){
@@ -2376,8 +2395,11 @@ function accountsDetailScreenHTML(){
           <option value="ALL">Lek (ALL)</option>
           <option value="USD">Dollar (USD)</option>
           <option value="UAH">Hryvnia (UAH)</option>
+          <option value="CAD">Canadian Dollar (CAD)</option>
+          <option value="PLN">Polish Zloty (PLN)</option>
           <option value="USDT">USDT</option>
           <option value="USDC">USDC</option>
+          <option value="ETH">ETH</option>
         </select>
       </div>
     </div>
@@ -2885,7 +2907,7 @@ function settingsScreenHTML(){
     <div class="side-label" style="margin:20px 0 8px;">Display Currency</div>
     <div class="empty-note" style="text-align:left; margin-bottom:8px;">Net Worth, Budget, Income/Expense totals, and category breakdowns are all shown and totaled in this currency. Individual transactions still show their own original currency.</div>
     <div class="modal-actions" style="justify-content:flex-start; margin-top:0; gap:8px;">
-      ${['EUR','USD','UAH','ALL'].map(function(c){
+      ${['EUR','USD','UAH','ALL','CAD','PLN'].map(function(c){
         return `<button class="header-btn${c===DISPLAY_CURRENCY?' active':''}" onclick="setDisplayCurrency('${c}')" style="${c===DISPLAY_CURRENCY?'background:var(--blue); color:#0A0D18;':''}">${c}</button>`;
       }).join('')}
     </div>
@@ -3073,13 +3095,20 @@ function ratesModalContentHTML(){
     </div>`;
   }
 
-  const rows = ['USD','EUR'].map(rowFor).join('') + rowFor('ALL') + eurUsdRowFor();
+  const rows = ['USD','EUR'].map(rowFor).join('') + rowFor('ALL') + rowFor('CAD') + rowFor('PLN') + eurUsdRowFor();
+  const ethPriceEur = exchangeRates.ETH ? (1 / exchangeRates.ETH) : 2000;
 
   return `
     <div class="panel-card">
       <div class="panel-title"><h3>Main rates</h3></div>
       <div class="rate-col-header"><span></span><span class="rate-col-buy">Buy</span><span class="rate-col-sell">Sell</span></div>
       ${rows}
+    </div>
+
+    <div class="panel-card" style="margin-top:14px;">
+      <div class="panel-title"><h3>ETH</h3><button class="header-btn" onclick="editEthRate()">✏️ Edit price</button></div>
+      <div class="empty-note" style="text-align:left; margin-bottom:4px;">Crypto prices move too fast for a reliable automatic feed here — set this manually from your exchange or a price site whenever you want it current.</div>
+      <div class="cat-row"><span class="cat-name">1 ETH ≈</span><span class="cat-amt">${fmtOriginal(ethPriceEur, 'EUR')}</span></div>
     </div>
 
     <div class="empty-note" style="margin-top:14px; text-align:left;">All rates shown against the Ukrainian Hryvnia (UAH), with real Buy/Sell figures wherever Monobank's own feed provides them. Anything it doesn't quote directly is estimated from a general exchange rate service instead.</div>
@@ -3830,7 +3859,7 @@ function importFromCSVText(text){
 }
 
 /* ---------- Monobank ---------- */
-const MONO_CURRENCY_MAP = { 980: 'UAH', 978: 'EUR', 840: 'USD', 8: 'ALL' };
+const MONO_CURRENCY_MAP = { 980: 'UAH', 978: 'EUR', 840: 'USD', 8: 'ALL', 124: 'CAD', 985: 'PLN' };
 let monoAccounts = [];
 let monoSyncStatus = {}; // { [accountId]: { lastSyncedAt, count, label } }
 
