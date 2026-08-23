@@ -167,6 +167,9 @@
   .breakdown-body .donut-wrap{ flex-shrink:0; }
   .cat-list{ flex:1; min-width:220px; }
   .cat-row{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:calc(14px * var(--font-scale, 1)); }
+  .drag-handle{ font-size:calc(20px * var(--font-scale, 1)); color:var(--muted-dim); padding:4px 10px; touch-action:none; cursor:grab; }
+  .dragging-row{ background:var(--panel-2); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.4); }
+  .dragging-row .drag-handle{ color:var(--blue); cursor:grabbing; }
   .cat-row:last-child{ border-bottom:none; }
   .cat-swatch{ width:10px; height:10px; border-radius:3px; flex-shrink:0; }
   .cat-name{ flex:1; min-width:0; color:var(--white); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:calc(15px * var(--font-scale, 1)); }
@@ -176,8 +179,9 @@
     .breakdown-body{ gap:10px; }
     .cat-list{ min-width:120px; }
     .cat-row{ font-size:calc(12px * var(--font-scale, 1)); gap:6px; }
+    .cat-name{ font-size:calc(12.5px * var(--font-scale, 1)); }
     .cat-pct{ width:auto; }
-    .cat-amt{ width:auto; }
+    .cat-amt{ width:auto; font-size:calc(13px * var(--font-scale, 1)); }
     .donut-wrap-mini svg{ width:185px; height:185px; }
     .detail-donut-large .donut-wrap-mini svg{ width:200px; height:200px; }
   }
@@ -1092,9 +1096,9 @@ window.startLongPress = function(){
   longPressFired = false;
   longPressTimer = setTimeout(function(){
     longPressFired = true;
-    try{ if(navigator.vibrate) navigator.vibrate(15); }catch(e){}
+    try{ if(navigator.vibrate) navigator.vibrate([20, 30, 20]); }catch(e){}
     openReorderBlocks();
-  }, 550);
+  }, 750);
 };
 window.cancelLongPress = function(){
   if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer = null; }
@@ -1112,25 +1116,77 @@ window.openReorderBlocks = function(){
   openModal('reorderBlocksModalOverlay');
 };
 function reorderBlocksListHTML(){
-  return dashboardBlockOrder.map(function(id, i){
+  return dashboardBlockOrder.map(function(id){
     const block = DASHBOARD_BLOCKS.find(function(b){ return b.id === id; });
     if(!block) return '';
-    return `<div class="cat-row">
+    return `<div class="cat-row drag-row" data-block-id="${id}">
       <span class="cat-name">${block.label}</span>
-      <button class="header-btn" onclick="moveDashboardBlock(${i}, -1)"${i===0?' disabled style="opacity:0.35;"':''}>↑</button>
-      <button class="header-btn" onclick="moveDashboardBlock(${i}, 1)"${i===dashboardBlockOrder.length-1?' disabled style="opacity:0.35;"':''}>↓</button>
+      <span class="drag-handle" onpointerdown="startDragBlock(event, this)">⠿</span>
     </div>`;
   }).join('');
 }
-window.moveDashboardBlock = function(index, delta){
-  const newIndex = index + delta;
-  if(newIndex < 0 || newIndex >= dashboardBlockOrder.length) return;
-  const temp = dashboardBlockOrder[index];
-  dashboardBlockOrder[index] = dashboardBlockOrder[newIndex];
-  dashboardBlockOrder[newIndex] = temp;
-  persistDashboardBlockOrder();
-  document.getElementById('reorderBlocksBody').innerHTML = reorderBlocksListHTML();
+
+// Drag-and-drop reordering via Pointer Events (one unified API for both
+// mouse and touch, rather than separate handlers for each). The dragged row
+// is moved with a CSS transform for smooth visual feedback; when the
+// pointer crosses a neighboring row's midpoint, that row swaps position in
+// the actual DOM immediately (not just visually) via insertBefore — so the
+// final order can just be read directly off the DOM once the drag ends,
+// rather than needing to track index math throughout the whole gesture.
+let dragBlockState = null;
+window.startDragBlock = function(e, handle){
+  e.preventDefault();
+  const row = handle.closest('.drag-row');
+  const startY = e.clientY;
+  row.classList.add('dragging-row');
+  row.style.position = 'relative';
+  row.style.zIndex = '5';
+  dragBlockState = { row: row, startY: startY };
+  document.addEventListener('pointermove', onDragBlockMove);
+  document.addEventListener('pointerup', onDragBlockEnd);
 };
+function onDragBlockMove(e){
+  if(!dragBlockState) return;
+  const row = dragBlockState.row;
+  const deltaY = e.clientY - dragBlockState.startY;
+  row.style.transform = 'translateY(' + deltaY + 'px)';
+
+  const container = row.parentNode;
+  const rows = Array.from(container.children);
+  const draggedRect = row.getBoundingClientRect();
+  const draggedMid = draggedRect.top + draggedRect.height / 2;
+
+  rows.forEach(function(sibling){
+    if(sibling === row) return;
+    const rect = sibling.getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    const siblingIsAfter = rows.indexOf(sibling) > rows.indexOf(row);
+    if(!siblingIsAfter && draggedMid < mid){
+      container.insertBefore(row, sibling);
+      dragBlockState.startY = e.clientY;
+      row.style.transform = 'translateY(0px)';
+    } else if(siblingIsAfter && draggedMid > mid){
+      container.insertBefore(row, sibling.nextSibling);
+      dragBlockState.startY = e.clientY;
+      row.style.transform = 'translateY(0px)';
+    }
+  });
+}
+function onDragBlockEnd(){
+  if(!dragBlockState) return;
+  const row = dragBlockState.row;
+  row.classList.remove('dragging-row');
+  row.style.transform = '';
+  row.style.position = '';
+  row.style.zIndex = '';
+  document.removeEventListener('pointermove', onDragBlockMove);
+  document.removeEventListener('pointerup', onDragBlockEnd);
+
+  const container = row.parentNode;
+  dashboardBlockOrder = Array.from(container.children).map(function(el){ return el.getAttribute('data-block-id'); });
+  persistDashboardBlockOrder();
+  dragBlockState = null;
+}
 window.closeReorderBlocks = function(){
   closeModal('reorderBlocksModalOverlay');
   renderView('finance');
@@ -1198,6 +1254,16 @@ function isRefundTx(t){
     allExpenseCategories().indexOf(t.category) !== -1 && allIncomeCategories().indexOf(t.category) === -1;
 }
 
+// Rent and Bills were merged into a single "Home & Bills" category. Applied
+// wherever transactions can enter the app — not just the initial local
+// load — since cloud sync or a fresh Monobank import can otherwise bring
+// the old category names right back in a few seconds after the app opens,
+// from data that predates the merge or from another device that hasn't
+// updated yet.
+function migrateRentBillsCategory(list){
+  (list || []).forEach(function(t){ if(t.category === 'Rent' || t.category === 'Bills') t.category = 'Home & Bills'; });
+}
+
 function loadData(){
   try{
     const saved = localStorage.getItem('nova-transactions');
@@ -1212,10 +1278,7 @@ function loadData(){
   // the standard accountId field the rest of the app (Transfers, the account
   // selector) uses to connect a transaction to an account.
   transactions.forEach(function(t){ if(!t.accountId && t.monoAccountId) t.accountId = 'mono:' + t.monoAccountId; });
-  // Rent and Bills were merged into a single "Home & Bills" category —
-  // migrate anything still tagged with the old names so they don't become
-  // orphaned under a category that no longer exists in the picker.
-  transactions.forEach(function(t){ if(t.category === 'Rent' || t.category === 'Bills') t.category = 'Home & Bills'; });
+  migrateRentBillsCategory(transactions);
   const maxId = transactions.reduce(function(m,t){
     const n = parseInt(String(t.id).replace(/\D/g,''), 10);
     return isNaN(n) ? m : Math.max(m, n);
@@ -1423,6 +1486,7 @@ function applyCloudPayload(payload){
 }
 
 function mergeInTransactionsFromCloud(incomingTransactions){
+  migrateRentBillsCategory(incomingTransactions);
   transactions = mergeTransactionArrays(transactions, incomingTransactions);
 }
 
