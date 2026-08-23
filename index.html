@@ -1873,7 +1873,7 @@ window.showNetWorthBreakdown = function(){
 };
 
 function monthIncome(){
-  return thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && !isRefundTx(t); })
+  return thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' && !isRefundTx(t); })
     .reduce(function(s,t){ return s + toDisplay(t.amount, t.currency); }, 0);
 }
 function monthSpend(){
@@ -1929,13 +1929,53 @@ function timeAgo(ts){
 let breakdownPeriod = 'month';
 let breakdownCategory = 'all';
 let breakdownType = 'expense'; // 'expense' | 'income'
+let breakdownViewMonth = new Date(); breakdownViewMonth.setDate(1);
+
+// Computes the from/to bounds and display label for any breakdown period,
+// anchored to a given date — this is what makes every period type (not just
+// Monthly) navigable with the same prev/next controls.
+function breakdownDateRange(period, anchor){
+  if(period === 'week'){
+    const day = anchor.getDay(); // 0=Sun..6=Sat
+    const diffToMonday = (day === 0 ? -6 : 1) - day;
+    const from = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + diffToMonday);
+    const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 6);
+    return { from: from, to: to, label: niceDate(localDateStr(from)) + ' – ' + niceDate(localDateStr(to)) };
+  }
+  if(period === 'month'){
+    const from = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    const to = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+    return { from: from, to: to, label: anchor.toLocaleString(undefined, { month:'long', year:'numeric' }) };
+  }
+  if(period === 'quarter'){
+    const q = Math.floor(anchor.getMonth() / 3);
+    const from = new Date(anchor.getFullYear(), q * 3, 1);
+    const to = new Date(anchor.getFullYear(), q * 3 + 3, 0);
+    return { from: from, to: to, label: 'Q' + (q+1) + ' ' + anchor.getFullYear() };
+  }
+  if(period === 'year'){
+    const from = new Date(anchor.getFullYear(), 0, 1);
+    const to = new Date(anchor.getFullYear(), 11, 31);
+    return { from: from, to: to, label: String(anchor.getFullYear()) };
+  }
+  return { from: null, to: null, label: 'All time' }; // 'all'
+}
+
+function shiftBreakdownAnchor(period, anchor, delta){
+  const d = new Date(anchor);
+  if(period === 'week') d.setDate(d.getDate() + delta*7);
+  else if(period === 'month') d.setMonth(d.getMonth() + delta);
+  else if(period === 'quarter') d.setMonth(d.getMonth() + delta*3);
+  else if(period === 'year') d.setFullYear(d.getFullYear() + delta);
+  return d;
+}
 
 function transactionsForPeriod(period, type){
   const now = new Date();
   const isIncome = type === 'income';
   return visibleTransactions().filter(function(t){
     const rightSign = isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t));
-    if(!rightSign || t.category === 'Transfer') return false;
+    if(!rightSign || t.category === 'Transfer' || (isIncome && t.category === 'Loan')) return false;
     const d = new Date(t.occurred_at);
     if(period === 'month') return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
     if(period === 'year') return d.getFullYear() === now.getFullYear();
@@ -2082,9 +2122,14 @@ function expenseCategorySummaryHTML(){
 // Full-screen detail view, opened by tapping the summary card
 function expenseDetailScreenHTML(){
   const isIncome = breakdownType === 'income';
-  const periodTx = breakdownPeriod === 'month'
-    ? thisMonthTx().filter(function(t){ const rightSign = isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t)); return rightSign && t.category !== 'Transfer'; })
-    : transactionsForPeriod(breakdownPeriod, breakdownType);
+  const range = breakdownDateRange(breakdownPeriod, breakdownViewMonth);
+  const periodTx = visibleTransactions().filter(function(t){
+    const rightSign = isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t));
+    if(!rightSign || t.category === 'Transfer' || (isIncome && t.category === 'Loan')) return false;
+    if(breakdownPeriod === 'all') return true;
+    const d = new Date(t.occurred_at + 'T00:00:00');
+    return d >= range.from && d <= range.to;
+  });
   const filteredTx = breakdownCategory === 'all' ? periodTx : periodTx.filter(function(t){ return t.category === breakdownCategory; });
   const data = categoryBreakdown(filteredTx);
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
@@ -2121,14 +2166,23 @@ function expenseDetailScreenHTML(){
 
     <div class="filter-row detail-filters">
       <select class="filter-select" onchange="setBreakdownPeriod(this.value)">
+        <option value="week"${breakdownPeriod==='week'?' selected':''}>Weekly</option>
         <option value="month"${breakdownPeriod==='month'?' selected':''}>Monthly</option>
+        <option value="quarter"${breakdownPeriod==='quarter'?' selected':''}>Quarterly</option>
         <option value="year"${breakdownPeriod==='year'?' selected':''}>Yearly</option>
         <option value="all"${breakdownPeriod==='all'?' selected':''}>All time</option>
       </select>
       <select class="filter-select" onchange="setBreakdownCategory(this.value)">${catOptions}</select>
     </div>
 
-    ${data.length ? `<div class="detail-donut-row detail-donut-large">${donutWithCenterLabel(data, Math.abs(total), breakdownPeriod === 'month' ? rangeLabel() : periodLabel(breakdownPeriod))}</div>` : ''}
+    ${breakdownPeriod !== 'all' ? `
+    <div class="filter-row detail-filters" style="align-items:center; justify-content:center; gap:14px;">
+      <button class="back-btn" onclick="shiftBreakdownPeriod(-1)">‹</button>
+      <div class="side-label" style="margin:0;">${range.label}</div>
+      <button class="back-btn" onclick="shiftBreakdownPeriod(1)">›</button>
+    </div>` : ''}
+
+    ${data.length ? `<div class="detail-donut-row detail-donut-large">${donutWithCenterLabel(data, Math.abs(total), range.label)}</div>` : ''}
 
     ${monthlyExpenseBarsHTML(breakdownType)}
 
@@ -2149,14 +2203,27 @@ window.viewCategoryTransactions = function(categoryName){
   historyType = breakdownType === 'income' ? 'income' : 'expense';
   historyCategoryFilter = categoryName;
   historySearch = '';
-  historyDateFrom = '';
-  historyDateTo = '';
+  if(breakdownPeriod === 'all'){
+    // No lower bound needed, just needs to be non-empty so historyRows()
+    // knows to use the full transaction list as its base rather than
+    // defaulting back to "this month only".
+    historyDateFrom = '1970-01-01';
+    historyDateTo = todayStr();
+  } else {
+    const range = breakdownDateRange(breakdownPeriod, breakdownViewMonth);
+    historyDateFrom = localDateStr(range.from);
+    historyDateTo = localDateStr(range.to);
+  }
   financeSubView = 'history';
   renderView('finance');
 };
 window.setBreakdownType = function(v){ breakdownType = v; breakdownCategory = 'all'; renderView('finance'); };
 window.toggleBreakdownType = function(){ setBreakdownType(breakdownType === 'income' ? 'expense' : 'income'); };
-window.openExpenseDetail = function(){ breakdownType = 'expense'; breakdownCategory = 'all'; financeSubView = 'expense'; renderView('finance'); };
+window.openExpenseDetail = function(){ breakdownType = 'expense'; breakdownCategory = 'all'; breakdownViewMonth = new Date(); breakdownViewMonth.setDate(1); financeSubView = 'expense'; renderView('finance'); };
+window.shiftBreakdownPeriod = function(delta){
+  breakdownViewMonth = shiftBreakdownAnchor(breakdownPeriod, breakdownViewMonth, delta);
+  renderView('finance');
+};
 window.closeExpenseDetail = function(){ financeSubView = null; renderView('finance'); };
 
 /* ---------- Budgets ---------- */
@@ -2230,7 +2297,7 @@ function monthSpendFor(date){
   return Math.max(0, expenses - refunds);
 }
 function monthIncomeFor(date){
-  return txForMonth(date).filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && !isRefundTx(t); })
+  return txForMonth(date).filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' && !isRefundTx(t); })
     .reduce(function(s,t){ return s + toDisplay(t.amount, t.currency); }, 0);
 }
 function categorySpendFor(category, date){
@@ -2796,7 +2863,13 @@ function historyRows(){
   const isTransfer = historyType === 'transfer';
   const isIncome = historyType === 'income';
   const isRefund = historyType === 'refund';
-  const base = thisMonthTx();
+  // Defaults to this month when no explicit date range is set (matching the
+  // dashboard panels), but drops that restriction entirely once a date range
+  // IS set — otherwise a range pointing at a different month (e.g. drilling
+  // into July's breakdown while viewing history in August) would intersect
+  // with nothing, since thisMonthTx() would already exclude July's data
+  // before the date filter even runs.
+  const base = (historyDateFrom || historyDateTo) ? visibleTransactions() : thisMonthTx();
   let list;
   if(isTransfer){
     list = base.filter(function(t){ return t.category === 'Transfer'; });
@@ -3193,7 +3266,7 @@ function financeHTML(){
         <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
-            const inc = sortMostRecentFirst(thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && !isRefundTx(t); })).slice(0,8);
+            const inc = sortMostRecentFirst(thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' && !isRefundTx(t); })).slice(0,8);
             if(!inc.length) return '<div class="empty-note">No income logged yet.</div>';
             return renderTxRowsGroupedByDay(inc, function(t){
               const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
