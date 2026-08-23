@@ -599,6 +599,17 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="reorderBlocksModalOverlay" onclick="if(event.target===this) closeReorderBlocks()">
+  <div class="modal" style="max-height:80vh; overflow-y:auto;">
+    <h3>Reorder Dashboard</h3>
+    <div class="empty-note" style="text-align:left; margin-bottom:10px;">Move blocks up or down to change how they're arranged on the main screen.</div>
+    <div id="reorderBlocksBody"></div>
+    <div class="modal-actions">
+      <button class="modal-save" onclick="closeReorderBlocks()">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="confirmModalOverlay" onclick="if(event.target===this) confirmModalNo()">
   <div class="modal">
     <h3 id="confirmModalTitle">Are you sure?</h3>
@@ -659,8 +670,7 @@ const CATEGORY_ICON = {
   'Travel': 'ic-car',
   'Home': 'ic-home',
   'Health': 'ic-wallet',
-  'Rent': 'ic-home',
-  'Bills': 'ic-refresh',
+  'Home & Bills': 'ic-home',
   'Family care': 'ic-wallet',
   'Kitsterovna': 'ic-wallet',
   'Transport': 'ic-car',
@@ -697,7 +707,7 @@ const CATEGORY_ICON = {
 };
 
 const EXPENSE_CATEGORIES = [
-  "Education","Travel","Home","Health","Rent","Bills","Family care","Kitsterovna",
+  "Education","Travel","Home","Health","Home & Bills","Family care","Kitsterovna",
   "Transport","Scooter","Gifts","Charity","Groceries","Eating out","Entertainment","Electronics",
   "Digital / Subscriptions","Clothing","Active Leisure","Entrepreneurship","Investments","Flowers",
   "Smoking","Self-care","Music & Video","Sport","Services","Fees","Taxes","Other expense","Refund","Transfer","Loan"
@@ -1036,6 +1046,95 @@ window.setMergeTransactionPanels = function(val){
   try{ localStorage.setItem('nova-merge-tx-panels', String(val)); }catch(e){}
   renderView('finance');
 };
+
+// Every reorderable dashboard block, in the default order. Transfers/Refunds
+// only actually render when there's matching data that month, but they still
+// have a fixed place in the ordering so the user can position them ahead of
+// time.
+const DASHBOARD_BLOCKS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'budget', label: 'Monthly Budget' },
+  { id: 'topExpenses', label: 'Top Expense Categories' },
+  { id: 'transactions', label: 'Transactions' },
+  { id: 'accounts', label: 'Accounts' },
+  { id: 'transfers', label: 'Transfers' },
+  { id: 'refunds', label: 'Refunds' }
+];
+let dashboardBlockOrder = DASHBOARD_BLOCKS.map(function(b){ return b.id; });
+function loadDashboardBlockOrder(){
+  try{
+    const saved = localStorage.getItem('nova-dashboard-block-order');
+    if(saved){
+      const parsed = JSON.parse(saved);
+      const validIds = DASHBOARD_BLOCKS.map(function(b){ return b.id; });
+      // Only trust ids that still actually exist — guards against a future
+      // update removing a block and leaving a stale id stuck in the saved order.
+      const filtered = parsed.filter(function(id){ return validIds.indexOf(id) !== -1; });
+      // Any block that's new since this order was saved (not yet in the
+      // saved list) gets appended at the end, rather than silently vanishing.
+      validIds.forEach(function(id){ if(filtered.indexOf(id) === -1) filtered.push(id); });
+      dashboardBlockOrder = filtered;
+    }
+  }catch(e){ /* keep default order */ }
+}
+function persistDashboardBlockOrder(){
+  try{ localStorage.setItem('nova-dashboard-block-order', JSON.stringify(dashboardBlockOrder)); }catch(e){}
+}
+
+// No native "long press" event exists in the browser, so this times a
+// press-and-hold manually: start a timer on press-down, and if it's still
+// running when the timer fires (meaning the finger/mouse never lifted or
+// moved away first), that counts as a long press. Cancelled on release,
+// leaving the area, or the touch being interrupted (e.g. a scroll).
+let longPressTimer = null;
+let longPressFired = false;
+window.startLongPress = function(){
+  longPressFired = false;
+  longPressTimer = setTimeout(function(){
+    longPressFired = true;
+    try{ if(navigator.vibrate) navigator.vibrate(15); }catch(e){}
+    openReorderBlocks();
+  }, 550);
+};
+window.cancelLongPress = function(){
+  if(longPressTimer){ clearTimeout(longPressTimer); longPressTimer = null; }
+};
+// Called at the start of every block's normal onclick handler — if a long
+// press just fired, this swallows that click so releasing the hold doesn't
+// also navigate into the block's detail screen.
+window.blockClickGuard = function(){
+  if(longPressFired){ longPressFired = false; return true; }
+  return false;
+};
+
+window.openReorderBlocks = function(){
+  document.getElementById('reorderBlocksBody').innerHTML = reorderBlocksListHTML();
+  openModal('reorderBlocksModalOverlay');
+};
+function reorderBlocksListHTML(){
+  return dashboardBlockOrder.map(function(id, i){
+    const block = DASHBOARD_BLOCKS.find(function(b){ return b.id === id; });
+    if(!block) return '';
+    return `<div class="cat-row">
+      <span class="cat-name">${block.label}</span>
+      <button class="header-btn" onclick="moveDashboardBlock(${i}, -1)"${i===0?' disabled style="opacity:0.35;"':''}>↑</button>
+      <button class="header-btn" onclick="moveDashboardBlock(${i}, 1)"${i===dashboardBlockOrder.length-1?' disabled style="opacity:0.35;"':''}>↓</button>
+    </div>`;
+  }).join('');
+}
+window.moveDashboardBlock = function(index, delta){
+  const newIndex = index + delta;
+  if(newIndex < 0 || newIndex >= dashboardBlockOrder.length) return;
+  const temp = dashboardBlockOrder[index];
+  dashboardBlockOrder[index] = dashboardBlockOrder[newIndex];
+  dashboardBlockOrder[newIndex] = temp;
+  persistDashboardBlockOrder();
+  document.getElementById('reorderBlocksBody').innerHTML = reorderBlocksListHTML();
+};
+window.closeReorderBlocks = function(){
+  closeModal('reorderBlocksModalOverlay');
+  renderView('finance');
+};
 window.adjustFontScale = function(delta){
   fontScale = Math.max(0.8, Math.min(1.6, Math.round((fontScale + delta) * 100) / 100));
   applyFontScale();
@@ -1113,6 +1212,10 @@ function loadData(){
   // the standard accountId field the rest of the app (Transfers, the account
   // selector) uses to connect a transaction to an account.
   transactions.forEach(function(t){ if(!t.accountId && t.monoAccountId) t.accountId = 'mono:' + t.monoAccountId; });
+  // Rent and Bills were merged into a single "Home & Bills" category —
+  // migrate anything still tagged with the old names so they don't become
+  // orphaned under a category that no longer exists in the picker.
+  transactions.forEach(function(t){ if(t.category === 'Rent' || t.category === 'Bills') t.category = 'Home & Bills'; });
   const maxId = transactions.reduce(function(m,t){
     const n = parseInt(String(t.id).replace(/\D/g,''), 10);
     return isNaN(n) ? m : Math.max(m, n);
@@ -1519,6 +1622,7 @@ function init(){
   loadMonoVisibility();
   loadFontScale();
   loadMergeTransactionPanels();
+  loadDashboardBlockOrder();
   loadDisplayCurrency();
   loadMonoDisplayFromDate();
   loadCustomCategories();
@@ -2207,7 +2311,7 @@ function donutWithCenterLabel(data, total, sublabel){
 }
 
 // Compact clickable card shown on the main dashboard
-function expenseCategorySummaryHTML(){
+function expenseCategorySummaryHTML(LP){
   const inRange = thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer'; });
   const data = categoryBreakdown(inRange);
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
@@ -2229,7 +2333,7 @@ function expenseCategorySummaryHTML(){
     </div>` : '';
 
   return `
-    <div class="chart-card clickable-card" style="grid-column:1 / -1;" onclick="openExpenseDetail()">
+    <div class="chart-card clickable-card" style="grid-column:1 / -1;" ${LP||''} onclick="if(blockClickGuard())return; openExpenseDetail()">
       <div class="chart-title-row">
         <div class="chart-title">Top Expense Categories, ${rangeLabel()}</div>
         <span class="chevron">›</span>
@@ -2418,6 +2522,21 @@ function normalizeBudgets(){
     budgets = { months: {} };
     budgets.months[key] = migrated;
   }
+  // Rent and Bills were merged into "Home & Bills" — fold any existing
+  // per-category budget for either old name into the merged one, for every
+  // month that has one, rather than leaving them stuck under a category
+  // that no longer exists.
+  Object.keys(budgets.months).forEach(function(key){
+    const cb = budgets.months[key].categoryBudgets;
+    if(!cb) return;
+    const rentAmt = Number(cb['Rent']) || 0;
+    const billsAmt = Number(cb['Bills']) || 0;
+    if(rentAmt || billsAmt){
+      cb['Home & Bills'] = (Number(cb['Home & Bills']) || 0) + rentAmt + billsAmt;
+      delete cb['Rent'];
+      delete cb['Bills'];
+    }
+  });
 }
 
 function loadBudgets(){
@@ -2507,7 +2626,7 @@ window.recalculateEverything = async function(){
   recalculating = false;
 };
 
-function accountsSummaryHTML(){
+function accountsSummaryHTML(LP){
   const rows = [];
   monoAccounts.forEach(function(a){
     const currency = MONO_CURRENCY_MAP[a.currencyCode] || 'UAH';
@@ -2521,7 +2640,7 @@ function accountsSummaryHTML(){
   });
 
   if(!rows.length){
-    return `<div class="chart-card clickable-card" style="grid-column:1 / -1;" onclick="openAccountsDetail()">
+    return `<div class="chart-card clickable-card" style="grid-column:1 / -1;" ${LP||''} onclick="if(blockClickGuard())return; openAccountsDetail()">
       <div class="chart-title">Accounts</div>
       <div class="empty-note" style="text-align:left; padding-top:6px;">No accounts yet — connect Monobank or add Cash/WhiteBIT manually.</div>
     </div>`;
@@ -2529,7 +2648,7 @@ function accountsSummaryHTML(){
 
   const total = rows.reduce(function(s,r){ return s + (r.amount !== null ? toDisplay(r.amount, r.currency) : 0); }, 0);
 
-  return `<div class="chart-card clickable-card" style="grid-column:1 / -1;" onclick="openAccountsDetail()">
+  return `<div class="chart-card clickable-card" style="grid-column:1 / -1;" ${LP||''} onclick="if(blockClickGuard())return; openAccountsDetail()">
     <div class="panel-title"><h3>Accounts</h3><span class="chevron">›</span></div>
     <div class="mini-stat" style="margin-bottom:8px;"><div class="mini-stat-label">Total</div><div class="mini-stat-num">${fmtShort(total)}</div></div>
     ${rows.slice(0,5).map(function(r){
@@ -2687,7 +2806,7 @@ window.editManualBalance = function(accIndex, balIndex){
   renderView('finance');
 };
 
-function monthlyBudgetSummaryHTML(){
+function monthlyBudgetSummaryHTML(LP){
   const now = new Date();
   const target = totalExpenseBudget(now);
   // Deliberately monthSpendFor(now), not monthSpend() — a monthly budget
@@ -2702,7 +2821,7 @@ function monthlyBudgetSummaryHTML(){
   const diff = Math.abs(spent - target);
 
   return `
-    <div class="chart-card clickable-card" style="grid-column:1 / -1;" onclick="openBudgetDetail()">
+    <div class="chart-card clickable-card" style="grid-column:1 / -1;" ${LP||''} onclick="if(blockClickGuard())return; openBudgetDetail()">
       <div class="chart-title-row">
         <div class="chart-title">Monthly Budget</div>
         <span class="chevron">›</span>
@@ -2949,12 +3068,12 @@ function avgDailySpend(){
   return spent / days;
 }
 
-function financeOverviewSummaryHTML(){
+function financeOverviewSummaryHTML(LP){
   const rate = savingsRate();
   const netProfit = monthIncome() - monthSpend();
   const isProfit = netProfit >= 0;
   return `
-    <div class="chart-card clickable-card" style="grid-column:1 / -1;" onclick="openOverviewDetail()">
+    <div class="chart-card clickable-card" style="grid-column:1 / -1;" ${LP||''} onclick="if(blockClickGuard())return; openOverviewDetail()">
       <div class="chart-title-row">
         <div class="chart-title">Overview</div>
         <span class="chevron">›</span>
@@ -3388,14 +3507,14 @@ window.closeOverviewDetail = function(){ financeSubView = null; renderView('fina
 // One combined block showing both expenses and income together, sorted by
 // date — the alternative to the separate Expenses/Income panels, toggled in
 // Settings.
-function mergedTransactionsPanelHTML(){
+function mergedTransactionsPanelHTML(LP){
   const combined = sortMostRecentFirst(thisMonthTx().filter(function(t){
     const isExpenseTx = Number(t.amount) < 0 || isRefundTx(t);
     const isIncomeTx = Number(t.amount) > 0 && !isRefundTx(t) && t.category !== 'Loan';
     return (isExpenseTx || isIncomeTx) && t.category !== 'Transfer';
   })).slice(0, 12);
 
-  return `<div class="panel-card clickable-card" onclick="openHistory('all')" style="grid-column:1 / -1;">
+  return `<div class="panel-card clickable-card" ${LP||''} onclick="if(blockClickGuard())return; openHistory('all')" style="grid-column:1 / -1;">
     <div class="panel-title"><h3>Transactions</h3><span class="chevron">›</span></div>
     <div id="txList">
       ${!combined.length ? '<div class="empty-note">No transactions logged yet.</div>' : renderTxRowsGroupedByDay(combined, function(t){
@@ -3420,30 +3539,27 @@ function financeHTML(){
   if(financeSubView === 'history') return historyScreenHTML();
   if(financeSubView === 'accounts') return accountsDetailScreenHTML();
 
-  return `
-    <div class="charts-row">
-      ${dateRangeBlockHTML()}
-    </div>
+  // Shared long-press attributes for every reorderable block — start a timer
+  // on press-down, cancel it on release/leave/interruption. Combined with
+  // blockClickGuard() at the start of each block's own onclick, so holding
+  // long enough to trigger the reorder menu doesn't also navigate into that
+  // block's detail screen when the press is released.
+  const LP = `onmousedown="startLongPress()" onmouseup="cancelLongPress()" onmouseleave="cancelLongPress()" ontouchstart="startLongPress()" ontouchend="cancelLongPress()" ontouchcancel="cancelLongPress()"`;
 
-    <div class="charts-row">
-      ${financeOverviewSummaryHTML()}
-    </div>
+  const transfers = sortMostRecentFirst(thisMonthTx().filter(function(t){ return t.category === 'Transfer'; }));
+  const refunds = sortMostRecentFirst(thisMonthTx().filter(isRefundTx));
 
+  const blockHTML = {
+    overview: `<div class="charts-row">${financeOverviewSummaryHTML(LP)}</div>`,
+    budget: `<div class="charts-row">${monthlyBudgetSummaryHTML(LP)}</div>`,
+    topExpenses: `<div class="charts-row">${expenseCategorySummaryHTML(LP)}</div>`,
+    transactions: mergeTransactionPanels ? `
     <div class="charts-row">
-      ${monthlyBudgetSummaryHTML()}
-    </div>
-
-    <div class="charts-row">
-      ${expenseCategorySummaryHTML()}
-    </div>
-
-    ${mergeTransactionPanels ? `
-    <div class="charts-row">
-      ${mergedTransactionsPanelHTML()}
+      ${mergedTransactionsPanelHTML(LP)}
     </div>
     ` : `
     <div class="bottom-row">
-      <div class="panel-card clickable-card" onclick="openHistory('expense')">
+      <div class="panel-card clickable-card" ${LP} onclick="if(blockClickGuard())return; openHistory('expense')">
         <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
         <div id="txList">
           ${(function(){
@@ -3463,7 +3579,7 @@ function financeHTML(){
           })()}
         </div>
       </div>
-      <div class="panel-card clickable-card" onclick="openHistory('income')">
+      <div class="panel-card clickable-card" ${LP} onclick="if(blockClickGuard())return; openHistory('income')">
         <div class="panel-title"><h3>Income</h3><span class="chevron">›</span></div>
         <div id="incomeList">
           ${(function(){
@@ -3483,17 +3599,10 @@ function financeHTML(){
         </div>
       </div>
     </div>
-    `}
-
-    <div class="charts-row">
-      ${accountsSummaryHTML()}
-    </div>
-
-    ${(function(){
-      const transfers = sortMostRecentFirst(thisMonthTx().filter(function(t){ return t.category === 'Transfer'; }));
-      if(!transfers.length) return '';
-      return `<div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
-        <div class="panel-card clickable-card" onclick="openHistory('transfer')">
+    `,
+    accounts: `<div class="charts-row">${accountsSummaryHTML(LP)}</div>`,
+    transfers: !transfers.length ? '' : `<div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
+        <div class="panel-card clickable-card" ${LP} onclick="if(blockClickGuard())return; openHistory('transfer')">
           <div class="panel-title"><h3>Transfers</h3><span class="chevron">›</span></div>
           <div class="empty-note" style="text-align:left; padding:0 0 8px;">Moved between your own connected accounts — not counted as income or spending.</div>
           ${transfers.slice(0,4).map(function(t){
@@ -3509,14 +3618,9 @@ function financeHTML(){
             </div>`;
           }).join('')}
         </div>
-      </div>`;
-    })()}
-
-    ${(function(){
-      const refunds = sortMostRecentFirst(thisMonthTx().filter(isRefundTx));
-      if(!refunds.length) return '';
-      return `<div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
-        <div class="panel-card clickable-card" onclick="openHistory('refund')">
+      </div>`,
+    refunds: !refunds.length ? '' : `<div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
+        <div class="panel-card clickable-card" ${LP} onclick="if(blockClickGuard())return; openHistory('refund')">
           <div class="panel-title"><h3>Refunds</h3><span class="chevron">›</span></div>
           <div class="empty-note" style="text-align:left; padding:0 0 8px;">Credited back against a prior expense — reduces what you've effectively spent, not counted as new income.</div>
           ${refunds.slice(0,4).map(function(t){
@@ -3530,8 +3634,15 @@ function financeHTML(){
             </div>`;
           }).join('')}
         </div>
-      </div>`;
-    })()}
+      </div>`
+  };
+
+  return `
+    <div class="charts-row">
+      ${dateRangeBlockHTML()}
+    </div>
+
+    ${dashboardBlockOrder.map(function(id){ return blockHTML[id] || ''; }).join('\n')}
 
     <button class="fab-add" onclick="openTxModal('expense','Other expense')">
       <svg class="icon"><use href="#ic-plus"/></svg>
@@ -3937,10 +4048,10 @@ const CATEGORY_ALIASES = {
   'heath':'Health', 'farmaci':'Health', 'pharmacy':'Health', 'apotek':'Health', 'clinic':'Health',
   'hospital':'Health', 'dentist':'Health', 'doctor':'Health', 'medical':'Health', 'optic':'Health',
   // Rent
-  'rent':'Rent', 'landlord':'Rent', 'lease':'Rent',
+  'rent':'Home & Bills', 'landlord':'Home & Bills', 'lease':'Home & Bills',
   // Bills
-  'utilities':'Bills', 'utility':'Bills', 'electricity':'Bills', 'water bill':'Bills',
-  'telecom':'Bills', 'vodafone':'Bills', 'orange':'Bills', 'internet bill':'Bills', 'phone bill':'Bills',
+  'utilities':'Home & Bills', 'utility':'Home & Bills', 'electricity':'Home & Bills', 'water bill':'Home & Bills',
+  'telecom':'Home & Bills', 'vodafone':'Home & Bills', 'orange':'Home & Bills', 'internet bill':'Home & Bills', 'phone bill':'Home & Bills',
   // Transport
   'taxi':'Transport', 'uber':'Transport', 'bolt':'Transport', 'fuel':'Transport', 'petrol':'Transport',
   'gas station':'Transport', 'parking':'Transport', 'metro':'Transport', 'bus ticket':'Transport',
@@ -3979,8 +4090,8 @@ const CATEGORY_ALIASES = {
   'маркет':'Groceries', 'супермаркет':'Groceries', 'продукти':'Groceries', 'магазин':'Groceries',
   'кафе':'Eating out', 'ресторан':'Eating out', 'піцерія':'Eating out', 'їдальня':'Eating out',
   'таксі':'Transport', 'убер':'Transport', 'заправка':'Transport', 'паливо':'Transport', 'парковка':'Transport',
-  'оренда':'Rent', 'аренда':'Rent',
-  'комуналка':'Bills', 'комунальні':'Bills', 'інтернет':'Bills', 'мобільний':'Bills',
+  'оренда':'Home & Bills', 'аренда':'Home & Bills',
+  'комуналка':'Home & Bills', 'комунальні':'Home & Bills', 'інтернет':'Home & Bills', 'мобільний':'Home & Bills',
   'готель':'Travel', 'авіа':'Travel', 'квиток':'Travel', 'подорож':'Travel',
   'спортзал':'Sport', 'фітнес':'Sport', 'тренажерний':'Sport',
   'перукарня':'Self-care', 'салон краси':'Self-care', 'манікюр':'Self-care', 'спа':'Self-care',
@@ -4007,7 +4118,7 @@ const MCC_CATEGORY_MAP = {
   5941:'Sport', 7941:'Sport', 7997:'Active Leisure',
   7011:'Travel', 4511:'Travel', 4522:'Travel', 4411:'Travel', 7512:'Travel',
   8211:'Education', 8220:'Education', 8241:'Education', 8244:'Education', 8249:'Education', 8299:'Education', 5942:'Education',
-  4899:'Bills', 4814:'Bills', 4900:'Bills', 4813:'Bills',
+  4899:'Home & Bills', 4814:'Home & Bills', 4900:'Home & Bills', 4813:'Home & Bills',
   7832:'Entertainment', 7922:'Entertainment', 7996:'Entertainment', 7998:'Entertainment', 7999:'Entertainment',
   7230:'Self-care', 7298:'Self-care', 7297:'Self-care',
   5992:'Flowers',
