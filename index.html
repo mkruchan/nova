@@ -178,7 +178,7 @@
     .cat-row{ font-size:calc(12px * var(--font-scale, 1)); gap:6px; }
     .cat-pct{ width:auto; }
     .cat-amt{ width:auto; }
-    .donut-wrap-mini svg{ width:140px; height:140px; }
+    .donut-wrap-mini svg{ width:155px; height:155px; }
     .detail-donut-large .donut-wrap-mini svg{ width:200px; height:200px; }
   }
 
@@ -2040,7 +2040,7 @@ function donutSVG(data, centerTotal, centerSub){
     }
   }
 
-  return `<svg width="150" height="150" viewBox="0 0 200 200"><circle cx="100" cy="100" r="70" fill="none" stroke="var(--panel-2)" stroke-width="${strokeW}"/>${arcs}${centerSvg}</svg>`;
+  return `<svg width="170" height="170" viewBox="0 0 200 200"><circle cx="100" cy="100" r="70" fill="none" stroke="var(--panel-2)" stroke-width="${strokeW}"/>${arcs}${centerSvg}</svg>`;
 }
 
 let financeSubView = null; // null | 'expense' | 'budget' | 'overview' | 'history'
