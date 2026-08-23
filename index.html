@@ -199,8 +199,9 @@
   .detail-donut-row{ display:flex; justify-content:center; margin-bottom:20px; }
   .detail-donut-large .donut-wrap-mini svg{ width:220px; height:220px; }
 
-  .month-bars-row{ display:flex; align-items:flex-end; gap:6px; height:80px; margin-bottom:20px; padding:0 2px; }
-  .month-bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:6px; height:100%; }
+  .month-bars-row{ display:flex; align-items:flex-end; gap:6px; height:80px; margin-bottom:20px; padding:0 2px; overflow-x:auto; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; scrollbar-width:none; }
+  .month-bars-row::-webkit-scrollbar{ display:none; }
+  .month-bar-col{ flex:0 0 34px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:6px; height:100%; scroll-snap-align:start; }
   .month-bar{ width:100%; max-width:26px; background:var(--panel-2); border-radius:4px 4px 2px 2px; }
   .month-bar.current{ background:var(--blue); }
   .month-bar-label{ font-size:calc(11px * var(--font-scale, 1)); color:var(--muted-dim); }
@@ -1711,7 +1712,7 @@ function thisMonthTx(){
   }
   const now = new Date();
   return base.filter(function(t){
-    const d = new Date(t.occurred_at);
+    const d = new Date(t.occurred_at + 'T00:00:00');
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   });
 }
@@ -1976,7 +1977,7 @@ function transactionsForPeriod(period, type){
   return visibleTransactions().filter(function(t){
     const rightSign = isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t));
     if(!rightSign || t.category === 'Transfer' || (isIncome && t.category === 'Loan')) return false;
-    const d = new Date(t.occurred_at);
+    const d = new Date(t.occurred_at + 'T00:00:00');
     if(period === 'month') return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
     if(period === 'year') return d.getFullYear() === now.getFullYear();
     return true; // all time
@@ -2053,26 +2054,124 @@ function monthlyExpenseBarsHTML(type){
   const isIncome = type === 'income';
   const now = new Date();
   const months = [];
-  for(let i = 8; i >= 0; i--){
+  for(let i = 23; i >= 0; i--){
     months.push(new Date(now.getFullYear(), now.getMonth() - i, 1));
   }
   const sums = months.map(function(m){
     return visibleTransactions().filter(function(t){
-      const d = new Date(t.occurred_at);
+      const d = new Date(t.occurred_at + 'T00:00:00');
       const rightSign = isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t));
-      return rightSign && t.category !== 'Transfer' && d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth();
+      return rightSign && t.category !== 'Transfer' && !(isIncome && t.category === 'Loan') && d.getFullYear() === m.getFullYear() && d.getMonth() === m.getMonth();
     }).reduce(function(s,t){ return isIncome ? s + toDisplay(t.amount, t.currency) : s - toDisplay(t.amount, t.currency); }, 0);
   });
   const max = Math.max.apply(null, sums.concat([1]));
   const bars = months.map(function(m,i){
     const h = Math.max(4, Math.round((sums[i]/max) * 56));
     const isCurrent = m.getFullYear() === now.getFullYear() && m.getMonth() === now.getMonth();
-    return `<div class="month-bar-col">
+    const isJan = m.getMonth() === 0;
+    const label = isJan ? m.toLocaleString(undefined,{month:'short'}) + " '" + String(m.getFullYear()).slice(2) : m.toLocaleString(undefined,{month:'short'});
+    return `<div class="month-bar-col" onclick="jumpToBreakdownMonth(${m.getFullYear()}, ${m.getMonth()})" style="cursor:pointer;">
       <div class="month-bar${isCurrent?' current':''}" style="height:${h}px;"></div>
-      <div class="month-bar-label${isCurrent?' current':''}">${m.toLocaleString(undefined,{month:'short'})}</div>
+      <div class="month-bar-label${isCurrent?' current':''}">${label}</div>
     </div>`;
   }).join('');
-  return `<div class="month-bars-row">${bars}</div>`;
+  return `<div class="month-bars-row" id="monthBarsScroll">${bars}</div>`;
+}
+
+// Same idea as monthlyExpenseBarsHTML but bucketed by week (Monday-Sunday)
+// instead of by month — shown when Weekly is the selected breakdown period,
+// so spending/income can be compared week to week the same visual way.
+function weeklyExpenseBarsHTML(type){
+  const isIncome = type === 'income';
+  const now = new Date();
+  const day = now.getDay();
+  const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + ((day === 0 ? -6 : 1) - day));
+  const weeks = [];
+  for(let i = 25; i >= 0; i--){
+    weeks.push(new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - i*7));
+  }
+  const sums = weeks.map(function(wStart){
+    const wEnd = new Date(wStart.getFullYear(), wStart.getMonth(), wStart.getDate() + 6);
+    return visibleTransactions().filter(function(t){
+      const d = new Date(t.occurred_at + 'T00:00:00');
+      const rightSign = isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t));
+      return rightSign && t.category !== 'Transfer' && !(isIncome && t.category === 'Loan') && d >= wStart && d <= wEnd;
+    }).reduce(function(s,t){ return isIncome ? s + toDisplay(t.amount, t.currency) : s - toDisplay(t.amount, t.currency); }, 0);
+  });
+  const max = Math.max.apply(null, sums.concat([1]));
+  const bars = weeks.map(function(wStart,i){
+    const h = Math.max(4, Math.round((sums[i]/max) * 56));
+    const isCurrent = wStart.getTime() === thisMonday.getTime();
+    const isFirstOfMonth = wStart.getDate() <= 7;
+    const label = isFirstOfMonth ? wStart.toLocaleString(undefined,{month:'short'}) : String(wStart.getDate());
+    return `<div class="month-bar-col" onclick="jumpToBreakdownWeek(${wStart.getFullYear()}, ${wStart.getMonth()}, ${wStart.getDate()})" style="cursor:pointer;">
+      <div class="month-bar${isCurrent?' current':''}" style="height:${h}px;"></div>
+      <div class="month-bar-label${isCurrent?' current':''}">${label}</div>
+    </div>`;
+  }).join('');
+  return `<div class="month-bars-row" id="monthBarsScroll">${bars}</div>`;
+}
+
+// Same idea, bucketed by quarter (Q1-Q4) instead — shown when Quarterly is
+// the selected breakdown period.
+function quarterlyExpenseBarsHTML(type){
+  const isIncome = type === 'income';
+  const now = new Date();
+  const thisQ = Math.floor(now.getMonth() / 3);
+  const quarters = [];
+  for(let i = 15; i >= 0; i--){
+    const totalQ = thisQ - i;
+    const yearOffset = Math.floor(totalQ / 4);
+    const q = ((totalQ % 4) + 4) % 4;
+    quarters.push(new Date(now.getFullYear() + yearOffset, q * 3, 1));
+  }
+  const sums = quarters.map(function(qStart){
+    const qEnd = new Date(qStart.getFullYear(), qStart.getMonth() + 3, 0);
+    return visibleTransactions().filter(function(t){
+      const d = new Date(t.occurred_at + 'T00:00:00');
+      const rightSign = isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t));
+      return rightSign && t.category !== 'Transfer' && !(isIncome && t.category === 'Loan') && d >= qStart && d <= qEnd;
+    }).reduce(function(s,t){ return isIncome ? s + toDisplay(t.amount, t.currency) : s - toDisplay(t.amount, t.currency); }, 0);
+  });
+  const max = Math.max.apply(null, sums.concat([1]));
+  const bars = quarters.map(function(qStart,i){
+    const h = Math.max(4, Math.round((sums[i]/max) * 56));
+    const isCurrent = qStart.getFullYear() === now.getFullYear() && Math.floor(qStart.getMonth()/3) === thisQ;
+    const label = 'Q' + (Math.floor(qStart.getMonth()/3)+1) + " '" + String(qStart.getFullYear()).slice(2);
+    return `<div class="month-bar-col" onclick="jumpToBreakdownQuarter(${qStart.getFullYear()}, ${qStart.getMonth()})" style="cursor:pointer;">
+      <div class="month-bar${isCurrent?' current':''}" style="height:${h}px;"></div>
+      <div class="month-bar-label${isCurrent?' current':''}">${label}</div>
+    </div>`;
+  }).join('');
+  return `<div class="month-bars-row" id="monthBarsScroll">${bars}</div>`;
+}
+
+// Same idea, bucketed by calendar year — shown when Yearly is the selected
+// breakdown period.
+function yearlyExpenseBarsHTML(type){
+  const isIncome = type === 'income';
+  const now = new Date();
+  const years = [];
+  for(let i = 9; i >= 0; i--){
+    years.push(now.getFullYear() - i);
+  }
+  const sums = years.map(function(y){
+    return visibleTransactions().filter(function(t){
+      const d = new Date(t.occurred_at + 'T00:00:00');
+      const rightSign = isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t));
+      return rightSign && t.category !== 'Transfer' && !(isIncome && t.category === 'Loan') && d.getFullYear() === y;
+    }).reduce(function(s,t){ return isIncome ? s + toDisplay(t.amount, t.currency) : s - toDisplay(t.amount, t.currency); }, 0);
+  });
+  const max = Math.max.apply(null, sums.concat([1]));
+  const bars = years.map(function(y,i){
+    const h = Math.max(4, Math.round((sums[i]/max) * 56));
+    const isCurrent = y === now.getFullYear();
+    return `<div class="month-bar-col" onclick="jumpToBreakdownYear(${y})" style="cursor:pointer;">
+      <div class="month-bar${isCurrent?' current':''}" style="height:${h}px;"></div>
+      <div class="month-bar-label${isCurrent?' current':''}">${y}</div>
+    </div>`;
+  }).join('');
+  return `<div class="month-bars-row" id="monthBarsScroll">${bars}</div>`;
 }
 
 function donutWithCenterLabel(data, total, sublabel){
@@ -2184,7 +2283,11 @@ function expenseDetailScreenHTML(){
 
     ${data.length ? `<div class="detail-donut-row detail-donut-large">${donutWithCenterLabel(data, Math.abs(total), range.label)}</div>` : ''}
 
-    ${monthlyExpenseBarsHTML(breakdownType)}
+    ${breakdownPeriod === 'week' ? weeklyExpenseBarsHTML(breakdownType)
+      : breakdownPeriod === 'quarter' ? quarterlyExpenseBarsHTML(breakdownType)
+      : breakdownPeriod === 'year' ? yearlyExpenseBarsHTML(breakdownType)
+      : breakdownPeriod === 'month' ? monthlyExpenseBarsHTML(breakdownType)
+      : ''}
 
     <div class="cat-list-full">
       <div class="cat-row total-row">
@@ -2222,6 +2325,30 @@ window.toggleBreakdownType = function(){ setBreakdownType(breakdownType === 'inc
 window.openExpenseDetail = function(){ breakdownType = 'expense'; breakdownCategory = 'all'; breakdownViewMonth = new Date(); breakdownViewMonth.setDate(1); financeSubView = 'expense'; renderView('finance'); };
 window.shiftBreakdownPeriod = function(delta){
   breakdownViewMonth = shiftBreakdownAnchor(breakdownPeriod, breakdownViewMonth, delta);
+  renderView('finance');
+};
+window.jumpToBreakdownMonth = function(year, month){
+  breakdownPeriod = 'month';
+  breakdownViewMonth = new Date(year, month, 1);
+  breakdownCategory = 'all';
+  renderView('finance');
+};
+window.jumpToBreakdownWeek = function(year, month, day){
+  breakdownPeriod = 'week';
+  breakdownViewMonth = new Date(year, month, day);
+  breakdownCategory = 'all';
+  renderView('finance');
+};
+window.jumpToBreakdownQuarter = function(year, month){
+  breakdownPeriod = 'quarter';
+  breakdownViewMonth = new Date(year, month, 1);
+  breakdownCategory = 'all';
+  renderView('finance');
+};
+window.jumpToBreakdownYear = function(year){
+  breakdownPeriod = 'year';
+  breakdownViewMonth = new Date(year, 0, 1);
+  breakdownCategory = 'all';
   renderView('finance');
 };
 window.closeExpenseDetail = function(){ financeSubView = null; renderView('finance'); };
@@ -2285,7 +2412,7 @@ function totalExpenseBudget(date){
 
 function txForMonth(date){
   return visibleTransactions().filter(function(t){
-    const d = new Date(t.occurred_at);
+    const d = new Date(t.occurred_at + 'T00:00:00');
     return d.getFullYear() === date.getFullYear() && d.getMonth() === date.getMonth();
   });
 }
@@ -2733,7 +2860,7 @@ function trendSVG(height){
 
   const daily = new Array(days+1).fill(0);
   trendTx.forEach(function(t){
-    const d = new Date(t.occurred_at);
+    const d = new Date(t.occurred_at + 'T00:00:00');
     const idx = Math.floor((d - start) / (1000*60*60*24));
     if(idx >= 0 && idx <= days) daily[idx] += toDisplay(t.amount, t.currency);
   });
@@ -2979,11 +3106,11 @@ function settingsScreenHTML(){
 
     <div class="side-label" style="margin:20px 0 8px;">Display Currency</div>
     <div class="empty-note" style="text-align:left; margin-bottom:8px;">Net Worth, Budget, Income/Expense totals, and category breakdowns are all shown and totaled in this currency. Individual transactions still show their own original currency.</div>
-    <div class="modal-actions" style="justify-content:flex-start; margin-top:0; gap:8px;">
+    <select class="filter-select" onchange="setDisplayCurrency(this.value)" style="width:100%;">
       ${['EUR','USD','UAH','ALL','CAD','PLN'].map(function(c){
-        return `<button class="header-btn${c===DISPLAY_CURRENCY?' active':''}" onclick="setDisplayCurrency('${c}')" style="${c===DISPLAY_CURRENCY?'background:var(--blue); color:#0A0D18;':''}">${c}</button>`;
+        return `<option value="${c}"${c===DISPLAY_CURRENCY?' selected':''}>${CURRENCY_NAMES[c] || c} (${c})</option>`;
       }).join('')}
-    </div>
+    </select>
 
     <div class="side-label" style="margin:20px 0 8px;">Auto Categorization Rules</div>
     <div class="empty-note" style="text-align:left; margin-bottom:8px;">If a synced transaction's name contains this text, it's assigned this category automatically — checked before any built-in matching, so your own rules always win.</div>
@@ -3340,6 +3467,8 @@ function financeHTML(){
 function wireFinanceEvents(){
   document.getElementById('txDate').value = localDateStr(new Date());
   wireNova();
+  const barsEl = document.getElementById('monthBarsScroll');
+  if(barsEl) barsEl.scrollLeft = barsEl.scrollWidth;
 }
 
 /* ---------- Modals + CRUD ---------- */
