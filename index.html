@@ -204,7 +204,8 @@
   .month-bar-col{ flex:0 0 34px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:6px; height:100%; scroll-snap-align:start; }
   .month-bar{ width:100%; max-width:26px; background:var(--panel-2); border-radius:4px 4px 2px 2px; }
   .month-bar.current{ background:var(--blue); }
-  .month-bar-label{ font-size:calc(11px * var(--font-scale, 1)); color:var(--muted-dim); }
+  .month-bar-label{ font-size:calc(11px * var(--font-scale, 1)); color:var(--muted-dim); white-space:nowrap; }
+  .month-bar-label.year-marker{ font-size:calc(9px * var(--font-scale, 1)); }
   .month-bar-label.current{ color:var(--white); font-weight:600; }
 
   .cat-list-full{ margin-top:4px; }
@@ -1024,6 +1025,17 @@ function loadFontScale(){
 function applyFontScale(){
   try{ document.documentElement.style.setProperty('--font-scale', fontScale); }catch(e){}
 }
+
+let mergeTransactionPanels = true; // one combined block by default; can be switched back to separate Expenses/Income panels in Settings
+function loadMergeTransactionPanels(){
+  try{ const s = localStorage.getItem('nova-merge-tx-panels'); mergeTransactionPanels = s === null ? true : s === 'true'; }
+  catch(e){ mergeTransactionPanels = true; }
+}
+window.setMergeTransactionPanels = function(val){
+  mergeTransactionPanels = val;
+  try{ localStorage.setItem('nova-merge-tx-panels', String(val)); }catch(e){}
+  renderView('finance');
+};
 window.adjustFontScale = function(delta){
   fontScale = Math.max(0.8, Math.min(1.6, Math.round((fontScale + delta) * 100) / 100));
   applyFontScale();
@@ -1506,6 +1518,7 @@ function init(){
   loadCachedRates();
   loadMonoVisibility();
   loadFontScale();
+  loadMergeTransactionPanels();
   loadDisplayCurrency();
   loadMonoDisplayFromDate();
   loadCustomCategories();
@@ -2067,12 +2080,16 @@ function monthlyExpenseBarsHTML(type){
   const max = Math.max.apply(null, sums.concat([1]));
   const bars = months.map(function(m,i){
     const h = Math.max(4, Math.round((sums[i]/max) * 56));
-    const isCurrent = m.getFullYear() === now.getFullYear() && m.getMonth() === now.getMonth();
+    // Highlights whichever month is actually selected in the breakdown right
+    // now, not always today's real month — otherwise navigating to a past
+    // month leaves the highlight pointing at "today" while the header above
+    // says something else entirely.
+    const isCurrent = breakdownPeriod === 'month' && m.getFullYear() === breakdownViewMonth.getFullYear() && m.getMonth() === breakdownViewMonth.getMonth();
     const isJan = m.getMonth() === 0;
     const label = isJan ? m.toLocaleString(undefined,{month:'short'}) + " '" + String(m.getFullYear()).slice(2) : m.toLocaleString(undefined,{month:'short'});
     return `<div class="month-bar-col" onclick="jumpToBreakdownMonth(${m.getFullYear()}, ${m.getMonth()})" style="cursor:pointer;">
-      <div class="month-bar${isCurrent?' current':''}" style="height:${h}px;"></div>
-      <div class="month-bar-label${isCurrent?' current':''}">${label}</div>
+      <div class="month-bar${isCurrent?' current':''}" style="height:${h}px;"${isCurrent?' id="currentPeriodBar"':''}></div>
+      <div class="month-bar-label${isCurrent?' current':''}${isJan?' year-marker':''}">${label}</div>
     </div>`;
   }).join('');
   return `<div class="month-bars-row" id="monthBarsScroll">${bars}</div>`;
@@ -2086,6 +2103,11 @@ function weeklyExpenseBarsHTML(type){
   const now = new Date();
   const day = now.getDay();
   const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + ((day === 0 ? -6 : 1) - day));
+  // The week actually selected in the breakdown, computed the same way as
+  // "this week" above, so the highlight can match it instead of always
+  // pointing at today's real week regardless of what's being viewed.
+  const selectedDay = breakdownViewMonth.getDay();
+  const selectedMonday = new Date(breakdownViewMonth.getFullYear(), breakdownViewMonth.getMonth(), breakdownViewMonth.getDate() + ((selectedDay === 0 ? -6 : 1) - selectedDay));
   const weeks = [];
   for(let i = 25; i >= 0; i--){
     weeks.push(new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - i*7));
@@ -2101,12 +2123,12 @@ function weeklyExpenseBarsHTML(type){
   const max = Math.max.apply(null, sums.concat([1]));
   const bars = weeks.map(function(wStart,i){
     const h = Math.max(4, Math.round((sums[i]/max) * 56));
-    const isCurrent = wStart.getTime() === thisMonday.getTime();
+    const isCurrent = breakdownPeriod === 'week' && wStart.getTime() === selectedMonday.getTime();
     const isFirstOfMonth = wStart.getDate() <= 7;
-    const label = isFirstOfMonth ? wStart.toLocaleString(undefined,{month:'short'}) : String(wStart.getDate());
+    const label = isFirstOfMonth ? wStart.toLocaleString(undefined,{month:'short'}) + ' ' + wStart.getDate() : String(wStart.getDate());
     return `<div class="month-bar-col" onclick="jumpToBreakdownWeek(${wStart.getFullYear()}, ${wStart.getMonth()}, ${wStart.getDate()})" style="cursor:pointer;">
-      <div class="month-bar${isCurrent?' current':''}" style="height:${h}px;"></div>
-      <div class="month-bar-label${isCurrent?' current':''}">${label}</div>
+      <div class="month-bar${isCurrent?' current':''}" style="height:${h}px;"${isCurrent?' id="currentPeriodBar"':''}></div>
+      <div class="month-bar-label${isCurrent?' current':''}${isFirstOfMonth?' year-marker':''}">${label}</div>
     </div>`;
   }).join('');
   return `<div class="month-bars-row" id="monthBarsScroll">${bars}</div>`;
@@ -2118,6 +2140,7 @@ function quarterlyExpenseBarsHTML(type){
   const isIncome = type === 'income';
   const now = new Date();
   const thisQ = Math.floor(now.getMonth() / 3);
+  const selectedQ = Math.floor(breakdownViewMonth.getMonth() / 3);
   const quarters = [];
   for(let i = 15; i >= 0; i--){
     const totalQ = thisQ - i;
@@ -2136,11 +2159,13 @@ function quarterlyExpenseBarsHTML(type){
   const max = Math.max.apply(null, sums.concat([1]));
   const bars = quarters.map(function(qStart,i){
     const h = Math.max(4, Math.round((sums[i]/max) * 56));
-    const isCurrent = qStart.getFullYear() === now.getFullYear() && Math.floor(qStart.getMonth()/3) === thisQ;
-    const label = 'Q' + (Math.floor(qStart.getMonth()/3)+1) + " '" + String(qStart.getFullYear()).slice(2);
+    const qNum = Math.floor(qStart.getMonth()/3);
+    const isCurrent = breakdownPeriod === 'quarter' && qStart.getFullYear() === breakdownViewMonth.getFullYear() && qNum === selectedQ;
+    const isQ1 = qNum === 0;
+    const label = isQ1 ? 'Q1 ' + qStart.getFullYear() : 'Q' + (qNum+1);
     return `<div class="month-bar-col" onclick="jumpToBreakdownQuarter(${qStart.getFullYear()}, ${qStart.getMonth()})" style="cursor:pointer;">
-      <div class="month-bar${isCurrent?' current':''}" style="height:${h}px;"></div>
-      <div class="month-bar-label${isCurrent?' current':''}">${label}</div>
+      <div class="month-bar${isCurrent?' current':''}" style="height:${h}px;"${isCurrent?' id="currentPeriodBar"':''}></div>
+      <div class="month-bar-label${isCurrent?' current':''}${isQ1?' year-marker':''}">${label}</div>
     </div>`;
   }).join('');
   return `<div class="month-bars-row" id="monthBarsScroll">${bars}</div>`;
@@ -2165,9 +2190,9 @@ function yearlyExpenseBarsHTML(type){
   const max = Math.max.apply(null, sums.concat([1]));
   const bars = years.map(function(y,i){
     const h = Math.max(4, Math.round((sums[i]/max) * 56));
-    const isCurrent = y === now.getFullYear();
+    const isCurrent = breakdownPeriod === 'year' && y === breakdownViewMonth.getFullYear();
     return `<div class="month-bar-col" onclick="jumpToBreakdownYear(${y})" style="cursor:pointer;">
-      <div class="month-bar${isCurrent?' current':''}" style="height:${h}px;"></div>
+      <div class="month-bar${isCurrent?' current':''}" style="height:${h}px;"${isCurrent?' id="currentPeriodBar"':''}></div>
       <div class="month-bar-label${isCurrent?' current':''}">${y}</div>
     </div>`;
   }).join('');
@@ -2990,6 +3015,7 @@ function historyRows(){
   const isTransfer = historyType === 'transfer';
   const isIncome = historyType === 'income';
   const isRefund = historyType === 'refund';
+  const isAll = historyType === 'all';
   // Defaults to this month when no explicit date range is set (matching the
   // dashboard panels), but drops that restriction entirely once a date range
   // IS set — otherwise a range pointing at a different month (e.g. drilling
@@ -3002,6 +3028,12 @@ function historyRows(){
     list = base.filter(function(t){ return t.category === 'Transfer'; });
   } else if(isRefund){
     list = base.filter(isRefundTx);
+  } else if(isAll){
+    list = base.filter(function(t){
+      const isExpenseTx = Number(t.amount) < 0 || isRefundTx(t);
+      const isIncomeTx = Number(t.amount) > 0 && !isRefundTx(t) && t.category !== 'Loan';
+      return (isExpenseTx || isIncomeTx) && t.category !== 'Transfer';
+    });
   } else {
     list = base.filter(function(t){ return (isIncome ? (Number(t.amount) > 0 && !isRefundTx(t)) : (Number(t.amount) < 0 || isRefundTx(t))) && t.category !== 'Transfer'; });
   }
@@ -3017,10 +3049,11 @@ function historyRows(){
   }
   list = sortMostRecentFirst(list);
 
-  if(!list.length) return `<div class="empty-note">No ${isTransfer?'transfers':isRefund?'refunds':isIncome?'income':'expenses'} match these filters.</div>`;
+  if(!list.length) return `<div class="empty-note">No ${isTransfer?'transfers':isRefund?'refunds':isAll?'transactions':isIncome?'income':'expenses'} match these filters.</div>`;
 
   return renderTxRowsGroupedByDay(list, function(t){
-    const icon = isTransfer ? (CATEGORY_ICON['Transfer'] || 'ic-wallet') : (CATEGORY_ICON[t.category] || (isIncome || isRefund ? 'ic-dollar' : 'ic-wallet'));
+    const isIncomeRow = isAll ? (Number(t.amount) > 0 && !isRefundTx(t)) : isIncome;
+    const icon = isTransfer ? (CATEGORY_ICON['Transfer'] || 'ic-wallet') : (CATEGORY_ICON[t.category] || (isIncomeRow || isRefund ? 'ic-dollar' : 'ic-wallet'));
     let amtClass, sign;
     if(isTransfer){
       amtClass = '';
@@ -3028,16 +3061,16 @@ function historyRows(){
     } else if(isRefund){
       amtClass = 'pos';
       sign = '+';
-    } else if(!isIncome && isRefundTx(t)){
+    } else if(!isIncomeRow && isRefundTx(t)){
       amtClass = 'pos';
       sign = '+';
     } else {
-      amtClass = isIncome ? 'pos' : 'neg';
-      sign = isIncome ? '+' : '-';
+      amtClass = isIncomeRow ? 'pos' : 'neg';
+      sign = isIncomeRow ? '+' : '-';
     }
     const transferMeta = (accountLabelById(t.fromAccountId) && accountLabelById(t.toAccountId))
       ? `${accountLabelById(t.fromAccountId)} → ${accountLabelById(t.toAccountId)}` : '';
-    const metaExtra = isTransfer ? transferMeta : (!isIncome && !isRefund && isRefundTx(t) ? escapeHtml(t.category) + ' · Refund' : escapeHtml(t.category));
+    const metaExtra = isTransfer ? transferMeta : (!isIncomeRow && !isRefund && isRefundTx(t) ? escapeHtml(t.category) + ' · Refund' : escapeHtml(t.category));
     return `<div class="tx-row">
       <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
       <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div>${metaExtra ? `<div class="tx-meta">${metaExtra}</div>` : ''}</div>
@@ -3052,11 +3085,12 @@ function historyScreenHTML(){
   const isTransfer = historyType === 'transfer';
   const isIncome = historyType === 'income';
   const isRefund = historyType === 'refund';
+  const isAll = historyType === 'all';
   const categories = (isIncome ? allIncomeCategories() : allExpenseCategories()).filter(function(c){ return c !== 'Transfer'; });
   const catOptions = ['<option value="all">All categories</option>'].concat(
     categories.map(function(c){ return `<option value="${c}"${historyCategoryFilter===c?' selected':''}>${c}</option>`; })
   ).join('');
-  const title = isTransfer ? 'Transfer History' : isRefund ? 'Refund History' : (isIncome ? 'Income History' : 'Expense History');
+  const title = isTransfer ? 'Transfer History' : isRefund ? 'Refund History' : isAll ? 'All Transactions' : (isIncome ? 'Income History' : 'Expense History');
 
   return `
     <div class="detail-header">
@@ -3066,7 +3100,7 @@ function historyScreenHTML(){
     </div>
 
     <div class="filter-row detail-filters">
-      ${(isTransfer || isRefund) ? '' : `<select class="filter-select" onchange="setHistoryCategory(this.value)">${catOptions}</select>`}
+      ${(isTransfer || isRefund || isAll) ? '' : `<select class="filter-select" onchange="setHistoryCategory(this.value)">${catOptions}</select>`}
       <input class="filter-select" type="text" placeholder="Search by name…" value="${escapeHtml(historySearch)}" oninput="setHistorySearch(this.value)" style="flex:1;">
     </div>
     <div class="filter-row detail-filters" style="align-items:center;">
@@ -3102,6 +3136,13 @@ function settingsScreenHTML(){
       <span style="color:var(--muted); min-width:48px; text-align:center;">${Math.round(fontScale*100)}%</span>
       <button class="header-btn" onclick="adjustFontScale(0.1)">A+</button>
       <button class="header-btn" onclick="resetFontScale()">Reset</button>
+    </div>
+
+    <div class="side-label" style="margin:20px 0 8px;">Transactions Layout</div>
+    <div class="empty-note" style="text-align:left; margin-bottom:8px;">Show Expenses and Income as one combined block, or as two separate panels like before.</div>
+    <div class="type-toggle">
+      <button type="button" class="type-btn${mergeTransactionPanels?' active':''}" onclick="setMergeTransactionPanels(true)">One block</button>
+      <button type="button" class="type-btn${!mergeTransactionPanels?' active':''}" onclick="setMergeTransactionPanels(false)">Two blocks</button>
     </div>
 
     <div class="side-label" style="margin:20px 0 8px;">Display Currency</div>
@@ -3344,6 +3385,34 @@ window.openOverviewDetail = function(){ financeSubView = 'overview'; renderView(
 window.closeOverviewDetail = function(){ financeSubView = null; renderView('finance'); };
 
 /* ---------- Finance view HTML ---------- */
+// One combined block showing both expenses and income together, sorted by
+// date — the alternative to the separate Expenses/Income panels, toggled in
+// Settings.
+function mergedTransactionsPanelHTML(){
+  const combined = sortMostRecentFirst(thisMonthTx().filter(function(t){
+    const isExpenseTx = Number(t.amount) < 0 || isRefundTx(t);
+    const isIncomeTx = Number(t.amount) > 0 && !isRefundTx(t) && t.category !== 'Loan';
+    return (isExpenseTx || isIncomeTx) && t.category !== 'Transfer';
+  })).slice(0, 12);
+
+  return `<div class="panel-card clickable-card" onclick="openHistory('all')" style="grid-column:1 / -1;">
+    <div class="panel-title"><h3>Transactions</h3><span class="chevron">›</span></div>
+    <div id="txList">
+      ${!combined.length ? '<div class="empty-note">No transactions logged yet.</div>' : renderTxRowsGroupedByDay(combined, function(t){
+        const isPos = Number(t.amount) > 0 && !isRefundTx(t);
+        const icon = CATEGORY_ICON[t.category] || (isPos ? 'ic-dollar' : 'ic-wallet');
+        return `<div class="tx-row">
+          <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
+          <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${escapeHtml(t.category)}</div></div>
+          <div class="tx-amt ${isPos?'pos':'neg'}">${isPos?'+':''}${fmtOriginal(t.amount, t.currency)}</div>
+          <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
+          <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
+        </div>`;
+      })}
+    </div>
+  </div>`;
+}
+
 function financeHTML(){
   if(financeSubView === 'expense') return expenseDetailScreenHTML();
   if(financeSubView === 'budget') return budgetDetailScreenHTML();
@@ -3368,6 +3437,11 @@ function financeHTML(){
       ${expenseCategorySummaryHTML()}
     </div>
 
+    ${mergeTransactionPanels ? `
+    <div class="charts-row">
+      ${mergedTransactionsPanelHTML()}
+    </div>
+    ` : `
     <div class="bottom-row">
       <div class="panel-card clickable-card" onclick="openHistory('expense')">
         <div class="panel-title"><h3>Expenses</h3><span class="chevron">›</span></div>
@@ -3409,6 +3483,7 @@ function financeHTML(){
         </div>
       </div>
     </div>
+    `}
 
     <div class="charts-row">
       ${accountsSummaryHTML()}
@@ -3468,7 +3543,18 @@ function wireFinanceEvents(){
   document.getElementById('txDate').value = localDateStr(new Date());
   wireNova();
   const barsEl = document.getElementById('monthBarsScroll');
-  if(barsEl) barsEl.scrollLeft = barsEl.scrollWidth;
+  if(barsEl){
+    const currentBar = document.getElementById('currentPeriodBar');
+    if(currentBar && currentBar.parentElement){
+      // Center the selected bar in the visible scroll area, rather than
+      // always jumping to the far right — otherwise navigating to an older
+      // period would leave its highlight scrolled out of view entirely.
+      const colEl = currentBar.parentElement;
+      barsEl.scrollLeft = colEl.offsetLeft - (barsEl.clientWidth / 2) + (colEl.offsetWidth / 2);
+    } else {
+      barsEl.scrollLeft = barsEl.scrollWidth;
+    }
+  }
 }
 
 /* ---------- Modals + CRUD ---------- */
