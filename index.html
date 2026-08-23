@@ -614,6 +614,17 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="excludeCategoriesModalOverlay" onclick="if(event.target===this) closeExcludeCategoriesModal()">
+  <div class="modal" style="max-height:80vh; overflow-y:auto;">
+    <h3>Exclude Categories</h3>
+    <div class="empty-note" style="text-align:left; margin-bottom:10px;">Tap a category to hide it from this breakdown — the total and chart update to reflect only what's left visible.</div>
+    <div id="excludeCategoriesBody"></div>
+    <div class="modal-actions">
+      <button class="modal-save" onclick="closeExcludeCategoriesModal()">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="confirmModalOverlay" onclick="if(event.target===this) confirmModalNo()">
   <div class="modal">
     <h3 id="confirmModalTitle">Are you sure?</h3>
@@ -2111,6 +2122,7 @@ function timeAgo(ts){
 let breakdownPeriod = 'month';
 let breakdownCategory = 'all';
 let breakdownType = 'expense'; // 'expense' | 'income'
+let breakdownExcludedCategories = []; // categories to hide from the breakdown, independent of breakdownCategory's "show only this one" filter
 let breakdownViewMonth = new Date(); breakdownViewMonth.setDate(1);
 
 // Computes the from/to bounds and display label for any breakdown period,
@@ -2422,7 +2434,8 @@ function expenseDetailScreenHTML(){
     const d = new Date(t.occurred_at + 'T00:00:00');
     return d >= range.from && d <= range.to;
   });
-  const filteredTx = breakdownCategory === 'all' ? periodTx : periodTx.filter(function(t){ return t.category === breakdownCategory; });
+  const filteredTx = (breakdownCategory === 'all' ? periodTx : periodTx.filter(function(t){ return t.category === breakdownCategory; }))
+    .filter(function(t){ return breakdownExcludedCategories.indexOf(t.category) === -1; });
   const data = categoryBreakdown(filteredTx);
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
 
@@ -2441,7 +2454,7 @@ function expenseDetailScreenHTML(){
       <span class="cat-amt">${amt}</span>
       <span class="chevron">›</span>
     </div>`;
-  }).join('') : `<div class="empty-note">No ${isIncome?'income':'expenses'} in this period.</div>`;
+  }).join('') : `<div class="empty-note">No ${isIncome?'income':'expenses'} in this period${breakdownExcludedCategories.length?' (with the current exclusions)':''}.</div>`;
 
   return `
     <div class="detail-header">
@@ -2466,6 +2479,15 @@ function expenseDetailScreenHTML(){
       </select>
       <select class="filter-select" onchange="setBreakdownCategory(this.value)">${catOptions}</select>
     </div>
+
+    <div class="filter-row detail-filters" style="align-items:center;">
+      <button class="header-btn" onclick="openExcludeCategoriesModal()">🚫 Exclude categories</button>
+    </div>
+    ${breakdownExcludedCategories.length ? `<div class="filter-row detail-filters" style="flex-wrap:wrap; gap:6px;">
+      ${breakdownExcludedCategories.map(function(c){
+        return `<span class="header-btn" style="display:inline-flex; align-items:center; gap:6px;">${escapeHtml(c)} <span onclick="toggleExcludedCategory('${escapeHtml(c)}')" style="cursor:pointer; color:var(--rose);">✕</span></span>`;
+      }).join('')}
+    </div>` : ''}
 
     ${breakdownPeriod !== 'all' ? `
     <div class="filter-row detail-filters" style="align-items:center; justify-content:center; gap:14px;">
@@ -2495,6 +2517,30 @@ function expenseDetailScreenHTML(){
 window.setBreakdownPeriod = function(v){ breakdownPeriod = v; renderView('finance'); };
 window.setBreakdownCategory = function(v){ breakdownCategory = v; financeSubView = 'expense'; renderView('finance'); };
 
+window.openExcludeCategoriesModal = function(){
+  const isIncome = breakdownType === 'income';
+  const catList = (isIncome ? allIncomeCategories() : allExpenseCategories()).filter(function(c){ return c !== 'Transfer'; });
+  document.getElementById('excludeCategoriesBody').innerHTML = catList.map(function(c){
+    const isExcluded = breakdownExcludedCategories.indexOf(c) !== -1;
+    return `<div class="cat-row" onclick="toggleExcludedCategory('${escapeHtml(c)}')" style="cursor:pointer;">
+      <span class="cat-name"${isExcluded?' style="color:var(--muted-dim); text-decoration:line-through;"':''}>${escapeHtml(c)}</span>
+      <span style="color:${isExcluded?'var(--rose)':'var(--muted-dim)'};">${isExcluded ? '✕ Hidden' : 'Shown'}</span>
+    </div>`;
+  }).join('');
+  openModal('excludeCategoriesModalOverlay');
+};
+window.toggleExcludedCategory = function(cat){
+  const idx = breakdownExcludedCategories.indexOf(cat);
+  if(idx === -1) breakdownExcludedCategories.push(cat);
+  else breakdownExcludedCategories.splice(idx, 1);
+  const modalEl = document.getElementById('excludeCategoriesModalOverlay');
+  if(modalEl && modalEl.classList.contains('open')) openExcludeCategoriesModal(); // refresh the modal's own checkmarks
+  renderView('finance');
+};
+window.closeExcludeCategoriesModal = function(){
+  closeModal('excludeCategoriesModalOverlay');
+};
+
 window.viewCategoryTransactions = function(categoryName){
   historyType = breakdownType === 'income' ? 'income' : 'expense';
   historyCategoryFilter = categoryName;
@@ -2513,9 +2559,9 @@ window.viewCategoryTransactions = function(categoryName){
   financeSubView = 'history';
   renderView('finance');
 };
-window.setBreakdownType = function(v){ breakdownType = v; breakdownCategory = 'all'; renderView('finance'); };
+window.setBreakdownType = function(v){ breakdownType = v; breakdownCategory = 'all'; breakdownExcludedCategories = []; renderView('finance'); };
 window.toggleBreakdownType = function(){ setBreakdownType(breakdownType === 'income' ? 'expense' : 'income'); };
-window.openExpenseDetail = function(){ breakdownType = 'expense'; breakdownCategory = 'all'; breakdownViewMonth = new Date(); breakdownViewMonth.setDate(1); financeSubView = 'expense'; renderView('finance'); };
+window.openExpenseDetail = function(){ breakdownType = 'expense'; breakdownCategory = 'all'; breakdownExcludedCategories = []; breakdownViewMonth = new Date(); breakdownViewMonth.setDate(1); financeSubView = 'expense'; renderView('finance'); };
 window.shiftBreakdownPeriod = function(delta){
   breakdownViewMonth = shiftBreakdownAnchor(breakdownPeriod, breakdownViewMonth, delta);
   renderView('finance');
