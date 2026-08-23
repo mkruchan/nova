@@ -685,7 +685,7 @@ const CATEGORY_ICON = {
   'Travel': 'ic-car',
   'Home': 'ic-home',
   'Health': 'ic-wallet',
-  'Home & Bills': 'ic-home',
+  'Living Expenses': 'ic-home',
   'Family care': 'ic-wallet',
   'Kitsterovna': 'ic-wallet',
   'Transport': 'ic-car',
@@ -722,7 +722,7 @@ const CATEGORY_ICON = {
 };
 
 const EXPENSE_CATEGORIES = [
-  "Education","Travel","Home","Health","Home & Bills","Family care","Kitsterovna",
+  "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
   "Transport","Scooter","Gifts","Charity","Groceries","Eating out","Entertainment","Electronics",
   "Digital / Subscriptions","Clothing","Active Leisure","Entrepreneurship","Investments","Flowers",
   "Smoking","Self-care","Music & Video","Sport","Services","Fees","Taxes","Other expense","Refund","Transfer","Loan"
@@ -1265,14 +1265,14 @@ function isRefundTx(t){
     allExpenseCategories().indexOf(t.category) !== -1 && allIncomeCategories().indexOf(t.category) === -1;
 }
 
-// Rent and Bills were merged into a single "Home & Bills" category. Applied
-// wherever transactions can enter the app — not just the initial local
-// load — since cloud sync or a fresh Monobank import can otherwise bring
-// the old category names right back in a few seconds after the app opens,
-// from data that predates the merge or from another device that hasn't
-// updated yet.
+// Rent and Bills were merged into "Home & Bills", then renamed to "Living
+// Expenses". Applied wherever transactions can enter the app — not just the
+// initial local load — since cloud sync or a fresh Monobank import can
+// otherwise bring an old category name right back in a few seconds after
+// the app opens, from data that predates a merge/rename or from another
+// device that hasn't updated yet.
 function migrateRentBillsCategory(list){
-  (list || []).forEach(function(t){ if(t.category === 'Rent' || t.category === 'Bills') t.category = 'Home & Bills'; });
+  (list || []).forEach(function(t){ if(t.category === 'Rent' || t.category === 'Bills' || t.category === 'Home & Bills') t.category = 'Living Expenses'; });
 }
 
 function loadData(){
@@ -2632,19 +2632,21 @@ function normalizeBudgets(){
     budgets = { months: {} };
     budgets.months[key] = migrated;
   }
-  // Rent and Bills were merged into "Home & Bills" — fold any existing
-  // per-category budget for either old name into the merged one, for every
-  // month that has one, rather than leaving them stuck under a category
-  // that no longer exists.
+  // Rent, Bills, and the intermediate "Home & Bills" name were all merged
+  // into "Living Expenses" — fold any existing per-category budget for any
+  // of the old names into the current one, for every month that has one,
+  // rather than leaving them stuck under a category that no longer exists.
   Object.keys(budgets.months).forEach(function(key){
     const cb = budgets.months[key].categoryBudgets;
     if(!cb) return;
     const rentAmt = Number(cb['Rent']) || 0;
     const billsAmt = Number(cb['Bills']) || 0;
-    if(rentAmt || billsAmt){
-      cb['Home & Bills'] = (Number(cb['Home & Bills']) || 0) + rentAmt + billsAmt;
+    const homeBillsAmt = Number(cb['Home & Bills']) || 0;
+    if(rentAmt || billsAmt || homeBillsAmt){
+      cb['Living Expenses'] = (Number(cb['Living Expenses']) || 0) + rentAmt + billsAmt + homeBillsAmt;
       delete cb['Rent'];
       delete cb['Bills'];
+      delete cb['Home & Bills'];
     }
   });
 }
@@ -4158,10 +4160,10 @@ const CATEGORY_ALIASES = {
   'heath':'Health', 'farmaci':'Health', 'pharmacy':'Health', 'apotek':'Health', 'clinic':'Health',
   'hospital':'Health', 'dentist':'Health', 'doctor':'Health', 'medical':'Health', 'optic':'Health',
   // Rent
-  'rent':'Home & Bills', 'landlord':'Home & Bills', 'lease':'Home & Bills',
+  'rent':'Living Expenses', 'landlord':'Living Expenses', 'lease':'Living Expenses',
   // Bills
-  'utilities':'Home & Bills', 'utility':'Home & Bills', 'electricity':'Home & Bills', 'water bill':'Home & Bills',
-  'telecom':'Home & Bills', 'vodafone':'Home & Bills', 'orange':'Home & Bills', 'internet bill':'Home & Bills', 'phone bill':'Home & Bills',
+  'utilities':'Living Expenses', 'utility':'Living Expenses', 'electricity':'Living Expenses', 'water bill':'Living Expenses',
+  'telecom':'Living Expenses', 'vodafone':'Living Expenses', 'orange':'Living Expenses', 'internet bill':'Living Expenses', 'phone bill':'Living Expenses',
   // Transport
   'taxi':'Transport', 'uber':'Transport', 'bolt':'Transport', 'fuel':'Transport', 'petrol':'Transport',
   'gas station':'Transport', 'parking':'Transport', 'metro':'Transport', 'bus ticket':'Transport',
@@ -4200,8 +4202,8 @@ const CATEGORY_ALIASES = {
   'маркет':'Groceries', 'супермаркет':'Groceries', 'продукти':'Groceries', 'магазин':'Groceries',
   'кафе':'Eating out', 'ресторан':'Eating out', 'піцерія':'Eating out', 'їдальня':'Eating out',
   'таксі':'Transport', 'убер':'Transport', 'заправка':'Transport', 'паливо':'Transport', 'парковка':'Transport',
-  'оренда':'Home & Bills', 'аренда':'Home & Bills',
-  'комуналка':'Home & Bills', 'комунальні':'Home & Bills', 'інтернет':'Home & Bills', 'мобільний':'Home & Bills',
+  'оренда':'Living Expenses', 'аренда':'Living Expenses',
+  'комуналка':'Living Expenses', 'комунальні':'Living Expenses', 'інтернет':'Living Expenses', 'мобільний':'Living Expenses',
   'готель':'Travel', 'авіа':'Travel', 'квиток':'Travel', 'подорож':'Travel',
   'спортзал':'Sport', 'фітнес':'Sport', 'тренажерний':'Sport',
   'перукарня':'Self-care', 'салон краси':'Self-care', 'манікюр':'Self-care', 'спа':'Self-care',
@@ -4228,7 +4230,7 @@ const MCC_CATEGORY_MAP = {
   5941:'Sport', 7941:'Sport', 7997:'Active Leisure',
   7011:'Travel', 4511:'Travel', 4522:'Travel', 4411:'Travel', 7512:'Travel',
   8211:'Education', 8220:'Education', 8241:'Education', 8244:'Education', 8249:'Education', 8299:'Education', 5942:'Education',
-  4899:'Home & Bills', 4814:'Home & Bills', 4900:'Home & Bills', 4813:'Home & Bills',
+  4899:'Living Expenses', 4814:'Living Expenses', 4900:'Living Expenses', 4813:'Living Expenses',
   7832:'Entertainment', 7922:'Entertainment', 7996:'Entertainment', 7998:'Entertainment', 7999:'Entertainment',
   7230:'Self-care', 7298:'Self-care', 7297:'Self-care',
   5992:'Flowers',
