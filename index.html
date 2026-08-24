@@ -3188,8 +3188,12 @@ function financeOverviewSummaryHTML(LP){
     <div class="chart-card clickable-card" style="grid-column:1 / -1;" ${LP||''} onclick="if(blockClickGuard())return; openOverviewDetail()">
       <div class="chart-title-row">
         <div class="chart-title">Overview</div>
-        <span class="chevron">›</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button id="recalcBtn" class="header-btn" onclick="event.stopPropagation(); recalculateEverything();">🔄</button>
+          <span class="chevron">›</span>
+        </div>
       </div>
+      <div id="recalcStatus" class="empty-note" style="text-align:left; padding:0; margin:-6px 0 4px;"></div>
       <div class="mini-stats-grid">
         <div class="mini-stat" onclick="event.stopPropagation(); showNetWorthBreakdown();" style="cursor:pointer;"><div class="mini-stat-label">Net Worth (All-time) <span class="chevron" style="font-size:12px;">›</span></div><div class="mini-stat-num">${fmtShort(netWorth())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Spent</div><div class="mini-stat-num">${fmtShort(monthSpend())}</div></div>
@@ -3598,8 +3602,9 @@ function financeOverviewDetailHTML(){
     <div class="detail-header">
       <button class="back-btn" onclick="closeOverviewDetail()">‹</button>
       <div class="detail-title">Overview</div>
-      <div style="width:32px;"></div>
+      <button id="recalcBtn" class="header-btn" onclick="recalculateEverything()">🔄</button>
     </div>
+    <div id="recalcStatus" class="empty-note" style="text-align:right; padding:0; margin:-8px 0 8px;"></div>
 
     <div class="stats-row">
       <div class="stat-card" onclick="showNetWorthBreakdown()" style="cursor:pointer;"><div class="stat-label">Net Worth ›</div><div class="stat-num">${fmtShort(netWorth())}</div><div class="stat-delta">All-time total — tap for breakdown</div></div>
@@ -3636,9 +3641,10 @@ function mergedTransactionsPanelHTML(LP){
       ${!combined.length ? '<div class="empty-note">No transactions logged yet.</div>' : renderTxRowsGroupedByDay(combined, function(t){
         const isPos = Number(t.amount) > 0 && !isRefundTx(t);
         const icon = CATEGORY_ICON[t.category] || (isPos ? 'ic-dollar' : 'ic-wallet');
+        const meta = escapeHtml(accountLabelById(t.accountId) || t.category);
         return `<div class="tx-row">
           <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-          <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${escapeHtml(t.category)}</div></div>
+          <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${meta}</div></div>
           <div class="tx-amt ${isPos?'pos':'neg'}">${isPos?'+':''}${fmtOriginal(t.amount, t.currency)}</div>
           <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
           <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
@@ -3684,9 +3690,10 @@ function financeHTML(){
             return renderTxRowsGroupedByDay(exp, function(t){
             const icon = CATEGORY_ICON[t.category] || 'ic-wallet';
             const isPos = Number(t.amount) > 0;
+            const meta = escapeHtml(accountLabelById(t.accountId) || t.category);
             return `<div class="tx-row">
               <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-              <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${escapeHtml(t.category)}</div></div>
+              <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${meta}</div></div>
               <div class="tx-amt ${isPos?'pos':'neg'}">${isPos?'+':''}${fmtOriginal(t.amount, t.currency)}</div>
               <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
               <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
@@ -3703,9 +3710,10 @@ function financeHTML(){
             if(!inc.length) return '<div class="empty-note">No income logged yet.</div>';
             return renderTxRowsGroupedByDay(inc, function(t){
               const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
+              const meta = escapeHtml(accountLabelById(t.accountId) || t.category);
               return `<div class="tx-row">
                 <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-                <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${escapeHtml(t.category)}</div></div>
+                <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${meta}</div></div>
                 <div class="tx-amt pos">+${fmtOriginal(t.amount, t.currency)}</div>
                 <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
                 <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
