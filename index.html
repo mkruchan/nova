@@ -3188,12 +3188,8 @@ function financeOverviewSummaryHTML(LP){
     <div class="chart-card clickable-card" style="grid-column:1 / -1;" ${LP||''} onclick="if(blockClickGuard())return; openOverviewDetail()">
       <div class="chart-title-row">
         <div class="chart-title">Overview</div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <button id="recalcBtn" class="header-btn" onclick="event.stopPropagation(); recalculateEverything();">🔄</button>
-          <span class="chevron">›</span>
-        </div>
+        <span class="chevron">›</span>
       </div>
-      <div id="recalcStatus" class="empty-note" style="text-align:left; padding:0; margin:-6px 0 4px;"></div>
       <div class="mini-stats-grid">
         <div class="mini-stat" onclick="event.stopPropagation(); showNetWorthBreakdown();" style="cursor:pointer;"><div class="mini-stat-label">Net Worth (All-time) <span class="chevron" style="font-size:12px;">›</span></div><div class="mini-stat-num">${fmtShort(netWorth())}</div></div>
         <div class="mini-stat"><div class="mini-stat-label">Spent</div><div class="mini-stat-num">${fmtShort(monthSpend())}</div></div>
