@@ -426,16 +426,15 @@
       <select id="txAccountId"></select>
     </div>
     <div class="form-row" id="txTransferFromRow" style="display:none;"><label>From account</label>
-      <select id="txTransferFromId" onchange="updateTransferConversionPreview()"></select>
+      <select id="txTransferFromId" onchange="onTransferAccountChange()"></select>
     </div>
     <div class="form-row" id="txTransferToRow" style="display:none;"><label>To account</label>
-      <select id="txTransferToId" onchange="updateTransferConversionPreview()"></select>
+      <select id="txTransferToId" onchange="onTransferAccountChange()"></select>
     </div>
-    <div id="txTransferConversionPreview" class="empty-note" style="text-align:left; padding:0; margin:-8px 0 8px; display:none;"></div>
     <div class="form-row amount-currency-row">
-      <div><label>Amount</label><input id="txAmount" type="text" inputmode="decimal" oninput="formatAmountInput(this); updateTxAmountPreview(); updateTransferConversionPreview();"></div>
+      <div><label id="txAmountLabel">Amount</label><input id="txAmount" type="text" inputmode="decimal" oninput="formatAmountInput(this); updateTxAmountPreview(); onTransferFromAmountChange();"></div>
       <div><label>Currency</label>
-        <select id="txCurrency" onchange="updateTxAmountPreview()">
+        <select id="txCurrency" onchange="updateTxAmountPreview(); onTransferAccountChange();">
           <option value="ALL" selected>Lek (ALL)</option>
           <option value="EUR">Euro (EUR)</option>
           <option value="USD">Dollar (USD)</option>
@@ -445,6 +444,20 @@
         </select>
       </div>
     </div>
+    <div class="form-row amount-currency-row" id="txTransferToAmountRow" style="display:none;">
+      <div><label>Amount received</label><input id="txTransferToAmount" type="text" inputmode="decimal" oninput="formatAmountInput(this); onTransferToAmountEdited();"></div>
+      <div><label>Currency</label>
+        <select id="txTransferToCurrency" onchange="onTransferToAmountEdited()">
+          <option value="ALL">Lek (ALL)</option>
+          <option value="EUR">Euro (EUR)</option>
+          <option value="USD">Dollar (USD)</option>
+          <option value="UAH">Hryvnia (UAH)</option>
+          <option value="CAD">Canadian Dollar (CAD)</option>
+          <option value="PLN">Polish Zloty (PLN)</option>
+        </select>
+      </div>
+    </div>
+    <div id="txTransferConversionPreview" class="empty-note" style="text-align:left; padding:0; margin:-8px 0 8px; display:none;"></div>
     <div style="display:flex; justify-content:space-between; align-items:center; margin:-8px 0 8px;">
       <span id="txAmountPreview" class="empty-note" style="padding:0;"></span>
       <button type="button" class="header-btn" onclick="showTxCurrencyCalc()">💱 All currencies</button>
@@ -1337,12 +1350,14 @@ function manualAccountCurrentBalance(accountId, currency, startingAmount){
   let net = Number(startingAmount) || 0;
   transactions.forEach(function(t){
     if(t.deleted) return;
-    if((t.currency || DEFAULT_INPUT_CURRENCY) !== currency) return;
     if(t.category === 'Transfer'){
-      const magnitude = Math.abs(Number(t.amount));
-      if(t.toAccountId === accountId) net += magnitude;
-      if(t.fromAccountId === accountId) net -= magnitude;
-    } else if(t.accountId === accountId){
+      const fromMagnitude = Math.abs(Number(t.amount));
+      const toMagnitude = t.toAmount != null ? Math.abs(Number(t.toAmount)) : fromMagnitude;
+      const toCur = t.toCurrency || t.currency || DEFAULT_INPUT_CURRENCY;
+      const fromCur = t.currency || DEFAULT_INPUT_CURRENCY;
+      if(t.toAccountId === accountId && toCur === currency) net += toMagnitude;
+      if(t.fromAccountId === accountId && fromCur === currency) net -= fromMagnitude;
+    } else if(t.accountId === accountId && (t.currency || DEFAULT_INPUT_CURRENCY) === currency){
       net += Number(t.amount);
     }
   });
@@ -1864,6 +1879,11 @@ function dayHeaderLabel(dateStr, dayTotal){
 function sortMostRecentFirst(list){
   return list.slice().sort(function(a,b){
     if(a.occurred_at !== b.occurred_at) return a.occurred_at < b.occurred_at ? 1 : -1;
+    // Within the same day, prefer the precise Monobank timestamp when both
+    // sides have one — a transaction's id reflects import/entry order, not
+    // necessarily the actual order things happened in, especially for
+    // bank-synced transactions pulled in a batch.
+    if(a.occurredAtMs && b.occurredAtMs) return b.occurredAtMs - a.occurredAtMs;
     const na = parseInt(String(a.id).replace(/\D/g,''), 10) || 0;
     const nb = parseInt(String(b.id).replace(/\D/g,''), 10) || 0;
     return nb - na;
@@ -3302,10 +3322,15 @@ function historyRows(){
     const transferMeta = (accountLabelById(t.fromAccountId) && accountLabelById(t.toAccountId))
       ? `${accountLabelById(t.fromAccountId)} → ${accountLabelById(t.toAccountId)}` : '';
     const metaExtra = isTransfer ? transferMeta : (!isIncomeRow && !isRefund && isRefundTx(t) ? escapeHtml(t.category) + ' · Refund' : escapeHtml(t.category));
+    const toCurForDisplay = t.toCurrency || t.currency;
+    const isCrossCurrencyTransfer = isTransfer && t.toAmount != null && toCurForDisplay && toCurForDisplay !== t.currency;
+    const amtDisplay = isCrossCurrencyTransfer
+      ? `${fmtOriginal(t.amount, t.currency)} → ${fmtOriginal(t.toAmount, toCurForDisplay)}`
+      : `${sign}${fmtOriginal(t.amount, t.currency)}`;
     return `<div class="tx-row">
       <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
       <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div>${metaExtra ? `<div class="tx-meta">${metaExtra}</div>` : ''}</div>
-      <div class="tx-amt ${amtClass}">${sign}${fmtOriginal(t.amount, t.currency)}</div>
+      <div class="tx-amt ${amtClass}">${amtDisplay}</div>
       <button class="tx-edit" onclick="editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
       <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
     </div>`;
@@ -3662,7 +3687,11 @@ function financeHTML(){
   // blockClickGuard() at the start of each block's own onclick, so holding
   // long enough to trigger the reorder menu doesn't also navigate into that
   // block's detail screen when the press is released.
-  const LP = `onmousedown="startLongPress()" onmouseup="cancelLongPress()" onmouseleave="cancelLongPress()" ontouchstart="startLongPress()" ontouchend="cancelLongPress()" ontouchcancel="cancelLongPress()"`;
+  // Long-press-to-reorder was removed in favor of the explicit Settings
+  // button (Settings → Dashboard Layout → Reorder Dashboard Blocks) — kept
+  // as an empty string, rather than restructuring every block function,
+  // so re-enabling it later is a one-line change if ever wanted back.
+  const LP = '';
 
   const transfers = sortMostRecentFirst(thisMonthTx().filter(function(t){ return t.category === 'Transfer'; }));
   const refunds = sortMostRecentFirst(thisMonthTx().filter(isRefundTx));
@@ -3729,10 +3758,15 @@ function financeHTML(){
             const icon = CATEGORY_ICON['Transfer'] || 'ic-refresh';
             const transferMeta = (accountLabelById(t.fromAccountId) && accountLabelById(t.toAccountId))
               ? `${accountLabelById(t.fromAccountId)} → ${accountLabelById(t.toAccountId)} · ` : '';
+            const toCur = t.toCurrency || t.currency;
+            const crossCurrency = t.toAmount != null && toCur && toCur !== t.currency;
+            const amtDisplay = crossCurrency
+              ? `${fmtOriginal(t.amount, t.currency)} → ${fmtOriginal(t.toAmount, toCur)}`
+              : `${Number(t.amount) < 0 ? '-' : ''}${fmtOriginal(t.amount, t.currency)}`;
             return `<div class="tx-row">
               <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
               <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${transferMeta}${niceDate(t.occurred_at)}</div></div>
-              <div class="tx-amt">${Number(t.amount) < 0 ? '-' : ''}${fmtOriginal(t.amount, t.currency)}</div>
+              <div class="tx-amt">${amtDisplay}</div>
               <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
               <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
             </div>`;
@@ -3817,23 +3851,49 @@ function accountImpliedCurrency(accountId){
   return null;
 }
 
-window.updateTransferConversionPreview = function(){
+let transferToAmountManuallyEdited = false;
+window.onTransferToAmountEdited = function(){
+  transferToAmountManuallyEdited = true;
+  updateTransferPreviewText();
+};
+window.onTransferFromAmountChange = function(){
+  autoFillTransferToAmount();
+  updateTransferPreviewText();
+};
+window.onTransferAccountChange = function(){
+  const toId = document.getElementById('txTransferToId').value;
+  const toCurrency = accountImpliedCurrency(toId);
+  if(toCurrency){
+    document.getElementById('txTransferToCurrency').value = toCurrency;
+    transferToAmountManuallyEdited = false; // a new account implies a fresh estimate is worth suggesting again
+  }
+  autoFillTransferToAmount();
+  updateTransferPreviewText();
+};
+function autoFillTransferToAmount(){
+  if(transferToAmountManuallyEdited) return; // never overwrite what the user deliberately entered
+  const fromCurrency = document.getElementById('txCurrency').value;
+  const toCurrency = document.getElementById('txTransferToCurrency').value;
+  const rawAmount = parseAmountInput(document.getElementById('txAmount').value);
+  if(isNaN(rawAmount) || rawAmount === 0 || !fromCurrency || !toCurrency) return;
+  const estimated = fromCurrency === toCurrency ? rawAmount : fromDisplay(toDisplay(rawAmount, fromCurrency), toCurrency);
+  document.getElementById('txTransferToAmount').value = estimated.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+function updateTransferPreviewText(){
   const previewEl = document.getElementById('txTransferConversionPreview');
   if(!previewEl) return;
-  const fromId = document.getElementById('txTransferFromId').value;
+  const fromAmount = parseAmountInput(document.getElementById('txAmount').value);
+  const fromCurrency = document.getElementById('txCurrency').value;
+  const toAmount = parseAmountInput(document.getElementById('txTransferToAmount').value);
+  const toCurrency = document.getElementById('txTransferToCurrency').value;
   const toId = document.getElementById('txTransferToId').value;
-  const fromCurrency = accountImpliedCurrency(fromId);
-  const toCurrency = accountImpliedCurrency(toId);
-  const rawAmount = parseAmountInput(document.getElementById('txAmount').value);
-
-  if(!fromCurrency || !toCurrency || fromCurrency === toCurrency || isNaN(rawAmount) || rawAmount === 0){
+  if(isNaN(fromAmount) || isNaN(toAmount) || fromAmount === 0){
     previewEl.style.display = 'none';
     return;
   }
-  const converted = fromDisplay(toDisplay(rawAmount, fromCurrency), toCurrency);
-  previewEl.textContent = `≈ ${fmtOriginal(converted, toCurrency)} arrives in ${accountLabelById(toId)} (converted from ${fromCurrency} to ${toCurrency})`;
+  previewEl.textContent = `${fmtOriginal(fromAmount, fromCurrency)} leaves this account → ${fmtOriginal(toAmount, toCurrency)} arrives in ${accountLabelById(toId) || 'the destination account'}`;
   previewEl.style.display = '';
-};
+}
 
 function populateAccountSelect(){
   const sel = document.getElementById('txAccountId');
@@ -3891,7 +3951,7 @@ function populateTransferAccountSelects(){
     fromSel.value = options[0].id;
     toSel.value = options[1].id;
   }
-  updateTransferConversionPreview();
+  onTransferAccountChange();
 }
 
 function setTxType(type){
@@ -3904,8 +3964,11 @@ function setTxType(type){
   document.getElementById('txAccountRow').style.display = isTransfer ? 'none' : '';
   document.getElementById('txTransferFromRow').style.display = isTransfer ? '' : 'none';
   document.getElementById('txTransferToRow').style.display = isTransfer ? '' : 'none';
+  document.getElementById('txTransferToAmountRow').style.display = isTransfer ? '' : 'none';
+  document.getElementById('txAmountLabel').textContent = isTransfer ? 'Amount sent' : 'Amount';
   if(!isTransfer) populateAccountSelect();
   if(isTransfer){
+    transferToAmountManuallyEdited = false;
     populateCategorySelect('expense'); // populate something internally even though hidden, so there's always a valid list backing the select
     document.getElementById('txCategory').value = 'Transfer';
     populateTransferAccountSelects();
@@ -3984,6 +4047,10 @@ function editTx(id){
   if(isTransfer){
     if(t.fromAccountId) document.getElementById('txTransferFromId').value = t.fromAccountId;
     if(t.toAccountId) document.getElementById('txTransferToId').value = t.toAccountId;
+    document.getElementById('txTransferToAmount').value = Math.abs(Number(t.toAmount != null ? t.toAmount : t.amount)).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    document.getElementById('txTransferToCurrency').value = t.toCurrency || t.currency || DEFAULT_INPUT_CURRENCY;
+    transferToAmountManuallyEdited = true; // this is the transaction's actual saved amount, not an estimate — don't let it get silently overwritten
+    updateTransferPreviewText();
   }
   updateTxAmountPreview();
 }
@@ -4027,10 +4094,13 @@ function saveTransaction(){
   const currency = document.getElementById('txCurrency').value || DEFAULT_INPUT_CURRENCY;
   if(isNaN(amount) || !occurred_at) return;
 
-  let fromAccountId = null, toAccountId = null, name;
+  let fromAccountId = null, toAccountId = null, toAmount = null, toCurrency = null, name;
   if(isTransfer){
     fromAccountId = document.getElementById('txTransferFromId').value || null;
     toAccountId = document.getElementById('txTransferToId').value || null;
+    const rawToAmount = parseAmountInput(document.getElementById('txTransferToAmount').value);
+    toAmount = isNaN(rawToAmount) ? Math.abs(amount) : Math.abs(rawToAmount); // falls back to mirroring the sent amount if left blank
+    toCurrency = document.getElementById('txTransferToCurrency').value || currency;
     const fromLabel = accountLabelById(fromAccountId);
     const toLabel = accountLabelById(toAccountId);
     const defaultName = (fromLabel && toLabel) ? `${fromLabel} → ${toLabel}` : category;
@@ -4047,15 +4117,15 @@ function saveTransaction(){
     if(t){
       t.name = name; t.category = category; t.amount = amount; t.currency = currency; t.occurred_at = occurred_at;
       if(accountId) t.accountId = accountId; else if(accountRowVisible) delete t.accountId;
-      if(isTransfer){ t.fromAccountId = fromAccountId; t.toAccountId = toAccountId; }
-      else { delete t.fromAccountId; delete t.toAccountId; }
+      if(isTransfer){ t.fromAccountId = fromAccountId; t.toAccountId = toAccountId; t.toAmount = toAmount; t.toCurrency = toCurrency; }
+      else { delete t.fromAccountId; delete t.toAccountId; delete t.toAmount; delete t.toCurrency; }
       t.editedAt = Date.now(); // lets a cross-device merge know this copy is the freshest edit
     }
     editingTxId = null;
   } else {
     const tx = { id: 't' + (nextId++), name, category, amount, currency, occurred_at, editedAt: Date.now() };
     if(accountId) tx.accountId = accountId;
-    if(isTransfer){ tx.fromAccountId = fromAccountId; tx.toAccountId = toAccountId; }
+    if(isTransfer){ tx.fromAccountId = fromAccountId; tx.toAccountId = toAccountId; tx.toAmount = toAmount; tx.toCurrency = toCurrency; }
     transactions.unshift(tx);
   }
   persist();
@@ -4743,7 +4813,7 @@ async function autoSyncMonobank(){
               const occurred_at = localDateStr(new Date(item.time * 1000));
               transactions.unshift({
                 id: 't' + (nextId++), monoId: item.id, monoAccountId: account.id, accountId: 'mono:' + account.id, name: desc, category: category,
-                amount: amount, currency: currency, occurred_at: occurred_at, mcc: item.mcc || null, originalMcc: item.originalMcc || null,
+                amount: amount, currency: currency, occurred_at: occurred_at, occurredAtMs: item.time * 1000, mcc: item.mcc || null, originalMcc: item.originalMcc || null,
                 editedAt: 0 // baseline — any manual edit on either device always outranks a freshly-synced import of the same transaction
               });
               existingIds.add(item.id);
