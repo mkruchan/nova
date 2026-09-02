@@ -3520,7 +3520,9 @@ function historyRows(){
     }
     const transferMeta = (accountLabelById(t.fromAccountId) && accountLabelById(t.toAccountId))
       ? `${accountLabelById(t.fromAccountId)} → ${accountLabelById(t.toAccountId)}` : '';
-    const metaExtra = isTransfer ? transferMeta : (!isIncomeRow && !isRefund && isRefundTx(t) ? escapeHtml(t.category) + ' · Refund' : escapeHtml(t.category));
+    const metaExtra = isTransfer ? transferMeta
+      : isAll ? escapeHtml(accountLabelById(t.accountId) || t.category)
+      : (!isIncomeRow && !isRefund && isRefundTx(t) ? escapeHtml(t.category) + ' · Refund' : escapeHtml(t.category));
     const toCurForDisplay = t.toCurrency || t.currency;
     const isCrossCurrencyTransfer = isTransfer && t.toAmount != null && toCurForDisplay && toCurForDisplay !== t.currency;
     const amtDisplay = isCrossCurrencyTransfer
