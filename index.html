@@ -1633,10 +1633,19 @@ function mergeInTransactionsFromCloud(incomingTransactions){
 function applyCloudPayloadNonTransactionFields(payload){
   if(!payload) return;
   if(payload.budgets) budgets = payload.budgets;
-  if(payload.customExpenseCategories) customExpenseCategories = payload.customExpenseCategories;
-  if(payload.customIncomeCategories) customIncomeCategories = payload.customIncomeCategories;
+  // Union-merge rather than replace — these lists only ever grow (there's no
+  // delete-a-category feature, only rename), so a category added on one
+  // device must never be capable of vanishing because a sync from another,
+  // less-up-to-date device happened to apply afterward. This was the root
+  // cause of a transaction's category sometimes failing to show correctly
+  // when editing it: the transaction itself syncs per-item and robustly,
+  // but the category list it depends on was syncing as "whichever whole
+  // payload is newest" — a lagging device's sync could arrive after and
+  // wipe out a category the transaction still referenced.
+  if(payload.customExpenseCategories) customExpenseCategories = Array.from(new Set(customExpenseCategories.concat(payload.customExpenseCategories)));
+  if(payload.customIncomeCategories) customIncomeCategories = Array.from(new Set(customIncomeCategories.concat(payload.customIncomeCategories)));
   if(payload.customCategoryRules) customCategoryRules = payload.customCategoryRules;
-  if(payload.categoryRenames) categoryRenames = payload.categoryRenames;
+  if(payload.categoryRenames) categoryRenames = Object.assign({}, categoryRenames, payload.categoryRenames);
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
 
   // Cloud-sourced budgets need the exact same normalization as locally-loaded
@@ -1644,12 +1653,6 @@ function applyCloudPayloadNonTransactionFields(payload){
   // budgets.months undefined and crashes the next time anything reads it.
   normalizeBudgets();
 
-  // Re-apply custom categories to the working lists and recompute nextId,
-  // same backfill logic loadData()/loadCustomCategories() already do.
-  [customExpenseCategories, customIncomeCategories].forEach(function(list, i){
-    const target = i === 0 ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
-    list.forEach(function(c){ if(target.indexOf(c) === -1) target.push(c); });
-  });
   const maxId = transactions.reduce(function(m,t){
     const n = parseInt(String(t.id).replace(/\D/g,''), 10);
     return isNaN(n) ? m : Math.max(m, n);
@@ -1660,6 +1663,7 @@ function applyCloudPayloadNonTransactionFields(payload){
   localStorage.setItem('nova-budgets', JSON.stringify(budgets));
   localStorage.setItem('nova-custom-expense-categories', JSON.stringify(customExpenseCategories));
   localStorage.setItem('nova-custom-income-categories', JSON.stringify(customIncomeCategories));
+  localStorage.setItem('nova-category-renames', JSON.stringify(categoryRenames));
   localStorage.setItem('nova-custom-category-rules', JSON.stringify(customCategoryRules));
   localStorage.setItem('nova-manual-accounts', JSON.stringify(manualAccounts));
   try{ localStorage.setItem('nova-show-mono-data', String(showMonoData)); }catch(e){}
@@ -4149,9 +4153,16 @@ function populateCategorySelect(type){
   const secondary = type === 'income' ? allExpenseCategories() : allIncomeCategories();
   const secondaryUnique = secondary.filter(function(c){ return primary.indexOf(c) === -1; });
   const sel = document.getElementById('txCategory');
+  // If the transaction currently being edited has a category this device
+  // doesn't otherwise know about, still show it as a selectable (and
+  // pre-selected) option rather than silently leaving the field blank.
+  const editingTx = editingTxId ? transactions.find(function(x){ return x.id === editingTxId; }) : null;
+  const unknownCurrent = (editingTx && editingTx.category && primary.indexOf(editingTx.category) === -1 && secondaryUnique.indexOf(editingTx.category) === -1)
+    ? editingTx.category : null;
   sel.innerHTML = primary.map(function(c){ return `<option>${c}</option>`; }).join('')
     + (secondaryUnique.length ? `<optgroup label="${type==='income' ? 'Expense categories (e.g. a refund tied to that expense)' : 'Income categories'}">`
         + secondaryUnique.map(function(c){ return `<option>${c}</option>`; }).join('') + '</optgroup>' : '')
+    + (unknownCurrent ? `<option>${escapeHtml(unknownCurrent)}</option>` : '')
     + '<option value="__add_new__">+ Add new category…</option>';
 }
 
