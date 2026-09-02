@@ -3530,7 +3530,7 @@ function historyRows(){
     const transferMeta = (accountLabelById(t.fromAccountId) && accountLabelById(t.toAccountId))
       ? `${accountLabelById(t.fromAccountId)} → ${accountLabelById(t.toAccountId)}` : '';
     const metaExtra = isTransfer ? transferMeta
-      : isAll ? escapeHtml(accountLabelById(t.accountId) || t.category)
+      : isAll ? (accountLabelById(t.accountId) ? `${escapeHtml(accountLabelById(t.accountId))} · ${escapeHtml(t.category)}` : escapeHtml(t.category))
       : (!isIncomeRow && !isRefund && isRefundTx(t) ? escapeHtml(t.category) + ' · Refund' : escapeHtml(t.category));
     const toCurForDisplay = t.toCurrency || t.currency;
     const isCrossCurrencyTransfer = isTransfer && t.toAmount != null && toCurForDisplay && toCurForDisplay !== t.currency;
@@ -3879,7 +3879,8 @@ function mergedTransactionsPanelHTML(LP){
       ${!combined.length ? '<div class="empty-note">No transactions logged yet.</div>' : renderTxRowsGroupedByDay(combined, function(t){
         const isPos = Number(t.amount) > 0 && !isRefundTx(t);
         const icon = CATEGORY_ICON[t.category] || (isPos ? 'ic-dollar' : 'ic-wallet');
-        const meta = escapeHtml(accountLabelById(t.accountId) || t.category);
+        const accountLabel = accountLabelById(t.accountId);
+        const meta = accountLabel ? `${escapeHtml(accountLabel)} · ${escapeHtml(t.category)}` : escapeHtml(t.category);
         return `<div class="tx-row">
           <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
           <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${meta}</div></div>
@@ -3932,7 +3933,7 @@ function financeHTML(){
             return renderTxRowsGroupedByDay(exp, function(t){
             const icon = CATEGORY_ICON[t.category] || 'ic-wallet';
             const isPos = Number(t.amount) > 0;
-            const meta = escapeHtml(accountLabelById(t.accountId) || t.category);
+            const accountLabel = accountLabelById(t.accountId); const meta = accountLabel ? `${escapeHtml(accountLabel)} · ${escapeHtml(t.category)}` : escapeHtml(t.category);
             return `<div class="tx-row">
               <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
               <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${meta}</div></div>
@@ -3952,7 +3953,7 @@ function financeHTML(){
             if(!inc.length) return '<div class="empty-note">No income logged yet.</div>';
             return renderTxRowsGroupedByDay(inc, function(t){
               const icon = CATEGORY_ICON[t.category] || 'ic-dollar';
-              const meta = escapeHtml(accountLabelById(t.accountId) || t.category);
+              const accountLabel = accountLabelById(t.accountId); const meta = accountLabel ? `${escapeHtml(accountLabel)} · ${escapeHtml(t.category)}` : escapeHtml(t.category);
               return `<div class="tx-row">
                 <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
                 <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${meta}</div></div>
