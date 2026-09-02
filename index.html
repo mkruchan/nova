@@ -2719,14 +2719,23 @@ function manageCategoriesListHTML(){
   return `
     <div class="side-label" style="margin:0 0 6px;">Expense</div>
     ${expenseCats.map(row).join('')}
+    <button class="header-btn" style="margin-top:8px;" onclick="promptAddCategory('expense')">+ Add expense category</button>
+
     <div class="side-label" style="margin:16px 0 6px;">Income</div>
     ${incomeCats.map(row).join('')}
+    <button class="header-btn" style="margin-top:8px;" onclick="promptAddCategory('income')">+ Add income category</button>
   `;
 }
 window.promptRenameCategory = function(currentName){
   const newName = prompt('Rename "' + currentName + '" to:', currentName);
   if(newName === null) return; // cancelled
   renameCategory(currentName, newName);
+  document.getElementById('manageCategoriesBody').innerHTML = manageCategoriesListHTML();
+};
+window.promptAddCategory = function(type){
+  const name = prompt('New ' + (type === 'income' ? 'income' : 'expense') + ' category name:');
+  if(name === null || !name.trim()) return; // cancelled or blank
+  addCustomCategory(name, type);
   document.getElementById('manageCategoriesBody').innerHTML = manageCategoriesListHTML();
 };
 window.closeManageCategories = function(){
