@@ -1148,8 +1148,23 @@ window.updateTxAmountPreview = function(){
 let currentUser = { id: 'local' };
 let transactions = [];
 let currentView = 'finance';
-let nextId = 1;
+let nextId = 1; // retained only for any legacy code path that still reads it; no longer used to generate new transaction ids — see generateTxId
 let showMonoData = true;
+
+// Generates a new transaction id. Deliberately NOT a simple incrementing
+// counter — nextId is computed independently on each device from whatever
+// transactions that device has already seen, with no coordination between
+// devices. Two devices can easily produce the exact same sequential id
+// ("t1", "t2"...) for two completely unrelated transactions — most likely
+// right when a second device is first set up and both are used for a few
+// entries before their first sync. Since the sync merge is keyed by this id,
+// a collision makes it treat two different transactions as the same one and
+// silently keep only whichever has the later edit timestamp, discarding the
+// other's data entirely. Timestamp + random suffix makes a same-millisecond
+// collision between two devices astronomically unlikely.
+function generateTxId(){
+  return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
 
 let fontScale = 1;
 function loadFontScale(){
@@ -4341,7 +4356,7 @@ function saveTransaction(){
     }
     editingTxId = null;
   } else {
-    const tx = { id: 't' + (nextId++), name, category, amount, currency, occurred_at, editedAt: Date.now() };
+    const tx = { id: generateTxId(), name, category, amount, currency, occurred_at, editedAt: Date.now() };
     if(accountId) tx.accountId = accountId;
     if(isTransfer){ tx.fromAccountId = fromAccountId; tx.toAccountId = toAccountId; tx.toAmount = toAmount; tx.toCurrency = toCurrency; }
     transactions.unshift(tx);
@@ -4656,7 +4671,7 @@ function importFromCSVText(text){
       if(CURRENCY_SYMBOLS[c]) currency = c;
     }
 
-    transactions.unshift({ id: 't' + (nextId++), name: name, category: category, amount: amount, currency: currency, occurred_at: occurred_at });
+    transactions.unshift({ id: generateTxId(), name: name, category: category, amount: amount, currency: currency, occurred_at: occurred_at, editedAt: Date.now() });
     imported++;
   }
 
@@ -5030,7 +5045,7 @@ async function autoSyncMonobank(){
               }
               const occurred_at = localDateStr(new Date(item.time * 1000));
               transactions.unshift({
-                id: 't' + (nextId++), monoId: item.id, monoAccountId: account.id, accountId: 'mono:' + account.id, name: desc, category: category,
+                id: generateTxId(), monoId: item.id, monoAccountId: account.id, accountId: 'mono:' + account.id, name: desc, category: category,
                 amount: amount, currency: currency, occurred_at: occurred_at, occurredAtMs: item.time * 1000, mcc: item.mcc || null, originalMcc: item.originalMcc || null,
                 editedAt: 0 // baseline — any manual edit on either device always outranks a freshly-synced import of the same transaction
               });
