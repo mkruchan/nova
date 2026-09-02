@@ -160,6 +160,13 @@
   .range-pill:hover{ color:var(--blue-light); }
   .filter-row{ display:flex; gap:8px; flex-wrap:wrap; }
   .filter-select{ background:var(--panel-2); border:1px solid var(--border-2); color:var(--muted); border-radius:7px; padding:6px 9px; font-size:calc(18px * var(--font-scale, 1)); outline:none; }
+  .custom-select-btn{ display:flex; align-items:center; justify-content:space-between; gap:8px; background:var(--panel-2); border:1px solid var(--border-2); color:var(--white); border-radius:7px; padding:6px 9px; font-size:calc(14px * var(--font-scale, 1)); width:100%; text-align:left; cursor:pointer; }
+  .custom-select-btn .chevron-down{ color:var(--muted-dim); font-size:12px; flex-shrink:0; }
+  select.native-select-hidden{ display:none; }
+  .picker-option-row{ display:flex; align-items:center; justify-content:space-between; padding:12px 4px; border-bottom:1px solid var(--border); cursor:pointer; font-size:calc(15px * var(--font-scale, 1)); color:var(--white); }
+  .picker-option-row:last-child{ border-bottom:none; }
+  .picker-option-row.selected{ color:var(--blue); font-weight:600; }
+  .picker-option-row .check{ color:var(--blue); }
   .filter-select:focus{ border-color:var(--blue); }
   .breakdown-total-label{ font-size:calc(13px * var(--font-scale, 1)); color:var(--muted); margin-top:6px; }
   .breakdown-total{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(30px * var(--font-scale, 1)); margin-bottom:14px; }
@@ -420,41 +427,59 @@
       </div>
     </div>
     <div class="form-row" id="txCategoryRow"><label>Category</label>
-      <select id="txCategory" onchange="handleCategorySelectChange(this)"></select>
+      <div class="custom-select-wrap">
+        <button type="button" class="custom-select-btn" onclick="openCustomPicker('txCategory','Category')"><span id="txCategory_label">Choose…</span><span class="chevron-down">⌄</span></button>
+        <select id="txCategory" class="native-select-hidden" onchange="handleCategorySelectChange(this)"></select>
+      </div>
     </div>
     <div class="form-row" id="txAccountRow"><label>Account</label>
-      <select id="txAccountId"></select>
+      <div class="custom-select-wrap">
+        <button type="button" class="custom-select-btn" onclick="openCustomPicker('txAccountId','Account')"><span id="txAccountId_label">Choose…</span><span class="chevron-down">⌄</span></button>
+        <select id="txAccountId" class="native-select-hidden"></select>
+      </div>
     </div>
     <div class="form-row" id="txTransferFromRow" style="display:none;"><label>From account</label>
-      <select id="txTransferFromId" onchange="onTransferAccountChange()"></select>
+      <div class="custom-select-wrap">
+        <button type="button" class="custom-select-btn" onclick="openCustomPicker('txTransferFromId','From account')"><span id="txTransferFromId_label">Choose…</span><span class="chevron-down">⌄</span></button>
+        <select id="txTransferFromId" class="native-select-hidden" onchange="onTransferAccountChange()"></select>
+      </div>
     </div>
     <div class="form-row" id="txTransferToRow" style="display:none;"><label>To account</label>
-      <select id="txTransferToId" onchange="onTransferAccountChange()"></select>
+      <div class="custom-select-wrap">
+        <button type="button" class="custom-select-btn" onclick="openCustomPicker('txTransferToId','To account')"><span id="txTransferToId_label">Choose…</span><span class="chevron-down">⌄</span></button>
+        <select id="txTransferToId" class="native-select-hidden" onchange="onTransferAccountChange()"></select>
+      </div>
     </div>
     <div class="form-row amount-currency-row">
       <div><label id="txAmountLabel">Amount</label><input id="txAmount" type="text" inputmode="decimal" oninput="formatAmountInput(this); updateTxAmountPreview(); onTransferFromAmountChange();"></div>
       <div><label>Currency</label>
-        <select id="txCurrency" onchange="updateTxAmountPreview(); onTransferAccountChange();">
-          <option value="ALL" selected>Lek (ALL)</option>
-          <option value="EUR">Euro (EUR)</option>
-          <option value="USD">Dollar (USD)</option>
-          <option value="UAH">Hryvnia (UAH)</option>
-          <option value="CAD">Canadian Dollar (CAD)</option>
-          <option value="PLN">Polish Zloty (PLN)</option>
-        </select>
+        <div class="custom-select-wrap">
+          <button type="button" class="custom-select-btn" onclick="openCustomPicker('txCurrency','Currency')"><span id="txCurrency_label">Lek (ALL)</span><span class="chevron-down">⌄</span></button>
+          <select id="txCurrency" class="native-select-hidden" onchange="updateTxAmountPreview(); onTransferAccountChange();">
+            <option value="ALL" selected>Lek (ALL)</option>
+            <option value="EUR">Euro (EUR)</option>
+            <option value="USD">Dollar (USD)</option>
+            <option value="UAH">Hryvnia (UAH)</option>
+            <option value="CAD">Canadian Dollar (CAD)</option>
+            <option value="PLN">Polish Zloty (PLN)</option>
+          </select>
+        </div>
       </div>
     </div>
     <div class="form-row amount-currency-row" id="txTransferToAmountRow" style="display:none;">
       <div><label>Amount received</label><input id="txTransferToAmount" type="text" inputmode="decimal" oninput="formatAmountInput(this); onTransferToAmountEdited();"></div>
       <div><label>Currency</label>
-        <select id="txTransferToCurrency" onchange="onTransferToAmountEdited()">
-          <option value="ALL">Lek (ALL)</option>
-          <option value="EUR">Euro (EUR)</option>
-          <option value="USD">Dollar (USD)</option>
-          <option value="UAH">Hryvnia (UAH)</option>
-          <option value="CAD">Canadian Dollar (CAD)</option>
-          <option value="PLN">Polish Zloty (PLN)</option>
-        </select>
+        <div class="custom-select-wrap">
+          <button type="button" class="custom-select-btn" onclick="openCustomPicker('txTransferToCurrency','Currency')"><span id="txTransferToCurrency_label">Lek (ALL)</span><span class="chevron-down">⌄</span></button>
+          <select id="txTransferToCurrency" class="native-select-hidden" onchange="onTransferToAmountEdited()">
+            <option value="ALL">Lek (ALL)</option>
+            <option value="EUR">Euro (EUR)</option>
+            <option value="USD">Dollar (USD)</option>
+            <option value="UAH">Hryvnia (UAH)</option>
+            <option value="CAD">Canadian Dollar (CAD)</option>
+            <option value="PLN">Polish Zloty (PLN)</option>
+          </select>
+        </div>
       </div>
     </div>
     <div id="txTransferConversionPreview" class="empty-note" style="text-align:left; padding:0; margin:-8px 0 8px; display:none;"></div>
@@ -481,14 +506,17 @@
     </div>
     <div class="side-label" id="budgetModalMonthLabel" style="margin-bottom:14px;"></div>
     <div class="form-row"><label>Currency</label>
-      <select id="budgetCurrency" onchange="convertBudgetEditCurrency()">
-        <option value="EUR">Euro (EUR)</option>
-        <option value="USD">Dollar (USD)</option>
-        <option value="UAH">Hryvnia (UAH)</option>
-        <option value="ALL">Lek (ALL)</option>
-        <option value="CAD">Canadian Dollar (CAD)</option>
-        <option value="PLN">Polish Zloty (PLN)</option>
-      </select>
+      <div class="custom-select-wrap">
+        <button type="button" class="custom-select-btn" onclick="openCustomPicker('budgetCurrency','Currency')"><span id="budgetCurrency_label">Euro (EUR)</span><span class="chevron-down">⌄</span></button>
+        <select id="budgetCurrency" class="native-select-hidden" onchange="convertBudgetEditCurrency()">
+          <option value="EUR">Euro (EUR)</option>
+          <option value="USD">Dollar (USD)</option>
+          <option value="UAH">Hryvnia (UAH)</option>
+          <option value="ALL">Lek (ALL)</option>
+          <option value="CAD">Canadian Dollar (CAD)</option>
+          <option value="PLN">Polish Zloty (PLN)</option>
+        </select>
+      </div>
     </div>
     <div class="form-row"><label>Monthly income target</label><input id="budgetIncomeTarget" type="text" inputmode="decimal" placeholder="0" oninput="formatAmountInput(this)"></div>
     <div class="form-row"><label>Monthly expense budget (overall)</label><input id="budgetExpenseTarget" type="text" inputmode="decimal" placeholder="0" oninput="formatAmountInput(this)"></div>
@@ -634,6 +662,27 @@
     <div id="excludeCategoriesBody"></div>
     <div class="modal-actions">
       <button class="modal-save" onclick="closeExcludeCategoriesModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="manageCategoriesModalOverlay" onclick="if(event.target===this) closeManageCategories()">
+  <div class="modal" style="max-height:80vh; overflow-y:auto;">
+    <h3>Manage Categories</h3>
+    <div class="empty-note" style="text-align:left; margin-bottom:10px;">Tap ✏️ to rename a category — existing transactions and any budget for it move to the new name automatically.</div>
+    <div id="manageCategoriesBody"></div>
+    <div class="modal-actions">
+      <button class="modal-save" onclick="closeManageCategories()">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="customPickerModalOverlay" onclick="if(event.target===this) closeCustomPicker()">
+  <div class="modal" style="max-height:80vh; overflow-y:auto;">
+    <h3 id="customPickerTitle">Choose</h3>
+    <div id="customPickerBody"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeCustomPicker()">Cancel</button>
     </div>
   </div>
 </div>
@@ -803,8 +852,57 @@ function persistCustomCategories(){
   localStorage.setItem('nova-custom-income-categories', JSON.stringify(customIncomeCategories));
   scheduleCloudPush();
 }
-function allExpenseCategories(){ return EXPENSE_CATEGORIES.concat(customExpenseCategories); }
-function allIncomeCategories(){ return INCOME_CATEGORIES.concat(customIncomeCategories); }
+
+// Maps an original category name to whatever it's been renamed to, applied
+// on top of both the built-in and custom category lists. This lets a
+// built-in category (defined as a code constant) be renamed from inside the
+// app without touching the constant itself — the rename just overlays it.
+let categoryRenames = {};
+function loadCategoryRenames(){
+  try{ categoryRenames = JSON.parse(localStorage.getItem('nova-category-renames') || '{}'); }
+  catch(e){ categoryRenames = {}; }
+}
+function persistCategoryRenames(){
+  localStorage.setItem('nova-category-renames', JSON.stringify(categoryRenames));
+  scheduleCloudPush();
+}
+function allExpenseCategories(){ return EXPENSE_CATEGORIES.concat(customExpenseCategories).map(function(c){ return categoryRenames[c] || c; }); }
+function allIncomeCategories(){ return INCOME_CATEGORIES.concat(customIncomeCategories).map(function(c){ return categoryRenames[c] || c; }); }
+
+// Finds which original (un-renamed) key currently displays as currentName —
+// needed because the name shown in the UI may already be a previous rename,
+// and a fresh rename needs to update that same underlying key rather than
+// creating an unrelated new mapping.
+function findOriginalCategoryKey(currentName){
+  for(const key in categoryRenames){
+    if(categoryRenames[key] === currentName) return key; // this category was renamed before — currentName is the result of that rename
+  }
+  return currentName; // never renamed — currentName is itself the original key
+}
+
+window.renameCategory = function(currentName, newNameRaw){
+  const newName = (newNameRaw || '').trim();
+  if(!newName || newName === currentName) return;
+  const originalKey = findOriginalCategoryKey(currentName);
+  categoryRenames[originalKey] = newName;
+  persistCategoryRenames();
+
+  // Migrate existing transactions carrying the old displayed name.
+  transactions.forEach(function(t){ if(t.category === currentName) t.category = newName; });
+  persist();
+
+  // Migrate any per-category budget amount set under the old name, across
+  // every month that has one — summing if the new name also already has one.
+  Object.keys((budgets && budgets.months) || {}).forEach(function(key){
+    const cb = budgets.months[key].categoryBudgets;
+    if(!cb || cb[currentName] == null) return;
+    cb[newName] = (Number(cb[newName]) || 0) + Number(cb[currentName]);
+    delete cb[currentName];
+  });
+  persistBudgets();
+
+  renderView('settings');
+};
 
 /* ---------- Custom auto-categorization rules ---------- */
 // User-defined keyword-to-category overrides (e.g. "apple" -> "Digital /
@@ -1410,6 +1508,7 @@ function cloudPayload(){
     customExpenseCategories: customExpenseCategories,
     customIncomeCategories: customIncomeCategories,
     customCategoryRules: customCategoryRules,
+    categoryRenames: categoryRenames,
     showMonoData: showMonoData,
     manualAccounts: manualAccounts
   };
@@ -1522,6 +1621,7 @@ function applyCloudPayloadNonTransactionFields(payload){
   if(payload.customExpenseCategories) customExpenseCategories = payload.customExpenseCategories;
   if(payload.customIncomeCategories) customIncomeCategories = payload.customIncomeCategories;
   if(payload.customCategoryRules) customCategoryRules = payload.customCategoryRules;
+  if(payload.categoryRenames) categoryRenames = payload.categoryRenames;
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
 
   // Cloud-sourced budgets need the exact same normalization as locally-loaded
@@ -1716,6 +1816,7 @@ function init(){
   loadDisplayCurrency();
   loadMonoDisplayFromDate();
   loadCustomCategories();
+  loadCategoryRenames();
   loadCustomCategoryRules();
   loadMonoSyncStatus();
   loadMonoAccounts();
@@ -1804,6 +1905,7 @@ function renderView(view){
         <p>This module is next up. Ask Nova will work the same way here once it's live — same bar, same voice, new data underneath.</p>
       </div>`;
   }
+  refreshAllCustomSelectLabels();
 }
 
 /* ---------- Finance calculations ---------- */
@@ -2490,14 +2592,20 @@ function expenseDetailScreenHTML(){
     </div>
 
     <div class="filter-row detail-filters">
-      <select class="filter-select" onchange="setBreakdownPeriod(this.value)">
-        <option value="week"${breakdownPeriod==='week'?' selected':''}>Weekly</option>
-        <option value="month"${breakdownPeriod==='month'?' selected':''}>Monthly</option>
-        <option value="quarter"${breakdownPeriod==='quarter'?' selected':''}>Quarterly</option>
-        <option value="year"${breakdownPeriod==='year'?' selected':''}>Yearly</option>
-        <option value="all"${breakdownPeriod==='all'?' selected':''}>All time</option>
-      </select>
-      <select class="filter-select" onchange="setBreakdownCategory(this.value)">${catOptions}</select>
+      <div class="custom-select-wrap">
+        <button type="button" class="custom-select-btn" onclick="openCustomPicker('breakdownPeriodSelect','Period')"><span id="breakdownPeriodSelect_label"></span><span class="chevron-down">⌄</span></button>
+        <select id="breakdownPeriodSelect" class="native-select-hidden" onchange="setBreakdownPeriod(this.value)">
+          <option value="week"${breakdownPeriod==='week'?' selected':''}>Weekly</option>
+          <option value="month"${breakdownPeriod==='month'?' selected':''}>Monthly</option>
+          <option value="quarter"${breakdownPeriod==='quarter'?' selected':''}>Quarterly</option>
+          <option value="year"${breakdownPeriod==='year'?' selected':''}>Yearly</option>
+          <option value="all"${breakdownPeriod==='all'?' selected':''}>All time</option>
+        </select>
+      </div>
+      <div class="custom-select-wrap">
+        <button type="button" class="custom-select-btn" onclick="openCustomPicker('breakdownCategorySelect','Category')"><span id="breakdownCategorySelect_label"></span><span class="chevron-down">⌄</span></button>
+        <select id="breakdownCategorySelect" class="native-select-hidden" onchange="setBreakdownCategory(this.value)">${catOptions}</select>
+      </div>
     </div>
 
     <div class="filter-row detail-filters" style="align-items:center;">
@@ -2536,6 +2644,94 @@ function expenseDetailScreenHTML(){
 
 window.setBreakdownPeriod = function(v){ breakdownPeriod = v; renderView('finance'); };
 window.setBreakdownCategory = function(v){ breakdownCategory = v; financeSubView = 'expense'; renderView('finance'); };
+
+// Generic custom picker — replaces the native <select> dropdown (which
+// renders as a plain system menu on iOS/Safari, out of step with the rest
+// of the app's own styling) with a themed modal list. The underlying
+// <select> is kept in the DOM (just visually hidden) so every existing
+// `.value` read/write and onchange handler throughout the app keeps working
+// completely unchanged — this only replaces how the option list is
+// presented, not the underlying data flow. Reads the select's <option>
+// elements live at open-time, so it works equally for statically-defined
+// selects and ones a JS function repopulates dynamically (accounts,
+// categories, etc.) without needing per-select rewrites.
+let activeCustomPickerSelectId = null;
+window.openCustomPicker = function(selectId, title){
+  const sel = document.getElementById(selectId);
+  if(!sel) return;
+  activeCustomPickerSelectId = selectId;
+  document.getElementById('customPickerTitle').textContent = title || 'Choose';
+  const options = Array.from(sel.options);
+  document.getElementById('customPickerBody').innerHTML = options.map(function(o){
+    const isSelected = o.value === sel.value;
+    return `<div class="picker-option-row${isSelected?' selected':''}" onclick="chooseCustomPickerOption('${o.value.replace(/'/g,"\\'")}')">
+      <span>${escapeHtml(o.text)}</span>
+      ${isSelected ? '<span class="check">✓</span>' : ''}
+    </div>`;
+  }).join('');
+  openModal('customPickerModalOverlay');
+};
+window.chooseCustomPickerOption = function(value){
+  const sel = document.getElementById(activeCustomPickerSelectId);
+  if(sel){
+    sel.value = value;
+    sel.dispatchEvent(new Event('change')); // fires whatever onchange handler this select already had wired up
+    refreshCustomSelectLabel(activeCustomPickerSelectId);
+  }
+  closeModal('customPickerModalOverlay');
+};
+window.closeCustomPicker = function(){ closeModal('customPickerModalOverlay'); };
+// Keeps a picker button's visible label in sync with its underlying select
+// — called after picking an option, and should also be called after any
+// dynamic repopulation of the select's options (e.g. populateAccountSelect).
+function refreshCustomSelectLabel(selectId){
+  const sel = document.getElementById(selectId);
+  const labelEl = document.getElementById(selectId + '_label');
+  if(!sel || !labelEl) return;
+  const selectedOption = sel.options[sel.selectedIndex];
+  labelEl.textContent = selectedOption ? selectedOption.text : '';
+}
+// Finds every custom-select wrapper currently in the DOM and syncs its
+// label to match its hidden select's current selection — called after every
+// render so newly-rendered pickers show the right label immediately,
+// without each screen needing to manually call refreshCustomSelectLabel for
+// every select it happens to contain.
+function refreshAllCustomSelectLabels(){
+  document.querySelectorAll('.custom-select-wrap select').forEach(function(sel){
+    if(sel.id) refreshCustomSelectLabel(sel.id);
+  });
+}
+
+window.openManageCategories = function(){
+  document.getElementById('manageCategoriesBody').innerHTML = manageCategoriesListHTML();
+  openModal('manageCategoriesModalOverlay');
+};
+function manageCategoriesListHTML(){
+  const nonRenamable = ['Transfer', 'Refund', 'Loan'];
+  const expenseCats = allExpenseCategories().filter(function(c){ return nonRenamable.indexOf(c) === -1; });
+  const incomeCats = allIncomeCategories().filter(function(c){ return nonRenamable.indexOf(c) === -1 && expenseCats.indexOf(c) === -1; });
+  function row(c){
+    return `<div class="cat-row">
+      <span class="cat-name">${escapeHtml(c)}</span>
+      <button class="header-btn" onclick="promptRenameCategory('${escapeHtml(c).replace(/'/g,"\\'")}')">✏️</button>
+    </div>`;
+  }
+  return `
+    <div class="side-label" style="margin:0 0 6px;">Expense</div>
+    ${expenseCats.map(row).join('')}
+    <div class="side-label" style="margin:16px 0 6px;">Income</div>
+    ${incomeCats.map(row).join('')}
+  `;
+}
+window.promptRenameCategory = function(currentName){
+  const newName = prompt('Rename "' + currentName + '" to:', currentName);
+  if(newName === null) return; // cancelled
+  renameCategory(currentName, newName);
+  document.getElementById('manageCategoriesBody').innerHTML = manageCategoriesListHTML();
+};
+window.closeManageCategories = function(){
+  closeModal('manageCategoriesModalOverlay');
+};
 
 window.openExcludeCategoriesModal = function(){
   const isIncome = breakdownType === 'income';
@@ -2860,17 +3056,20 @@ function accountsDetailScreenHTML(){
     <div class="form-row amount-currency-row">
       <div><label>Starting balance</label><input id="newManualAccountBalance" type="text" inputmode="decimal" placeholder="0" oninput="formatAmountInput(this)"></div>
       <div><label>Currency</label>
-        <select id="newManualAccountCurrency">
-          <option value="EUR" selected>Euro (EUR)</option>
-          <option value="ALL">Lek (ALL)</option>
-          <option value="USD">Dollar (USD)</option>
-          <option value="UAH">Hryvnia (UAH)</option>
-          <option value="CAD">Canadian Dollar (CAD)</option>
-          <option value="PLN">Polish Zloty (PLN)</option>
-          <option value="USDT">USDT</option>
-          <option value="USDC">USDC</option>
-          <option value="ETH">ETH</option>
-        </select>
+        <div class="custom-select-wrap">
+          <button type="button" class="custom-select-btn" onclick="openCustomPicker('newManualAccountCurrency','Currency')"><span id="newManualAccountCurrency_label">Euro (EUR)</span><span class="chevron-down">⌄</span></button>
+          <select id="newManualAccountCurrency" class="native-select-hidden">
+            <option value="EUR" selected>Euro (EUR)</option>
+            <option value="ALL">Lek (ALL)</option>
+            <option value="USD">Dollar (USD)</option>
+            <option value="UAH">Hryvnia (UAH)</option>
+            <option value="CAD">Canadian Dollar (CAD)</option>
+            <option value="PLN">Polish Zloty (PLN)</option>
+            <option value="USDT">USDT</option>
+            <option value="USDC">USDC</option>
+            <option value="ETH">ETH</option>
+          </select>
+        </div>
       </div>
     </div>
     <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
@@ -3356,7 +3555,7 @@ function historyScreenHTML(){
     </div>
 
     <div class="filter-row detail-filters">
-      ${(isTransfer || isRefund || isAll) ? '' : `<select class="filter-select" onchange="setHistoryCategory(this.value)">${catOptions}</select>`}
+      ${(isTransfer || isRefund || isAll) ? '' : `<div class="custom-select-wrap"><button type="button" class="custom-select-btn" onclick="openCustomPicker('historyCategorySelect','Category')"><span id="historyCategorySelect_label"></span><span class="chevron-down">⌄</span></button><select id="historyCategorySelect" class="native-select-hidden" onchange="setHistoryCategory(this.value)">${catOptions}</select></div>`}
       <input class="filter-select" type="text" placeholder="Search by name…" value="${escapeHtml(historySearch)}" oninput="setHistorySearch(this.value)" style="flex:1;">
     </div>
     <div class="filter-row detail-filters" style="align-items:center;">
@@ -3407,17 +3606,24 @@ function settingsScreenHTML(){
 
     <div class="side-label" style="margin:20px 0 8px;">Display Currency</div>
     <div class="empty-note" style="text-align:left; margin-bottom:8px;">Net Worth, Budget, Income/Expense totals, and category breakdowns are all shown and totaled in this currency. Individual transactions still show their own original currency.</div>
-    <select class="filter-select" onchange="setDisplayCurrency(this.value)" style="width:100%;">
-      ${['EUR','USD','UAH','ALL','CAD','PLN'].map(function(c){
-        return `<option value="${c}"${c===DISPLAY_CURRENCY?' selected':''}>${CURRENCY_NAMES[c] || c} (${c})</option>`;
-      }).join('')}
-    </select>
+    <div class="custom-select-wrap">
+      <button type="button" class="custom-select-btn" onclick="openCustomPicker('displayCurrencySelect','Display Currency')"><span id="displayCurrencySelect_label"></span><span class="chevron-down">⌄</span></button>
+      <select id="displayCurrencySelect" class="native-select-hidden" onchange="setDisplayCurrency(this.value)">
+        ${['EUR','USD','UAH','ALL','CAD','PLN'].map(function(c){
+          return `<option value="${c}"${c===DISPLAY_CURRENCY?' selected':''}>${CURRENCY_NAMES[c] || c} (${c})</option>`;
+        }).join('')}
+      </select>
+    </div>
+
+    <div class="side-label" style="margin:20px 0 8px;">Manage Categories</div>
+    <div class="empty-note" style="text-align:left; margin-bottom:8px;">Rename any category — every past and future transaction, plus any budget set for it, automatically moves to the new name.</div>
+    <button class="header-btn" onclick="openManageCategories()">✏️ Edit Categories</button>
 
     <div class="side-label" style="margin:20px 0 8px;">Auto Categorization Rules</div>
     <div class="empty-note" style="text-align:left; margin-bottom:8px;">If a synced transaction's name contains this text, it's assigned this category automatically — checked before any built-in matching, so your own rules always win.</div>
     <div id="categoryRulesList">${categoryRulesListHTML()}</div>
     <div class="form-row" style="margin-top:10px;"><label>If name contains</label><input id="newRuleKeyword" type="text" placeholder="e.g. apple"></div>
-    <div class="form-row"><label>Assign category</label><select id="newRuleCategory">${allExpenseCategories().concat(allIncomeCategories()).filter(function(c,i,arr){ return arr.indexOf(c) === i; }).map(function(c){ return `<option>${c}</option>`; }).join('')}</select></div>
+    <div class="form-row"><label>Assign category</label><div class="custom-select-wrap"><button type="button" class="custom-select-btn" onclick="openCustomPicker('newRuleCategory','Category')"><span id="newRuleCategory_label"></span><span class="chevron-down">⌄</span></button><select id="newRuleCategory" class="native-select-hidden">${allExpenseCategories().concat(allIncomeCategories()).filter(function(c,i,arr){ return arr.indexOf(c) === i; }).map(function(c){ return `<option>${c}</option>`; }).join('')}</select></div></div>
     <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
       <button class="modal-save" onclick="addCategoryRule()">Add rule</button>
     </div>
@@ -4023,6 +4229,7 @@ function openTxModal(type, presetCategory){
     amtEl.select();
   }, 0);
   updateTxAmountPreview();
+  refreshAllCustomSelectLabels();
 }
 
 function editTx(id){
@@ -4053,9 +4260,8 @@ function editTx(id){
     updateTransferPreviewText();
   }
   updateTxAmountPreview();
+  refreshAllCustomSelectLabels();
 }
-
-// Formats the amount input live as the user types, e.g. "1234.5" -> "1,234.5",
 // same thousand-separator style used everywhere else amounts are displayed.
 window.formatAmountInput = function(el){
   const cursorFromEnd = el.value.length - el.selectionStart;
