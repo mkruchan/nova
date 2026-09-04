@@ -4947,7 +4947,7 @@ window.openMonoModal = function(){
   renderMonoAccountList();
   openModal('monoModalOverlay');
   refreshMonoVisibilityLabel();
-  if(token) connectMonobank();
+  if(token && !monoAccounts.length) connectMonobank(); // only needed to establish the connection the first time — once we have accounts cached, the regular background sync keeps things current without this modal needing to make its own request every time it's opened
 };
 
 window.applyMonoDisplayFromDate = function(){
@@ -4983,10 +4983,23 @@ window.connectMonobank = async function(){
   const statusEl = document.getElementById('monoStatus');
   if(!token){ statusEl.textContent = 'Paste your personal token first.'; statusEl.classList.add('error'); return; }
 
+  // This request shares the exact same per-token rate limit as every
+  // automatic sync — without checking/updating lastMonoRequestAt here too,
+  // opening this modal (a natural thing to do while checking on a sync
+  // issue) would silently consume a real request the rest of the app has
+  // no record of, causing the next automatic sync to come back genuinely
+  // rate-limited even though its own tracking thought enough time had passed.
+  if(Date.now() - lastMonoRequestAt < 61000){
+    statusEl.textContent = 'Just synced a moment ago — wait a bit before checking again (Monobank allows about once a minute).';
+    statusEl.classList.add('error');
+    return;
+  }
+
   statusEl.textContent = 'Connecting…';
   statusEl.classList.remove('error');
 
   try{
+    lastMonoRequestAt = Date.now();
     const res = await fetch('https://api.monobank.ua/personal/client-info', {
       headers: { 'X-Token': token }
     });
