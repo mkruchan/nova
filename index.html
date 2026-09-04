@@ -546,9 +546,11 @@
     <div id="monoLastError" class="status-msg error" style="margin-top:6px; display:none;"></div>
     <div id="monoAccountRow" style="margin-top:14px;">
       <div class="empty-note" style="text-align:left; margin-bottom:8px;">All accounts sync automatically — nothing to select. The first sync grabs your full history; after that it checks for anything new every minute on its own.</div>
-      <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
+      <div class="modal-actions" style="justify-content:flex-start; margin-top:0; gap:8px;">
         <button class="modal-save" onclick="syncNowManual()">Sync now</button>
+        <button class="header-btn" onclick="resyncFullHistory()">↺ Re-sync full history</button>
       </div>
+      <div class="empty-note" style="text-align:left; margin:6px 0 0;">If you suspect older transactions are missing (e.g. an earlier sync was interrupted), this re-pulls your complete history from scratch rather than just the recent catch-up window.</div>
       <div id="monoProgress" class="status-msg" style="margin-top:8px;"></div>
 
       <div class="side-label" style="margin:16px 0 4px;">Accounts</div>
@@ -1152,20 +1154,19 @@ let currentView = 'finance';
 let nextId = 1; // retained only for any legacy code path that still reads it; no longer used to generate new transaction ids — see generateTxId
 let showMonoData = true;
 
-// Generates a new transaction id. Deliberately NOT a simple incrementing
-// counter — nextId is computed independently on each device from whatever
-// transactions that device has already seen, with no coordination between
-// devices. Two devices can easily produce the exact same sequential id
-// ("t1", "t2"...) for two completely unrelated transactions — most likely
-// right when a second device is first set up and both are used for a few
-// entries before their first sync. Since the sync merge is keyed by this id,
-// a collision makes it treat two different transactions as the same one and
-// silently keep only whichever has the later edit timestamp, discarding the
-// other's data entirely. Timestamp + random suffix makes a same-millisecond
-// collision between two devices astronomically unlikely.
-function generateTxId(){
-  return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+// Generates a collision-resistant unique id — timestamp + random suffix,
+// deliberately NOT a plain Date.now() or incrementing counter. A plain
+// Date.now() collides whenever two ids get generated within the same
+// millisecond (easy to hit with fast, synchronous actions — e.g. adding
+// several manual accounts in a row), and a per-device incrementing counter
+// collides across two DIFFERENT devices that have no coordination with each
+// other. Since every sync merge is keyed by these ids, a collision makes
+// two genuinely different records look like the same one and silently
+// discards whichever side loses the edit-time comparison.
+function generateUniqueId(prefix){
+  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
+function generateTxId(){ return generateUniqueId('t'); }
 
 let fontScale = 1;
 function loadFontScale(){
@@ -1555,6 +1556,29 @@ function mergeTransactionArrays(localList, incomingList){
 // a loan tracked as a negative balance) need the same protection, since a
 // balance edit on one device shouldn't be silently overwritten by another
 // device pushing its own, older copy of the same account.
+// Merges two budgets objects month-by-month rather than replacing one
+// wholesale with the other — each month keeps whichever side edited that
+// SPECIFIC month more recently. Without this, pulling in (or reconciling
+// against, before a push) another device's budgets object would silently
+// discard this device's own not-yet-synced edit to some other month, since
+// a budget change to August has nothing to do with whether July's data is
+// any newer.
+function mergeBudgets(localBudgets, incomingBudgets){
+  const merged = { months: {} };
+  const localMonths = (localBudgets && localBudgets.months) || {};
+  const incomingMonths = (incomingBudgets && incomingBudgets.months) || {};
+  const allKeys = new Set(Object.keys(localMonths).concat(Object.keys(incomingMonths)));
+  allKeys.forEach(function(key){
+    const local = localMonths[key];
+    const incoming = incomingMonths[key];
+    if(local && !incoming){ merged.months[key] = local; return; }
+    if(incoming && !local){ merged.months[key] = incoming; return; }
+    // Both sides have this month — keep whichever was edited more recently.
+    merged.months[key] = (incoming.editedAt || 0) >= (local.editedAt || 0) ? incoming : local;
+  });
+  return merged;
+}
+
 function mergeManualAccountArrays(localList, incomingList){
   // Merge by id first, same as before — this correctly handles the normal
   // case where an account was created once and just edited on both devices.
@@ -1633,7 +1657,7 @@ function mergeInTransactionsFromCloud(incomingTransactions){
 
 function applyCloudPayloadNonTransactionFields(payload){
   if(!payload) return;
-  if(payload.budgets) budgets = payload.budgets;
+  if(payload.budgets) budgets = mergeBudgets(budgets, payload.budgets);
   // Union-merge rather than replace — these lists only ever grow (there's no
   // delete-a-category feature, only rename), so a category added on one
   // device must never be capable of vanishing because a sync from another,
@@ -1645,7 +1669,12 @@ function applyCloudPayloadNonTransactionFields(payload){
   // wipe out a category the transaction still referenced.
   if(payload.customExpenseCategories) customExpenseCategories = Array.from(new Set(customExpenseCategories.concat(payload.customExpenseCategories)));
   if(payload.customIncomeCategories) customIncomeCategories = Array.from(new Set(customIncomeCategories.concat(payload.customIncomeCategories)));
-  if(payload.customCategoryRules) customCategoryRules = payload.customCategoryRules;
+  if(payload.customCategoryRules){
+    const byKeyword = new Map();
+    customCategoryRules.forEach(function(r){ byKeyword.set((r.keyword||'').toLowerCase(), r); });
+    payload.customCategoryRules.forEach(function(r){ byKeyword.set((r.keyword||'').toLowerCase(), r); });
+    customCategoryRules = Array.from(byKeyword.values());
+  }
   if(payload.categoryRenames) categoryRenames = Object.assign({}, categoryRenames, payload.categoryRenames);
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
 
@@ -1721,11 +1750,15 @@ async function pullCloudSync(){
           localStorage.setItem('nova-transactions', JSON.stringify(transactions));
         }catch(e){}
       }
-      // Everything else (budgets, custom categories/rules) doesn't have
-      // per-item edit tracking, so it still relies on whole-payload "only
-      // apply if genuinely newer" — otherwise a periodic pull could
-      // silently undo a local edit made moments earlier.
-      if(!localLastModifiedAt || new Date(cloudUpdatedAt) > new Date(localLastModifiedAt)){
+      // Categories, rules, renames, and budgets all merge safely now
+      // (additively/edit-time-aware, never a blind whole-payload
+      // replacement) — so this always applies on every pull, regardless of
+      // which side's timestamp is newer. A timestamp gate here would skip
+      // the merge itself in the very common case where this device has
+      // made ANY local edit more recently than the cloud's last push,
+      // which has nothing to do with whether the cloud has something this
+      // device still needs to merge in.
+      if(payload){
         applyCloudPayloadNonTransactionFields(payload);
         cloudLastPulledAt = cloudUpdatedAt;
       }
@@ -1761,6 +1794,12 @@ async function pushCloudSyncNow(){
             manualAccounts = result.accounts;
             applyManualAccountIdRemap(result.idRemap);
           }
+          // Categories, category rules, renames, and budgets all need the
+          // same reconcile-before-push treatment — without this, pushing
+          // from this device would silently overwrite the cloud's version
+          // of any of these with whatever this device's own, possibly
+          // stale, local copy happens to be.
+          applyCloudPayloadNonTransactionFields(rows[0].data);
         }
       }
     }catch(e){ /* if this reconcile step fails, still proceed with the push below rather than blocking entirely */ }
@@ -3113,7 +3152,7 @@ window.addManualAccount = function(){
   if(!name) return;
   const currency = document.getElementById('newManualAccountCurrency').value;
   const startingBalance = parseAmountInput(document.getElementById('newManualAccountBalance').value);
-  manualAccounts.push({ id: 'macc' + Date.now(), name: name, balances: [{ currency: currency, amount: isNaN(startingBalance) ? 0 : startingBalance }], editedAt: Date.now() });
+  manualAccounts.push({ id: generateUniqueId('macc'), name: name, balances: [{ currency: currency, amount: isNaN(startingBalance) ? 0 : startingBalance }], editedAt: Date.now() });
   persistManualAccounts();
   nameEl.value = '';
   document.getElementById('newManualAccountBalance').value = '';
@@ -3358,6 +3397,7 @@ window.saveBudgetEdit = function(){
     if(val > 0) mb.categoryBudgets[cat] = val;
     else delete mb.categoryBudgets[cat];
   });
+  mb.editedAt = Date.now(); // lets a cross-device merge pick whichever device edited THIS specific month more recently
   persistBudgets();
   closeModal('budgetModalOverlay');
   renderView('finance');
@@ -4964,6 +5004,17 @@ function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 // chosen to connect and sync at least once.
 let autoSyncInProgress = false;
 let monoSyncSessionId = 0; // bumped on disconnect/token-switch so any in-flight sync can detect it's gone stale and stop itself
+// Tracks the last actual request made to ANY Monobank endpoint for this
+// token — the rate limit (1 request/minute) applies across the whole token,
+// not per-endpoint, so a fresh sync attempt starting too soon after a
+// previous one's last request would just get rate-limited on its very first
+// call. Used to skip an attempt outright rather than making a request
+// destined to fail.
+let lastMonoRequestAt = 0;
+async function waitForMonoRateLimit(){
+  const elapsed = Date.now() - lastMonoRequestAt;
+  if(elapsed < 61000) await sleep(61000 - elapsed);
+}
 
 function hasEverManuallySynced(){
   try{ return localStorage.getItem('nova-mono-manual-sync-done') === 'true'; }catch(e){ return false; }
@@ -4990,13 +5041,34 @@ async function autoSyncMonobank(){
   const token = loadMonoToken();
   if(!token) return; // never connected — nothing to keep in sync
 
+  // Skip outright if we'd be making a request less than a minute after the
+  // last one — Monobank's limit is 1 request/minute across the whole token,
+  // so this call would almost certainly come back rate-limited. Better to
+  // let the next scheduled trigger (interval, focus, click) pick it up than
+  // to burn an attempt on a call destined to fail silently.
+  if(Date.now() - lastMonoRequestAt < 61000) return;
+
   const mySessionId = monoSyncSessionId; // if this changes mid-run (disconnect/reconnect), this specific run stops itself rather than continuing with stale credentials
   autoSyncInProgress = true;
   try{
     updateMonoProgressUI('Connecting to Monobank…');
+    lastMonoRequestAt = Date.now();
     const res = await fetch('https://api.monobank.ua/personal/client-info', { headers: { 'X-Token': token } });
     if(mySessionId !== monoSyncSessionId) return; // disconnected/reconnected while this was in flight — stop here, a fresh run will have already started or will start soon
-    if(!res.ok){ updateMonoProgressUI(''); return; } // rate-limited or token issue — just try again next round, no need to surface an error silently in the background
+    if(!res.ok){
+      // Previously silent here — but a persistently-failing client-info call
+      // (repeated rate-limiting, an expired token, etc.) is exactly what
+      // "sync sometimes just doesn't happen, with no explanation" looks
+      // like from the outside. Tracked the same way a statement-request
+      // failure already was, so it's at least visible in the Bank modal.
+      let bodyText = '';
+      try{ bodyText = await res.text(); }catch(e2){}
+      const errMsg = `Connection check failed (HTTP ${res.status})${bodyText ? ': ' + bodyText.slice(0,200) : ''}`;
+      try{ localStorage.setItem('nova-mono-last-error', errMsg); }catch(e){}
+      try{ localStorage.setItem('nova-mono-last-sync-attempt', String(Date.now())); }catch(e){}
+      updateMonoProgressUI('');
+      return;
+    }
     const data = await res.json();
     if(mySessionId !== monoSyncSessionId) return;
     const accounts = data.accounts || [];
@@ -5023,13 +5095,14 @@ async function autoSyncMonobank(){
     updateMonoProgressUI(isFirstRun
       ? 'Connected. Starting your full history sync in about a minute (this respects Monobank\'s rate limit — it can take a while for 5 years of data, but your recent transactions arrive first)…'
       : `Connected. Checking for anything new from ${localDateStr(new Date(from*1000))} through ${localDateStr(new Date(to*1000))}…`);
-    await sleep(61000);
+    await waitForMonoRateLimit();
     if(mySessionId !== monoSyncSessionId) return;
 
     let anyImported = false;
     let totalImportedSoFar = 0;
     let totalRawItemsSeen = 0; // how many items Monobank actually returned, regardless of whether they were new — helps tell apart "Monobank didn't send it" from "something here discarded it"
     let lastSyncError = null;
+    let syncRanToCompletion = true; // false if any account's chunk loop stopped early for any reason (error OR a stale-session break) — first-run history sync must only be marked done once every chunk has actually been requested
 
     async function syncOneAccount(account, accountLabel){
       const currency = MONO_CURRENCY_MAP[account.currencyCode] || 'UAH';
@@ -5043,12 +5116,15 @@ async function autoSyncMonobank(){
         // very last thing to arrive after the whole historical pull finishes.
         let chunkEnd = to;
         while(chunkEnd > from){
-          if(mySessionId !== monoSyncSessionId) break; // stale run — abort this account's chunk loop too
+          if(mySessionId !== monoSyncSessionId){ syncRanToCompletion = false; break; } // stale run — abort this account's chunk loop too
           const chunkStart = Math.max(chunkEnd - MAX_WINDOW, from);
           const pctDone = isFirstRun ? Math.round(((to - chunkEnd) / totalWindow) * 100) : null;
           updateMonoProgressUI(`Importing… ${accountLabel}${pctDone !== null ? `, ~${pctDone}% through your history` : ''} — ${totalImportedSoFar} transaction${totalImportedSoFar===1?'':'s'} imported so far`);
+          await waitForMonoRateLimit(); // covers every case uniformly: between chunks of one account, AND the handoff from one account's last request to the next account's first
+          if(mySessionId !== monoSyncSessionId){ syncRanToCompletion = false; break; }
+          lastMonoRequestAt = Date.now();
           const sres = await fetch(`https://api.monobank.ua/personal/statement/${account.id}/${chunkStart}/${chunkEnd}`, { headers: { 'X-Token': token } });
-          if(mySessionId !== monoSyncSessionId) break; // disconnected mid-request — discard this response rather than importing it under the new session
+          if(mySessionId !== monoSyncSessionId){ syncRanToCompletion = false; break; } // disconnected mid-request — discard this response rather than importing it under the new session
           if(sres.ok){
             const items = await sres.json();
             totalRawItemsSeen += items.length;
@@ -5110,19 +5186,22 @@ async function autoSyncMonobank(){
             let bodyText = '';
             try{ bodyText = await sres.text(); }catch(e2){}
             lastSyncError = `Statement request failed (HTTP ${sres.status})${bodyText ? ': ' + bodyText.slice(0,200) : ''}`;
+            syncRanToCompletion = false;
           }
           chunkEnd = chunkStart;
-          if(chunkEnd > from) await sleep(61000); // respect the 1-request-per-minute limit for repeated requests to this SAME account's history
         }
-      }catch(e){ lastSyncError = 'Network error reaching Monobank: ' + e.message; }
+      }catch(e){ lastSyncError = 'Network error reaching Monobank: ' + e.message; syncRanToCompletion = false; }
     }
 
-    // All accounts sync in parallel — each one's own chunk requests still
-    // wait for that account specifically, but different accounts don't
-    // block on each other at all.
-    await Promise.all(accounts.map(function(account, i){
-      return syncOneAccount(account, `account ${i+1} of ${accounts.length}`);
-    }));
+    // Accounts sync one at a time, not in parallel — they share the same
+    // token, and Monobank's rate limit applies across the whole token, not
+    // per-account. Syncing them concurrently would mean two accounts' first
+    // requests landing close together and getting rate-limited, which is
+    // exactly the kind of failure this function otherwise goes out of its
+    // way to avoid for a single account's own chunk requests.
+    for(let i = 0; i < accounts.length; i++){
+      await syncOneAccount(accounts[i], `account ${i+1} of ${accounts.length}`);
+    }
 
     try{ localStorage.setItem('nova-mono-last-sync-attempt', String(Date.now())); }catch(e){}
 
@@ -5136,7 +5215,7 @@ async function autoSyncMonobank(){
         : `Sync complete — up to date, nothing new. Monobank returned ${totalRawItemsSeen} transaction${totalRawItemsSeen===1?'':'s'} for ${localDateStr(new Date(from*1000))} through ${localDateStr(new Date(to*1000))}${totalRawItemsSeen===0 ? ' — if you expected some, they may not be visible via Monobank\'s API yet.' : ', all already synced.'}`);
     }
 
-    if(isFirstRun) markManuallySyncedOnce(); // subsequent runs use the lightweight window from here on
+    if(isFirstRun && syncRanToCompletion && !lastSyncError) markManuallySyncedOnce(); // only switch to the lightweight window once the full history genuinely finished — otherwise the next run retries the full pull
 
     if(anyImported){
       if(currentView === 'finance') renderView('finance');
@@ -5151,6 +5230,20 @@ window.syncNowManual = async function(){
   statusEl.textContent = '';
   statusEl.classList.remove('error');
   progressEl.textContent = 'Syncing…';
+  await autoSyncMonobank();
+  progressEl.textContent = '';
+  renderMonoAccountList();
+  statusEl.textContent = 'Sync complete.';
+};
+
+window.resyncFullHistory = async function(){
+  if(!confirm('Re-pull your complete transaction history from Monobank? This can take a while (up to an hour or more, respecting Monobank\'s rate limit) but never creates duplicates — already-imported transactions are simply skipped.')) return;
+  try{ localStorage.removeItem('nova-mono-manual-sync-done'); }catch(e){}
+  const statusEl = document.getElementById('monoStatus');
+  const progressEl = document.getElementById('monoProgress');
+  statusEl.textContent = '';
+  statusEl.classList.remove('error');
+  progressEl.textContent = 'Starting full history re-sync…';
   await autoSyncMonobank();
   progressEl.textContent = '';
   renderMonoAccountList();
