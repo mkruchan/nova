@@ -1527,7 +1527,16 @@ function cloudPayload(){
     customCategoryRules: customCategoryRules,
     categoryRenames: categoryRenames,
     showMonoData: showMonoData,
-    manualAccounts: manualAccounts
+    manualAccounts: manualAccounts,
+    // If more than one device has the same Monobank token configured (e.g.
+    // both a phone and a Mac), they share the same underlying rate limit
+    // with no way to know about each other's requests on their own. Sharing
+    // this via the same sync payload everything else already uses lets each
+    // device learn "someone, on some device, made a request this recently"
+    // and back off accordingly — otherwise two devices can easily collide
+    // and rate-limit each other, which looks exactly like "sync sometimes
+    // just doesn't happen" from either device's perspective.
+    lastMonoRequestAt: lastMonoRequestAt
   };
 }
 
@@ -1677,6 +1686,7 @@ function applyCloudPayloadNonTransactionFields(payload){
   }
   if(payload.categoryRenames) categoryRenames = Object.assign({}, categoryRenames, payload.categoryRenames);
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
+  if(typeof payload.lastMonoRequestAt === 'number') lastMonoRequestAt = Math.max(lastMonoRequestAt, payload.lastMonoRequestAt);
 
   // Cloud-sourced budgets need the exact same normalization as locally-loaded
   // ones — otherwise a budget pulled from an older data shape leaves
@@ -1830,7 +1840,7 @@ function scheduleCloudPush(){
   if(!cloudConfigured()) return;
   localLastModifiedAt = new Date().toISOString();
   if(cloudPushTimer) clearTimeout(cloudPushTimer);
-  cloudPushTimer = setTimeout(pushCloudSyncNow, 2000); // debounce rapid successive edits into one push
+  cloudPushTimer = setTimeout(function(){ pushCloudSyncNow().catch(function(){ /* see checkForUpdates in init() — same reasoning: fail silently, next scheduled push/pull will retry */ }); }, 2000); // debounce rapid successive edits into one push
 }
 
 window.saveCloudConfigFromForm = async function(){
@@ -1844,8 +1854,16 @@ window.saveCloudConfigFromForm = async function(){
   cloudConfig = { url: url, key: key, syncId: syncId };
   saveCloudConfig();
   document.getElementById('cloudStatus').textContent = 'Connecting…';
-  await pullCloudSync();
-  await pushCloudSyncNow(); // make sure this device's existing local data is captured too, not just overwritten silently
+  try{
+    await pullCloudSync();
+    await pushCloudSyncNow(); // make sure this device's existing local data is captured too, not just overwritten silently
+  }catch(e){
+    // pullCloudSync/pushCloudSyncNow already catch their own network errors
+    // internally — this is only a last-resort net for anything unexpected,
+    // so a failure here shows as a clear status message instead of a raw
+    // unhandled-rejection banner.
+    document.getElementById('cloudStatus').textContent = 'Something went wrong connecting — check your details and try again.';
+  }
   renderView('settings');
 };
 
@@ -1858,8 +1876,14 @@ window.disconnectCloudSync = function(){
 };
 
 window.manualCloudSync = async function(){
-  await pullCloudSync();
-  await pushCloudSyncNow();
+  try{
+    await pullCloudSync();
+    await pushCloudSyncNow();
+  }catch(e){
+    // Same reasoning as saveCloudConfigFromForm above.
+    const statusEl = document.getElementById('cloudStatus');
+    if(statusEl) statusEl.textContent = 'Sync hit an unexpected error — try again in a moment.';
+  }
   renderView('settings');
 };
 
@@ -1885,16 +1909,37 @@ function init(){
   renderView('finance');
   refreshExchangeRates();
   setInterval(refreshExchangeRates, 24 * 60 * 60 * 1000); // rates only actually change ~once a day on the free API anyway
-  autoSyncMonobank();
-  setInterval(autoSyncMonobank, 60 * 1000); // keep Monobank data current without needing a manual sync
 
   function pullCloudAndRender(){
     return pullCloudSync().then(function(){ if(currentView === 'finance') renderView('finance'); });
   }
+  // Cloud pull runs first, Monobank sync after — this ensures
+  // autoSyncMonobank() always has the freshest possible cross-device
+  // Monobank rate-limit info (shared via the cloud payload) before it
+  // decides whether it's safe to make a request. Reversing this order
+  // would mean the very sync attempt that most needs this information is
+  // the one that never gets it in time.
+  //
+  // The whole body is wrapped here (rather than relying solely on each
+  // inner function's own try/catch) as a safety net — this function is
+  // fired from five different places (initial load, the 60s interval,
+  // visibilitychange, focus, and click) with none of them awaiting or
+  // catching its result, so any error that slipped past an inner
+  // try/catch would otherwise surface to the user as a raw "unhandled
+  // promise rejection" banner for what's ordinarily just a routine
+  // network hiccup — exactly the kind of thing every other network path
+  // in this app already fails silently on and retries later instead.
+  async function checkForUpdates(){
+    try{
+      if(cloudConfigured()) await pullCloudAndRender();
+      await autoSyncMonobank();
+    }catch(e){ /* offline, CORS, a transient error, etc. — next scheduled check will retry */ }
+  }
+  checkForUpdates();
+  setInterval(checkForUpdates, 60 * 1000); // keep both Monobank and cloud data current without needing a manual sync
 
   if(cloudConfigured()){
-    pullCloudAndRender();
-    setInterval(pullCloudAndRender, 60 * 1000);
+    setInterval(function(){ pullCloudAndRender().catch(function(){ /* see checkForUpdates — same reasoning */ }); }, 60 * 1000);
   }
 
   // Background tabs get setInterval throttled by the browser (a standard
@@ -1907,14 +1952,10 @@ function init(){
   // too. Catching both up the moment you return to the tab means a
   // backgrounded period never causes a real, lasting gap on any device.
   document.addEventListener('visibilitychange', function(){
-    if(document.visibilityState === 'visible'){
-      autoSyncMonobank();
-      if(cloudConfigured()) pullCloudAndRender();
-    }
+    if(document.visibilityState === 'visible') checkForUpdates();
   });
   window.addEventListener('focus', function(){
-    autoSyncMonobank();
-    if(cloudConfigured()) pullCloudAndRender();
+    checkForUpdates();
   });
 
   // Extra insurance beyond tab-focus: any tap/click anywhere in the app also
@@ -1925,8 +1966,7 @@ function init(){
     const now = Date.now();
     if(now - lastInteractionCheck < 30000) return;
     lastInteractionCheck = now;
-    autoSyncMonobank();
-    if(cloudConfigured()) pullCloudAndRender();
+    checkForUpdates();
   });
 }
 
@@ -5036,6 +5076,7 @@ function isIOSDevice(){
   return /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
 }
 
+let hasSkippedInitialClientInfo = false;
 async function autoSyncMonobank(){
   if(autoSyncInProgress) return;
   const token = loadMonoToken();
@@ -5051,30 +5092,47 @@ async function autoSyncMonobank(){
   const mySessionId = monoSyncSessionId; // if this changes mid-run (disconnect/reconnect), this specific run stops itself rather than continuing with stale credentials
   autoSyncInProgress = true;
   try{
-    updateMonoProgressUI('Connecting to Monobank…');
-    lastMonoRequestAt = Date.now();
-    const res = await fetch('https://api.monobank.ua/personal/client-info', { headers: { 'X-Token': token } });
-    if(mySessionId !== monoSyncSessionId) return; // disconnected/reconnected while this was in flight — stop here, a fresh run will have already started or will start soon
-    if(!res.ok){
-      // Previously silent here — but a persistently-failing client-info call
-      // (repeated rate-limiting, an expired token, etc.) is exactly what
-      // "sync sometimes just doesn't happen, with no explanation" looks
-      // like from the outside. Tracked the same way a statement-request
-      // failure already was, so it's at least visible in the Bank modal.
-      let bodyText = '';
-      try{ bodyText = await res.text(); }catch(e2){}
-      const errMsg = `Connection check failed (HTTP ${res.status})${bodyText ? ': ' + bodyText.slice(0,200) : ''}`;
-      try{ localStorage.setItem('nova-mono-last-error', errMsg); }catch(e){}
-      try{ localStorage.setItem('nova-mono-last-sync-attempt', String(Date.now())); }catch(e){}
-      updateMonoProgressUI('');
-      return;
+    let accounts;
+    // The very first sync of a fresh page load can skip straight to
+    // fetching transactions using whatever account list is already cached
+    // from last time, rather than spending the first ~minute of the app
+    // being open on a client-info call before a single transaction can be
+    // requested. The account list/balances themselves might be a little
+    // stale until the NEXT sync cycle (60s later) refreshes them the normal
+    // way — an acceptable trade since the balances shown are already from
+    // this same cache regardless.
+    if(!hasSkippedInitialClientInfo && monoAccounts.length){
+      hasSkippedInitialClientInfo = true;
+      accounts = monoAccounts;
+      updateMonoProgressUI('Checking for new transactions…');
+    } else {
+      updateMonoProgressUI('Connecting to Monobank…');
+      lastMonoRequestAt = Date.now();
+      const res = await fetch('https://api.monobank.ua/personal/client-info', { headers: { 'X-Token': token } });
+      if(mySessionId !== monoSyncSessionId) return; // disconnected/reconnected while this was in flight — stop here, a fresh run will have already started or will start soon
+      if(!res.ok){
+        // Previously silent here — but a persistently-failing client-info call
+        // (repeated rate-limiting, an expired token, etc.) is exactly what
+        // "sync sometimes just doesn't happen, with no explanation" looks
+        // like from the outside. Tracked the same way a statement-request
+        // failure already was, so it's at least visible in the Bank modal.
+        let bodyText = '';
+        try{ bodyText = await res.text(); }catch(e2){}
+        const errMsg = `Connection check failed (HTTP ${res.status})${bodyText ? ': ' + bodyText.slice(0,200) : ''}`;
+        try{ localStorage.setItem('nova-mono-last-error', errMsg); }catch(e){}
+        try{ localStorage.setItem('nova-mono-last-sync-attempt', String(Date.now())); }catch(e){}
+        updateMonoProgressUI('');
+        return;
+      }
+      const data = await res.json();
+      if(mySessionId !== monoSyncSessionId) return;
+      accounts = data.accounts || [];
+      if(accounts.length){
+        monoAccounts = accounts; // keep this fresh so the Bank modal reflects the same list if opened
+        persistMonoAccounts();
+      }
     }
-    const data = await res.json();
-    if(mySessionId !== monoSyncSessionId) return;
-    const accounts = data.accounts || [];
     if(!accounts.length){ updateMonoProgressUI(''); return; }
-    monoAccounts = accounts; // keep this fresh so the Bank modal reflects the same list if opened
-    persistMonoAccounts();
 
     const myOwnIbans = new Set(accounts.filter(function(a){ return a.iban; }).map(function(a){ return a.iban; }));
     const existingIds = new Set(transactions.filter(function(t){ return t.monoId; }).map(function(t){ return t.monoId; }));
@@ -5088,13 +5146,15 @@ async function autoSyncMonobank(){
     const totalWindow = to - from;
 
     // Monobank's 1-request-per-minute limit applies across ALL endpoints for
-    // a token, not per-endpoint — without this wait, the very first statement
-    // request right after client-info would get silently rate-limited every
-    // single time, which is exactly what "accounts show up but no
-    // transactions ever appear" looks like from the outside.
+    // a token, not per-endpoint — waitForMonoRateLimit() below is what
+    // actually enforces the gap when one's needed (e.g. after a client-info
+    // call just made); when this is the very first request of the session
+    // (the skip-ahead path above), lastMonoRequestAt is old enough that it
+    // resolves immediately, so transactions really do start arriving right
+    // away rather than a fixed minute-long wait every single time.
     updateMonoProgressUI(isFirstRun
-      ? 'Connected. Starting your full history sync in about a minute (this respects Monobank\'s rate limit — it can take a while for 5 years of data, but your recent transactions arrive first)…'
-      : `Connected. Checking for anything new from ${localDateStr(new Date(from*1000))} through ${localDateStr(new Date(to*1000))}…`);
+      ? 'Starting your full history sync (this respects Monobank\'s rate limit — it can take a while for 5 years of data, but your recent transactions arrive first)…'
+      : `Checking for anything new from ${localDateStr(new Date(from*1000))} through ${localDateStr(new Date(to*1000))}…`);
     await waitForMonoRateLimit();
     if(mySessionId !== monoSyncSessionId) return;
 
