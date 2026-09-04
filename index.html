@@ -1729,7 +1729,7 @@ async function pullCloudSync(){
     const res = await fetchWithTimeout(
       `${cloudConfig.url}/rest/v1/nova_sync?sync_id=eq.${encodeURIComponent(cloudConfig.syncId)}&select=data,updated_at`,
       { headers: { 'apikey': cloudConfig.key, 'Authorization': 'Bearer ' + cloudConfig.key } },
-      10000
+      30000 // generous enough for a large transaction history (potentially several MB after years of Monobank data) on a slower mobile connection — 10s was too easy to time out on, which looked exactly like "sync sometimes just doesn't work"
     );
     if(!res.ok){
       cloudSyncStatus = 'error';
@@ -1791,7 +1791,7 @@ async function pushCloudSyncNow(){
       const getRes = await fetchWithTimeout(
         `${cloudConfig.url}/rest/v1/nova_sync?sync_id=eq.${encodeURIComponent(cloudConfig.syncId)}&select=data`,
         { headers: { 'apikey': cloudConfig.key, 'Authorization': 'Bearer ' + cloudConfig.key } },
-        10000
+        30000
       );
       if(getRes.ok){
         const rows = await getRes.json();
@@ -1823,7 +1823,7 @@ async function pushCloudSyncNow(){
         'Prefer': 'resolution=merge-duplicates,return=minimal'
       },
       body: JSON.stringify({ sync_id: cloudConfig.syncId, data: cloudPayload(), updated_at: new Date().toISOString() })
-    }, 10000);
+    }, 30000);
     cloudSyncStatus = res.ok ? 'synced' : 'error';
     if(res.ok){
       cloudLastPulledAt = new Date().toISOString();
