@@ -1353,7 +1353,7 @@ function setMonoVisibility(show){
   showMonoData = show;
   try{ localStorage.setItem('nova-show-mono-data', String(show)); }catch(e){}
   scheduleCloudPush(); // otherwise a periodic pull could silently restore the old value from Supabase moments later
-  renderView('finance');
+  renderView(currentView);
 }
 window.toggleMonoVisibility = function(){ setMonoVisibility(!showMonoData); };
 
@@ -3840,17 +3840,24 @@ function cloudConnectedHTML(){
   const statusText = {
     syncing: 'Syncing…', synced: 'Up to date',
     error: "Couldn't reach the sync server — double-check your Project URL and anon key",
-    timeout: "Timed out reaching the sync server (10s) — check your Project URL and internet connection",
+    timeout: "Timed out reaching the sync server (30s) — check your Project URL and internet connection",
     idle: 'Connected', unconfigured: 'Connected'
   }[cloudSyncStatus] || 'Connected';
+  const monoTxCount = transactions.filter(function(t){ return t.monoId && !t.deleted; }).length;
   return `
     <div class="setup-box" style="margin-bottom:12px;">
       <p style="margin:0 0 6px;"><b>✅ Synced across your devices</b></p>
       <p style="margin:0; font-size:11px;">${escapeHtml(statusText)}${cloudLastPulledAt ? ' · last update ' + timeAgo(new Date(cloudLastPulledAt).getTime()) : ''}</p>
       ${cloudSyncStatus === 'error' && cloudSyncErrorDetail ? `<p style="margin:8px 0 0; font-size:10.5px; color:var(--rose); white-space:pre-wrap; word-break:break-word;">${escapeHtml(cloudSyncErrorDetail)}</p>` : ''}
     </div>
-    <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
+    <div class="empty-note" style="text-align:left; margin-bottom:10px;">
+      Sync ID on this device: <b style="color:var(--white); user-select:all;">${escapeHtml(cloudConfig.syncId || '')}</b> — must be <b>character-for-character identical</b> on every device for them to share data. Compare this against your other device if transactions aren't showing up here.<br><br>
+      This device has <b style="color:var(--white);">${monoTxCount}</b> Monobank-sourced transaction${monoTxCount===1?'':'s'} locally.
+      ${!showMonoData ? '<br><br><span style="color:#F5A623;">⚠ Monobank data is currently set to hidden on this device — that alone would explain transactions not appearing, even if they\'ve synced correctly. Tap below to show them.</span>' : ''}
+    </div>
+    <div class="modal-actions" style="justify-content:flex-start; margin-top:0; flex-wrap:wrap;">
       <button class="modal-save" onclick="manualCloudSync()">Sync now</button>
+      <button class="header-btn" onclick="toggleMonoVisibility()">${showMonoData ? 'Hide' : 'Show'} Monobank data</button>
       <button class="modal-cancel" onclick="disconnectCloudSync()">Disconnect</button>
     </div>
   `;
