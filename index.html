@@ -1723,7 +1723,19 @@ function fetchWithTimeout(url, opts, timeoutMs){
 
 async function pullCloudSync(){
   if(!cloudConfigured()) { cloudSyncStatus = 'unconfigured'; return; }
-  if(cloudPushTimer) return; // a local change is still waiting to be pushed — don't risk overwriting it with a stale pull
+  if(cloudPushTimer){
+    if((Date.now() - cloudPushScheduledAt) < 15000) return; // a local change is still waiting to be pushed (within its normal ~2s window) — don't risk overwriting it with a stale pull
+    // Beyond that, the timer is stuck rather than genuinely pending — e.g.
+    // iOS Safari is known to aggressively suspend JS timers the moment an
+    // app backgrounds, even briefly, which could mean this one simply never
+    // fired. Left alone, this guard would otherwise block every future pull
+    // on this device forever, since nothing else ever resets cloudPushTimer
+    // back to null. Clear it and reschedule a fresh push so the original
+    // local change this was meant to save still actually reaches the cloud.
+    clearTimeout(cloudPushTimer);
+    cloudPushTimer = null;
+    scheduleCloudPush();
+  }
   cloudSyncStatus = 'syncing';
   try{
     const res = await fetchWithTimeout(
@@ -1836,10 +1848,12 @@ async function pushCloudSyncNow(){
 
 let localLastModifiedAt = null; // guards against a periodic pull silently reverting a not-yet-pushed local change
 
+let cloudPushScheduledAt = 0;
 function scheduleCloudPush(){
   if(!cloudConfigured()) return;
   localLastModifiedAt = new Date().toISOString();
   if(cloudPushTimer) clearTimeout(cloudPushTimer);
+  cloudPushScheduledAt = Date.now();
   cloudPushTimer = setTimeout(function(){ pushCloudSyncNow().catch(function(){ /* see checkForUpdates in init() — same reasoning: fail silently, next scheduled push/pull will retry */ }); }, 2000); // debounce rapid successive edits into one push
 }
 
@@ -3844,6 +3858,7 @@ function cloudConnectedHTML(){
     idle: 'Connected', unconfigured: 'Connected'
   }[cloudSyncStatus] || 'Connected';
   const monoTxCount = transactions.filter(function(t){ return t.monoId && !t.deleted; }).length;
+  const totalTxCount = transactions.filter(function(t){ return !t.deleted; }).length;
   return `
     <div class="setup-box" style="margin-bottom:12px;">
       <p style="margin:0 0 6px;"><b>✅ Synced across your devices</b></p>
@@ -3852,8 +3867,9 @@ function cloudConnectedHTML(){
     </div>
     <div class="empty-note" style="text-align:left; margin-bottom:10px;">
       Sync ID on this device: <b style="color:var(--white); user-select:all;">${escapeHtml(cloudConfig.syncId || '')}</b> — must be <b>character-for-character identical</b> on every device for them to share data. Compare this against your other device if transactions aren't showing up here.<br><br>
-      This device has <b style="color:var(--white);">${monoTxCount}</b> Monobank-sourced transaction${monoTxCount===1?'':'s'} locally.
+      This device has <b style="color:var(--white);">${totalTxCount}</b> transaction${totalTxCount===1?'':'s'} total locally (<b style="color:var(--white);">${monoTxCount}</b> from Monobank). Compare this count against your other device too — a mismatch here (rather than just missing Monobank ones specifically) points at the sync itself rather than anything Monobank-related.
       ${!showMonoData ? '<br><br><span style="color:#F5A623;">⚠ Monobank data is currently set to hidden on this device — that alone would explain transactions not appearing, even if they\'ve synced correctly. Tap below to show them.</span>' : ''}
+      ${cloudPushTimer ? '<br><br><span style="color:#F5A623;">⏳ A change on this device is queued to sync in a moment — if this message doesn\'t go away, tap "Sync now" below.</span>' : ''}
     </div>
     <div class="modal-actions" style="justify-content:flex-start; margin-top:0; flex-wrap:wrap;">
       <button class="modal-save" onclick="manualCloudSync()">Sync now</button>
