@@ -869,8 +869,36 @@ function persistCategoryRenames(){
   localStorage.setItem('nova-category-renames', JSON.stringify(categoryRenames));
   scheduleCloudPush();
 }
-function allExpenseCategories(){ return EXPENSE_CATEGORIES.concat(customExpenseCategories).map(function(c){ return categoryRenames[c] || c; }); }
-function allIncomeCategories(){ return INCOME_CATEGORIES.concat(customIncomeCategories).map(function(c){ return categoryRenames[c] || c; }); }
+function allExpenseCategories(){
+  const base = EXPENSE_CATEGORIES.concat(customExpenseCategories).map(function(c){ return categoryRenames[c] || c; });
+  return base.concat(orphanCategoriesNotIn(base, 'expense'));
+}
+function allIncomeCategories(){
+  const base = INCOME_CATEGORIES.concat(customIncomeCategories).map(function(c){ return categoryRenames[c] || c; });
+  return base.concat(orphanCategoriesNotIn(base, 'income'));
+}
+// Categories that show up on real transactions but aren't in either standard
+// list — classified by the sign of the amount they're actually used with,
+// so a category only ever used for expenses doesn't wrongly appear in the
+// income list and vice versa. Both allExpenseCategories/allIncomeCategories
+// exclude the SAME base list from each other's search here, since the base
+// list already includes both after renames are applied.
+function orphanCategoriesNotIn(base, type){
+  const known = new Set(base);
+  const seen = new Set();
+  const orphans = [];
+  for(let i = 0; i < transactions.length; i++){
+    const t = transactions[i];
+    if(t.deleted || !t.category || t.category === 'Transfer') continue;
+    const isExpenseTx = Number(t.amount) < 0;
+    if((type === 'expense') !== isExpenseTx) continue;
+    const cat = categoryRenames[t.category] || t.category;
+    if(known.has(cat) || seen.has(cat)) continue;
+    seen.add(cat);
+    orphans.push(cat);
+  }
+  return orphans;
+}
 
 // Finds which original (un-renamed) key currently displays as currentName —
 // needed because the name shown in the UI may already be a previous rename,
