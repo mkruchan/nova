@@ -791,7 +791,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.1.1';
+const APP_BUILD = 'v1.1.2';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -1559,6 +1559,31 @@ function isRefundTx(t){
   if(t.category === 'Refund') return true;
   return t.category !== 'Transfer' &&
     allExpenseCategories().indexOf(t.category) !== -1 && allIncomeCategories().indexOf(t.category) === -1;
+}
+
+// Direct diagnostic — shows exactly what the app currently recognizes as a
+// refund, plus anything that LOOKS like it should be one but isn't, so a
+// mismatch between what's expected and what's actually happening is visible
+// immediately rather than needing more back-and-forth guessing.
+function refundDiagnosticHTML(){
+  const active = transactions.filter(function(t){ return !t.deleted; });
+  const recognized = active.filter(isRefundTx);
+  // "Looks like a refund but isn't recognized" — any positive amount on a
+  // category that also exists on the expense side, EXCLUDING ones already
+  // counted above. Catches an edge case this function doesn't yet know
+  // about, rather than assuming isRefundTx() is exhaustively correct.
+  const suspicious = active.filter(function(t){
+    return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' &&
+      allExpenseCategories().indexOf(t.category) !== -1 && !isRefundTx(t);
+  });
+  return `
+    <div class="side-label" style="margin:8px 0 4px; color:var(--muted);">Refund diagnostic</div>
+    <div class="empty-note" style="text-align:left; margin-bottom:8px;">
+      This device currently recognizes <b style="color:var(--white);">${recognized.length}</b> transaction${recognized.length===1?'':'s'} as a refund.
+      ${recognized.length ? '<br>' + recognized.slice(0,5).map(function(t){ return escapeHtml(t.name) + ' (' + escapeHtml(t.category) + ', ' + fmtOriginal(t.amount, t.currency) + ', ' + t.occurred_at + ')'; }).join('<br>') + (recognized.length > 5 ? '<br>…and ' + (recognized.length-5) + ' more' : '') : ''}
+      ${suspicious.length ? `<br><br><span style="color:#F5A623;">⚠ ${suspicious.length} positive-amount transaction${suspicious.length===1?'':'s'} on an expense category ${suspicious.length===1?'is':'are'} NOT currently recognized as a refund — this is the specific case to report if refunds still seem missing:<br>` + suspicious.slice(0,5).map(function(t){ return escapeHtml(t.name) + ' (' + escapeHtml(t.category) + ', ' + fmtOriginal(t.amount, t.currency) + ', ' + t.occurred_at + ')'; }).join('<br>') + '</span>' : ''}
+    </div>
+  `;
 }
 
 // Rent and Bills were merged into "Home & Bills", then renamed to "Living
@@ -3941,6 +3966,7 @@ function settingsScreenHTML(){
   return `
     <h2 style="font-family:'Sora',sans-serif; font-size:20px; margin:0 0 4px;">Settings</h2>
     <div class="empty-note" style="text-align:left; margin-bottom:14px; user-select:all;">Version <b style="color:var(--white);">${APP_BUILD}</b>${lastSeenRemoteBuild ? ` · other device: <b style="color:${lastSeenRemoteBuild === APP_BUILD ? 'var(--white)' : 'var(--rose)'};">${escapeHtml(lastSeenRemoteBuild)}</b>${lastSeenRemoteBuild !== APP_BUILD ? ' ⚠ mismatch — re-download and reopen on whichever looks older' : ''}` : ''}</div>
+    ${refundDiagnosticHTML()}
     <div class="settings-row" onclick="openMonoModal()">
       <span>🏦 Bank</span><span class="chevron">›</span>
     </div>
