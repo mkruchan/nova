@@ -791,15 +791,15 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.1.2';
+const APP_BUILD = 'v1.2.0';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
   "Transport","Scooter","Gifts","Charity","Groceries","Eating out","Entertainment","Electronics",
   "Digital / Subscriptions","Clothing","Active Leisure","Entrepreneurship","Investments","Flowers",
-  "Smoking","Self-care","Music & Video","Sport","Services","Fees","Taxes","Other expense","Refund","Transfer","Loan"
+  "Smoking","Self-care","Music & Video","Sport","Services","Fees","Taxes","Other expense","Transfer","Loan"
 ];
-const INCOME_CATEGORIES = ["Salary","Freelance","Sale","Gifts","Other income","Cashback","Business","Refund","Transfer","Loan"];
+const INCOME_CATEGORIES = ["Salary","Freelance","Sale","Gifts","Other income","Cashback","Business","Transfer","Loan"];
 
 const DONUT_COLORS = ['#5B8CFF', '#8FB2FF', '#C3D3FF', '#2A3A66', '#4A5A8A', '#7A8CC9'];
 
@@ -1544,21 +1544,24 @@ function visibleTransactions(){
 }
 
 // A refund is money credited back against a prior expense, not new income.
-// Two ways a transaction signals this: (1) its category is literally
-// "Refund" — always trusted outright, since that's an explicit, unambiguous
-// signal regardless of what else is true about the category lists; or (2)
-// a positive amount tagged with a category that only exists on the expense
-// side (e.g. a partial Groceries refund), never the income side. "Refund"
-// itself is deliberately listed in BOTH EXPENSE_CATEGORIES and
-// INCOME_CATEGORIES (so it's selectable as either transaction type), which
-// meant case (1) used to fail case (2)'s "not in the income list" check —
-// a transaction explicitly categorized as "Refund" was never recognized as
-// one, the exact opposite of what its own name says.
+// Recognized two ways: (1) its category is literally "Refund" — trusted
+// outright, an explicit and unambiguous signal on its own; or (2) a
+// positive amount whose category is NOT a recognized income category (and
+// isn't Transfer/Loan). Deliberately does NOT also require the category to
+// be found in allExpenseCategories() — a category can end up "orphaned"
+// from that list (a past rename that didn't fully propagate everywhere, a
+// custom category that got disconnected from customExpenseCategories, etc.)
+// while still very clearly not being an income category, and a positive
+// amount on it is still obviously a refund, not new income. Requiring
+// expense-list membership too meant any such orphaned category silently
+// stopped being recognized as a refund at all, no matter how many
+// transactions used it — this is what a "0 refunds recognized" report
+// actually traces back to.
 function isRefundTx(t){
-  if(Number(t.amount) < 0) return false;
+  if(Number(t.amount) < 0 || !t.category) return false;
   if(t.category === 'Refund') return true;
-  return t.category !== 'Transfer' &&
-    allExpenseCategories().indexOf(t.category) !== -1 && allIncomeCategories().indexOf(t.category) === -1;
+  if(t.category === 'Transfer' || t.category === 'Loan') return false;
+  return allIncomeCategories().indexOf(t.category) === -1;
 }
 
 // Direct diagnostic — shows exactly what the app currently recognizes as a
