@@ -789,8 +789,9 @@ const CATEGORY_ICON = {
 // Bumped by hand whenever a new copy of this file is produced — the app has
 // no auto-update mechanism, so this is the only way to confirm two devices
 // are actually running the same code rather than one silently being stuck
-// on an older download.
-const APP_BUILD = '2026-09-04-a';
+// on an older download. Follows major.minor.patch: patch for a bug fix,
+// minor for a new feature, major for a significant rework.
+const APP_BUILD = 'v1.0.0';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -3908,7 +3909,8 @@ function historyScreenHTML(){
 
 function settingsScreenHTML(){
   return `
-    <h2 style="font-family:'Sora',sans-serif; font-size:20px; margin:0 0 18px;">Settings</h2>
+    <h2 style="font-family:'Sora',sans-serif; font-size:20px; margin:0 0 4px;">Settings</h2>
+    <div class="empty-note" style="text-align:left; margin-bottom:14px; user-select:all;">Version <b style="color:var(--white);">${APP_BUILD}</b>${lastSeenRemoteBuild ? ` · other device: <b style="color:${lastSeenRemoteBuild === APP_BUILD ? 'var(--white)' : 'var(--rose)'};">${escapeHtml(lastSeenRemoteBuild)}</b>${lastSeenRemoteBuild !== APP_BUILD ? ' ⚠ mismatch — re-download and reopen on whichever looks older' : ''}` : ''}</div>
     <div class="settings-row" onclick="openMonoModal()">
       <span>🏦 Bank</span><span class="chevron">›</span>
     </div>
@@ -3974,11 +3976,6 @@ function settingsScreenHTML(){
       <button class="modal-cancel" onclick="exportCSV()">Export backup first</button>
       <button class="tx-del" style="border:1px solid var(--rose); border-radius:8px; padding:8px 14px;" onclick="resetAppData()">Reset app data</button>
     </div>
-
-    <div class="side-label" style="margin:24px 0 4px; color:var(--muted);">App version</div>
-    <div class="empty-note" style="text-align:left; margin-bottom:4px; user-select:all;">This device: <b style="color:var(--white);">${APP_BUILD}</b></div>
-    ${lastSeenRemoteBuild ? `<div class="empty-note" style="text-align:left; margin-bottom:8px; user-select:all;">Last seen from another device: <b style="color:${lastSeenRemoteBuild === APP_BUILD ? 'var(--white)' : 'var(--rose)'};">${escapeHtml(lastSeenRemoteBuild)}</b>${lastSeenRemoteBuild !== APP_BUILD ? ' ⚠ different from this device — one of them is running an older copy of the file. Re-download and replace it on whichever shows the older-looking version, then reopen.' : ' — matches this device.'}</div>` : ''}
-    <div class="empty-note" style="text-align:left; margin-bottom:8px;">This app has no auto-update — each device runs whatever copy of the file was last saved to it. A version mismatch above means one device is simply running older code, not a new bug.</div>
   `;
 }
 
