@@ -791,7 +791,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.1.0';
+const APP_BUILD = 'v1.1.1';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -1543,11 +1543,21 @@ function visibleTransactions(){
   return list;
 }
 
-// A refund is money credited back against a prior expense, not new income —
-// identified as a positive amount tagged to a category that only exists on
-// the expense side (e.g. Kitsterovna), never the income side.
+// A refund is money credited back against a prior expense, not new income.
+// Two ways a transaction signals this: (1) its category is literally
+// "Refund" — always trusted outright, since that's an explicit, unambiguous
+// signal regardless of what else is true about the category lists; or (2)
+// a positive amount tagged with a category that only exists on the expense
+// side (e.g. a partial Groceries refund), never the income side. "Refund"
+// itself is deliberately listed in BOTH EXPENSE_CATEGORIES and
+// INCOME_CATEGORIES (so it's selectable as either transaction type), which
+// meant case (1) used to fail case (2)'s "not in the income list" check —
+// a transaction explicitly categorized as "Refund" was never recognized as
+// one, the exact opposite of what its own name says.
 function isRefundTx(t){
-  return Number(t.amount) >= 0 && t.category !== 'Transfer' &&
+  if(Number(t.amount) < 0) return false;
+  if(t.category === 'Refund') return true;
+  return t.category !== 'Transfer' &&
     allExpenseCategories().indexOf(t.category) !== -1 && allIncomeCategories().indexOf(t.category) === -1;
 }
 
@@ -4557,9 +4567,12 @@ function setTxType(type){
     populateTransferAccountSelects();
   } else if(type === 'refund'){
     populateCategorySelect('expense'); // pick which expense category this money is being credited back to
+    const refundOpt = Array.from(document.getElementById('txCategory').options).find(function(o){ return o.value === 'Refund'; });
+    if(refundOpt) refundOpt.remove(); // steer toward the underlying category (e.g. Groceries) instead of the generic label, so budget tracking stays accurate per-category
   } else {
     populateCategorySelect(type);
   }
+  refreshAllCustomSelectLabels();
 }
 
 function openModal(id){ document.getElementById(id).classList.add('open'); }
