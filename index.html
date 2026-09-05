@@ -898,44 +898,11 @@ function persistCategoryRenames(){
 }
 function allExpenseCategories(){
   const hidden = new Set(hiddenCategories);
-  const expenseBase = EXPENSE_CATEGORIES.concat(customExpenseCategories).filter(function(c){ return !hidden.has(c); }).map(function(c){ return categoryRenames[c] || c; });
-  const incomeBase = INCOME_CATEGORIES.concat(customIncomeCategories).filter(function(c){ return !hidden.has(c); }).map(function(c){ return categoryRenames[c] || c; });
-  return expenseBase.concat(orphanCategoriesNotIn(expenseBase, incomeBase, 'expense'));
+  return EXPENSE_CATEGORIES.concat(customExpenseCategories).filter(function(c){ return !hidden.has(c); }).map(function(c){ return categoryRenames[c] || c; });
 }
 function allIncomeCategories(){
   const hidden = new Set(hiddenCategories);
-  const expenseBase = EXPENSE_CATEGORIES.concat(customExpenseCategories).filter(function(c){ return !hidden.has(c); }).map(function(c){ return categoryRenames[c] || c; });
-  const incomeBase = INCOME_CATEGORIES.concat(customIncomeCategories).filter(function(c){ return !hidden.has(c); }).map(function(c){ return categoryRenames[c] || c; });
-  return incomeBase.concat(orphanCategoriesNotIn(incomeBase, expenseBase, 'income'));
-}
-// Categories that show up on real transactions but aren't in either standard
-// list — classified by the sign of the amount they're actually used with,
-// so a category only ever used for expenses doesn't wrongly appear in the
-// income list and vice versa. Critically, a category already known on the
-// OTHER side is never added here even if some transaction's sign would
-// otherwise suggest it — this is exactly the refund case: a positive amount
-// tagged with an expense category (e.g. a partial Groceries refund) must
-// never make "Groceries" start looking like an income category too, since
-// isRefundTx() depends entirely on a category existing on the expense side
-// but NOT the income side to identify a refund as a refund in the first
-// place, rather than as new income.
-function orphanCategoriesNotIn(sameBase, otherBase, type){
-  const knownSame = new Set(sameBase);
-  const knownOther = new Set(otherBase);
-  const hidden = new Set(hiddenCategories.map(function(c){ return categoryRenames[c] || c; }));
-  const seen = new Set();
-  const orphans = [];
-  for(let i = 0; i < transactions.length; i++){
-    const t = transactions[i];
-    if(t.deleted || !t.category || t.category === 'Transfer') continue;
-    const cat = categoryRenames[t.category] || t.category;
-    if(knownSame.has(cat) || knownOther.has(cat) || seen.has(cat) || hidden.has(cat)) continue;
-    const isExpenseTx = Number(t.amount) < 0;
-    if((type === 'expense') !== isExpenseTx) continue;
-    seen.add(cat);
-    orphans.push(cat);
-  }
-  return orphans;
+  return INCOME_CATEGORIES.concat(customIncomeCategories).filter(function(c){ return !hidden.has(c); }).map(function(c){ return categoryRenames[c] || c; });
 }
 
 // Finds which original (un-renamed) key currently displays as currentName —
