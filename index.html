@@ -791,7 +791,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.3.0';
+const APP_BUILD = 'v1.4.0';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -1581,6 +1581,14 @@ function refundDiagnosticHTML(){
     return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' &&
       allExpenseCategories().indexOf(t.category) !== -1 && !isRefundTx(t);
   });
+  // Likely candidates specifically for the Monobank case: a refund the bank
+  // sends through with no way to auto-detect it lands in "Other income" or
+  // "Cashback" by default (a purely-income category, so the check above
+  // never catches it) — these are exactly the transactions someone would
+  // need to go back and manually mark.
+  const likelyMonoRefunds = active.filter(function(t){
+    return t.monoId && !t.isRefund && (t.category === 'Other income' || t.category === 'Cashback');
+  });
   return `
     <div class="side-label" style="margin:8px 0 4px; color:var(--muted);">Refund diagnostic</div>
     <div class="empty-note" style="text-align:left; margin-bottom:8px;">
@@ -1588,6 +1596,14 @@ function refundDiagnosticHTML(){
       ${recognized.length ? '<br>' + recognized.slice(0,5).map(function(t){ return escapeHtml(t.name) + ' (' + escapeHtml(t.category) + ', ' + fmtOriginal(t.amount, t.currency) + ', ' + t.occurred_at + ')'; }).join('<br>') + (recognized.length > 5 ? '<br>…and ' + (recognized.length-5) + ' more' : '') : ''}
       ${suspicious.length ? `<br><br><span style="color:#F5A623;">⚠ ${suspicious.length} positive-amount transaction${suspicious.length===1?'':'s'} on an expense category ${suspicious.length===1?'is':'are'} NOT currently recognized as a refund — this is the specific case to report if refunds still seem missing:<br>` + suspicious.slice(0,5).map(function(t){ return escapeHtml(t.name) + ' (' + escapeHtml(t.category) + ', ' + fmtOriginal(t.amount, t.currency) + ', ' + t.occurred_at + ')'; }).join('<br>') + '</span>' : ''}
     </div>
+    ${likelyMonoRefunds.length ? `
+    <div class="empty-note" style="text-align:left; margin-bottom:8px;">
+      <b style="color:var(--white);">${likelyMonoRefunds.length}</b> Monobank transaction${likelyMonoRefunds.length===1?'':'s'} sitting in "Other income"/"Cashback" — the bank has no way to signal these are refunds, so they need marking manually if they actually are:<br>
+      ${likelyMonoRefunds.slice(0,8).map(function(t){
+        return `${escapeHtml(t.name)} (${fmtOriginal(t.amount, t.currency)}, ${t.occurred_at}) <button class="header-btn" style="font-size:10px; padding:2px 6px;" onclick="markAsRefund('${t.id}')">Mark as refund</button>`;
+      }).join('<br>')}
+      ${likelyMonoRefunds.length > 8 ? '<br>…and ' + (likelyMonoRefunds.length-8) + ' more — check History → Income to find the rest.' : ''}
+    </div>` : ''}
   `;
 }
 
@@ -3928,11 +3944,20 @@ function historyRows(){
       <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
       <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div>${metaExtra ? `<div class="tx-meta">${metaExtra}</div>` : ''}</div>
       <div class="tx-amt ${amtClass}">${amtDisplay}</div>
+      ${(isIncomeRow && !isTransfer && !isRefund && !t.isRefund) ? `<button class="header-btn" style="font-size:11px; padding:4px 8px;" onclick="markAsRefund('${t.id}')" title="This is actually a refund, not new income">↩️ Refund</button>` : ''}
       <button class="tx-edit" onclick="editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
       <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
     </div>`;
   });
 }
+window.markAsRefund = function(id){
+  const t = transactions.find(function(x){ return x.id === id; });
+  if(!t) return;
+  t.isRefund = true;
+  t.editedAt = Date.now();
+  persist();
+  renderView('finance');
+};
 
 function historyScreenHTML(){
   const isTransfer = historyType === 'transfer';
