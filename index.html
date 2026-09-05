@@ -791,7 +791,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.0.1';
+const APP_BUILD = 'v1.0.2';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -1295,6 +1295,13 @@ let hiddenFromViewCategories = [];
 function loadHiddenFromViewCategories(){
   try{ hiddenFromViewCategories = JSON.parse(localStorage.getItem('nova-hidden-from-view-categories') || '[]'); }
   catch(e){ hiddenFromViewCategories = []; }
+  // Self-corrects any existing state where a structural category (Transfer/
+  // Loan/Refund/Other expense/Other income) was hidden before this
+  // restriction existed — those are relied on by exact name throughout the
+  // app, so hiding one silently breaks whatever depends on it.
+  const before = hiddenFromViewCategories.length;
+  hiddenFromViewCategories = hiddenFromViewCategories.filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
+  if(hiddenFromViewCategories.length !== before) persistHiddenFromViewCategories();
 }
 function persistHiddenFromViewCategories(){
   localStorage.setItem('nova-hidden-from-view-categories', JSON.stringify(hiddenFromViewCategories));
@@ -1849,7 +1856,7 @@ function applyCloudPayloadNonTransactionFields(payload){
   if(payload.categoryRenames) categoryRenames = Object.assign({}, categoryRenames, payload.categoryRenames);
   if(payload.hiddenCategories) hiddenCategories = Array.from(new Set(hiddenCategories.concat(payload.hiddenCategories)));
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
-  if(Array.isArray(payload.hiddenFromViewCategories)) hiddenFromViewCategories = payload.hiddenFromViewCategories;
+  if(Array.isArray(payload.hiddenFromViewCategories)) hiddenFromViewCategories = payload.hiddenFromViewCategories.filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
   if(typeof payload.lastMonoRequestAt === 'number') lastMonoRequestAt = Math.max(lastMonoRequestAt, payload.lastMonoRequestAt);
 
   // Cloud-sourced budgets need the exact same normalization as locally-loaded
@@ -2993,14 +3000,16 @@ function manageCategoriesListHTML(){
   const incomeCats = allIncomeCategories().filter(function(c){ return expenseCats.indexOf(c) === -1; });
   const hiddenSet = new Set(hiddenFromViewCategories);
   function row(c){
-    const canDelete = UNDELETABLE_CATEGORIES.indexOf(c) === -1;
-    const canRename = UNDELETABLE_CATEGORIES.indexOf(c) === -1; // same set the app depends on by exact name — Transfer/Loan/Refund/Other expense/Other income
+    const isStructural = UNDELETABLE_CATEGORIES.indexOf(c) !== -1; // Transfer/Loan/Refund/Other expense/Other income — relied on by exact name throughout the app, so hiding one silently breaks whatever depends on it
+    const canDelete = !isStructural;
+    const canRename = !isStructural;
+    const canHide = !isStructural;
     const escaped = escapeHtml(c).replace(/'/g,"\\'");
     return `<div class="cat-row">
       <span class="cat-name">${escapeHtml(c)}</span>
-      <label style="display:flex; align-items:center; gap:4px; font-size:12px; color:var(--muted); white-space:nowrap;">
+      ${canHide ? `<label style="display:flex; align-items:center; gap:4px; font-size:12px; color:var(--muted); white-space:nowrap;">
         <input type="checkbox" class="hide-cat-checkbox" data-cat="${escapeHtml(c)}"${hiddenSet.has(c)?' checked':''}> Hide
-      </label>
+      </label>` : ''}
       ${canRename ? `<button class="header-btn" onclick="promptRenameCategory('${escaped}')">✏️</button>` : ''}
       ${canDelete ? `<button class="tx-del" onclick="deleteCategory('${escaped}')">✕</button>` : ''}
     </div>`;
