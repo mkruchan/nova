@@ -791,15 +791,15 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.4.0';
+const APP_BUILD = 'v1.5.0';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
   "Transport","Scooter","Gifts","Charity","Groceries","Eating out","Entertainment","Electronics",
   "Digital / Subscriptions","Clothing","Active Leisure","Entrepreneurship","Investments","Flowers",
-  "Smoking","Self-care","Music & Video","Sport","Services","Fees","Taxes","Other expense","Transfer","Loan"
+  "Smoking","Self-care","Music & Video","Sport","Services","Fees","Taxes","Other expense","Refund","Transfer","Loan"
 ];
-const INCOME_CATEGORIES = ["Salary","Freelance","Sale","Gifts","Other income","Cashback","Business","Transfer","Loan"];
+const INCOME_CATEGORIES = ["Salary","Freelance","Sale","Gifts","Other income","Cashback","Business","Refund","Transfer","Loan"];
 
 const DONUT_COLORS = ['#5B8CFF', '#8FB2FF', '#C3D3FF', '#2A3A66', '#4A5A8A', '#7A8CC9'];
 
@@ -1543,27 +1543,12 @@ function visibleTransactions(){
   return list;
 }
 
-// A refund is money credited back against a prior expense, not new income.
-// Recognized two ways: (1) its category is literally "Refund" — trusted
-// outright, an explicit and unambiguous signal on its own; or (2) a
-// positive amount whose category is NOT a recognized income category (and
-// isn't Transfer/Loan). Deliberately does NOT also require the category to
-// be found in allExpenseCategories() — a category can end up "orphaned"
-// from that list (a past rename that didn't fully propagate everywhere, a
-// custom category that got disconnected from customExpenseCategories, etc.)
-// while still very clearly not being an income category, and a positive
-// amount on it is still obviously a refund, not new income. Requiring
-// expense-list membership too meant any such orphaned category silently
-// stopped being recognized as a refund at all, no matter how many
-// transactions used it — this is what a "0 refunds recognized" report
-// actually traces back to.
+// A refund is money credited back against a prior expense, not new income —
+// identified as a positive amount tagged to a category that only exists on
+// the expense side (e.g. Kitsterovna), never the income side.
 function isRefundTx(t){
-  if(Number(t.amount) < 0) return false;
-  if(t.isRefund) return true; // the user's own explicit choice when they created this transaction — always trusted first, over any inference from category
-  if(!t.category) return false;
-  if(t.category === 'Refund') return true;
-  if(t.category === 'Transfer' || t.category === 'Loan') return false;
-  return allIncomeCategories().indexOf(t.category) === -1;
+  return Number(t.amount) >= 0 && t.category !== 'Transfer' &&
+    allExpenseCategories().indexOf(t.category) !== -1 && allIncomeCategories().indexOf(t.category) === -1;
 }
 
 // Direct diagnostic — shows exactly what the app currently recognizes as a
@@ -1581,14 +1566,6 @@ function refundDiagnosticHTML(){
     return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' &&
       allExpenseCategories().indexOf(t.category) !== -1 && !isRefundTx(t);
   });
-  // Likely candidates specifically for the Monobank case: a refund the bank
-  // sends through with no way to auto-detect it lands in "Other income" or
-  // "Cashback" by default (a purely-income category, so the check above
-  // never catches it) — these are exactly the transactions someone would
-  // need to go back and manually mark.
-  const likelyMonoRefunds = active.filter(function(t){
-    return t.monoId && !t.isRefund && (t.category === 'Other income' || t.category === 'Cashback');
-  });
   return `
     <div class="side-label" style="margin:8px 0 4px; color:var(--muted);">Refund diagnostic</div>
     <div class="empty-note" style="text-align:left; margin-bottom:8px;">
@@ -1596,14 +1573,6 @@ function refundDiagnosticHTML(){
       ${recognized.length ? '<br>' + recognized.slice(0,5).map(function(t){ return escapeHtml(t.name) + ' (' + escapeHtml(t.category) + ', ' + fmtOriginal(t.amount, t.currency) + ', ' + t.occurred_at + ')'; }).join('<br>') + (recognized.length > 5 ? '<br>…and ' + (recognized.length-5) + ' more' : '') : ''}
       ${suspicious.length ? `<br><br><span style="color:#F5A623;">⚠ ${suspicious.length} positive-amount transaction${suspicious.length===1?'':'s'} on an expense category ${suspicious.length===1?'is':'are'} NOT currently recognized as a refund — this is the specific case to report if refunds still seem missing:<br>` + suspicious.slice(0,5).map(function(t){ return escapeHtml(t.name) + ' (' + escapeHtml(t.category) + ', ' + fmtOriginal(t.amount, t.currency) + ', ' + t.occurred_at + ')'; }).join('<br>') + '</span>' : ''}
     </div>
-    ${likelyMonoRefunds.length ? `
-    <div class="empty-note" style="text-align:left; margin-bottom:8px;">
-      <b style="color:var(--white);">${likelyMonoRefunds.length}</b> Monobank transaction${likelyMonoRefunds.length===1?'':'s'} sitting in "Other income"/"Cashback" — the bank has no way to signal these are refunds, so they need marking manually if they actually are:<br>
-      ${likelyMonoRefunds.slice(0,8).map(function(t){
-        return `${escapeHtml(t.name)} (${fmtOriginal(t.amount, t.currency)}, ${t.occurred_at}) <button class="header-btn" style="font-size:10px; padding:2px 6px;" onclick="markAsRefund('${t.id}')">Mark as refund</button>`;
-      }).join('<br>')}
-      ${likelyMonoRefunds.length > 8 ? '<br>…and ' + (likelyMonoRefunds.length-8) + ' more — check History → Income to find the rest.' : ''}
-    </div>` : ''}
   `;
 }
 
@@ -3944,20 +3913,11 @@ function historyRows(){
       <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
       <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div>${metaExtra ? `<div class="tx-meta">${metaExtra}</div>` : ''}</div>
       <div class="tx-amt ${amtClass}">${amtDisplay}</div>
-      ${(isIncomeRow && !isTransfer && !isRefund && !t.isRefund) ? `<button class="header-btn" style="font-size:11px; padding:4px 8px;" onclick="markAsRefund('${t.id}')" title="This is actually a refund, not new income">↩️ Refund</button>` : ''}
       <button class="tx-edit" onclick="editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
       <button class="tx-del" onclick="deleteTx('${t.id}')">✕</button>
     </div>`;
   });
 }
-window.markAsRefund = function(id){
-  const t = transactions.find(function(x){ return x.id === id; });
-  if(!t) return;
-  t.isRefund = true;
-  t.editedAt = Date.now();
-  persist();
-  renderView('finance');
-};
 
 function historyScreenHTML(){
   const isTransfer = historyType === 'transfer';
@@ -4623,8 +4583,6 @@ function setTxType(type){
     populateTransferAccountSelects();
   } else if(type === 'refund'){
     populateCategorySelect('expense'); // pick which expense category this money is being credited back to
-    const refundOpt = Array.from(document.getElementById('txCategory').options).find(function(o){ return o.value === 'Refund'; });
-    if(refundOpt) refundOpt.remove(); // steer toward the underlying category (e.g. Groceries) instead of the generic label, so budget tracking stays accurate per-category
   } else {
     populateCategorySelect(type);
   }
@@ -4738,7 +4696,6 @@ function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 function saveTransaction(){
   const category = document.getElementById('txCategory').value;
   const isTransfer = currentTxType === 'transfer';
-  const isRefund = currentTxType === 'refund';
   const rawAmount = parseAmountInput(document.getElementById('txAmount').value);
   const isPositive = currentTxType === 'income' || currentTxType === 'refund';
   const amount = isNaN(rawAmount) ? rawAmount : (isPositive ? Math.abs(rawAmount) : -Math.abs(rawAmount));
@@ -4768,7 +4725,6 @@ function saveTransaction(){
     const t = transactions.find(function(x){ return x.id === editingTxId; });
     if(t){
       t.name = name; t.category = category; t.amount = amount; t.currency = currency; t.occurred_at = occurred_at;
-      if(isRefund) t.isRefund = true; else delete t.isRefund;
       if(accountId) t.accountId = accountId; else if(accountRowVisible) delete t.accountId;
       if(isTransfer){ t.fromAccountId = fromAccountId; t.toAccountId = toAccountId; t.toAmount = toAmount; t.toCurrency = toCurrency; }
       else { delete t.fromAccountId; delete t.toAccountId; delete t.toAmount; delete t.toCurrency; }
@@ -4777,7 +4733,6 @@ function saveTransaction(){
     editingTxId = null;
   } else {
     const tx = { id: generateTxId(), name, category, amount, currency, occurred_at, editedAt: Date.now() };
-    if(isRefund) tx.isRefund = true;
     if(accountId) tx.accountId = accountId;
     if(isTransfer){ tx.fromAccountId = fromAccountId; tx.toAccountId = toAccountId; tx.toAmount = toAmount; tx.toCurrency = toCurrency; }
     transactions.unshift(tx);
