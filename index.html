@@ -791,7 +791,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.0.2';
+const APP_BUILD = 'v1.1.0';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -3769,8 +3769,19 @@ window.openHistory = function(type){
   historyType = type;
   historyCategoryFilter = 'all';
   historySearch = '';
-  historyDateFrom = '';
-  historyDateTo = '';
+  // Refunds default to all-time rather than this month — they're typically
+  // sparse, so someone opening this view almost certainly wants to see
+  // every refund they've ever gotten, not just however many landed in the
+  // current calendar month. Every other history type still defaults to
+  // this month, matching the dashboard's normal scope.
+  if(type === 'refund'){
+    const earliest = visibleTransactions().reduce(function(min, t){ return (!min || t.occurred_at < min) ? t.occurred_at : min; }, null);
+    historyDateFrom = earliest || todayStr();
+    historyDateTo = todayStr();
+  } else {
+    historyDateFrom = '';
+    historyDateTo = '';
+  }
   financeSubView = 'history';
   renderView('finance');
 };
@@ -4259,7 +4270,7 @@ function financeHTML(){
   const LP = '';
 
   const transfers = sortMostRecentFirst(thisMonthTx().filter(function(t){ return t.category === 'Transfer'; }));
-  const refunds = sortMostRecentFirst(thisMonthTx().filter(isRefundTx));
+  const refunds = sortMostRecentFirst(visibleTransactions().filter(isRefundTx));
 
   const blockHTML = {
     overview: `<div class="charts-row">${financeOverviewSummaryHTML(LP)}</div>`,
