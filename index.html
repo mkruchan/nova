@@ -791,7 +791,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.0.0';
+const APP_BUILD = 'v1.0.1';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -2989,19 +2989,19 @@ window.openManageCategories = function(){
   openModal('manageCategoriesModalOverlay');
 };
 function manageCategoriesListHTML(){
-  const nonRenamable = ['Transfer', 'Refund', 'Loan'];
-  const expenseCats = allExpenseCategories().filter(function(c){ return nonRenamable.indexOf(c) === -1; });
-  const incomeCats = allIncomeCategories().filter(function(c){ return nonRenamable.indexOf(c) === -1 && expenseCats.indexOf(c) === -1; });
+  const expenseCats = allExpenseCategories();
+  const incomeCats = allIncomeCategories().filter(function(c){ return expenseCats.indexOf(c) === -1; });
   const hiddenSet = new Set(hiddenFromViewCategories);
   function row(c){
     const canDelete = UNDELETABLE_CATEGORIES.indexOf(c) === -1;
+    const canRename = UNDELETABLE_CATEGORIES.indexOf(c) === -1; // same set the app depends on by exact name — Transfer/Loan/Refund/Other expense/Other income
     const escaped = escapeHtml(c).replace(/'/g,"\\'");
     return `<div class="cat-row">
       <span class="cat-name">${escapeHtml(c)}</span>
       <label style="display:flex; align-items:center; gap:4px; font-size:12px; color:var(--muted); white-space:nowrap;">
         <input type="checkbox" class="hide-cat-checkbox" data-cat="${escapeHtml(c)}"${hiddenSet.has(c)?' checked':''}> Hide
       </label>
-      <button class="header-btn" onclick="promptRenameCategory('${escaped}')">✏️</button>
+      ${canRename ? `<button class="header-btn" onclick="promptRenameCategory('${escaped}')">✏️</button>` : ''}
       ${canDelete ? `<button class="tx-del" onclick="deleteCategory('${escaped}')">✕</button>` : ''}
     </div>`;
   }
