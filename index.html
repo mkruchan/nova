@@ -672,7 +672,7 @@
 <div class="modal-overlay" id="manageCategoriesModalOverlay" onclick="if(event.target===this) closeManageCategories()">
   <div class="modal" style="max-height:80vh; overflow-y:auto;">
     <h3>Manage Categories</h3>
-    <div class="empty-note" style="text-align:left; margin-bottom:10px;">Tap ✏️ to rename a category — existing transactions and any budget for it move to the new name automatically.</div>
+    <div class="empty-note" style="text-align:left; margin-bottom:10px;">Tap ✏️ to rename a category — existing transactions and any budget for it move to the new name automatically. Check "Hide" to filter it out everywhere in the app without touching its transactions — tap Save when you're done checking boxes.</div>
     <div id="manageCategoriesBody"></div>
     <div class="modal-actions">
       <button class="modal-save" onclick="closeManageCategories()">Done</button>
@@ -786,6 +786,12 @@ const CATEGORY_ICON = {
   'Loan': 'ic-wallet'
 };
 
+// Bumped by hand whenever a new copy of this file is produced — the app has
+// no auto-update mechanism, so this is the only way to confirm two devices
+// are actually running the same code rather than one silently being stuck
+// on an older download.
+const APP_BUILD = '2026-09-04-a';
+
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
   "Transport","Scooter","Gifts","Charity","Groceries","Eating out","Entertainment","Electronics",
@@ -856,6 +862,27 @@ function persistCustomCategories(){
   scheduleCloudPush();
 }
 
+// Built-in categories (Groceries, Travel, etc.) are hardcoded constants, so
+// "removing" one can't mean deleting it from the array — it's tracked here
+// as hidden instead, the same overlay approach categoryRenames uses for
+// renaming a built-in without touching the constant itself.
+let hiddenCategories = [];
+function loadHiddenCategories(){
+  try{ hiddenCategories = JSON.parse(localStorage.getItem('nova-hidden-categories') || '[]'); }
+  catch(e){ hiddenCategories = []; }
+}
+function persistHiddenCategories(){
+  localStorage.setItem('nova-hidden-categories', JSON.stringify(hiddenCategories));
+  scheduleCloudPush();
+}
+// hiddenCategories stores original (pre-rename) keys — this checks a
+// CURRENT display name against the renamed version of each, so it works
+// correctly regardless of whether the category was renamed before or after
+// being hidden.
+function isHiddenCategory(displayName){
+  return hiddenCategories.some(function(orig){ return (categoryRenames[orig] || orig) === displayName; });
+}
+
 // Maps an original category name to whatever it's been renamed to, applied
 // on top of both the built-in and custom category lists. This lets a
 // built-in category (defined as a code constant) be renamed from inside the
@@ -870,30 +897,41 @@ function persistCategoryRenames(){
   scheduleCloudPush();
 }
 function allExpenseCategories(){
-  const base = EXPENSE_CATEGORIES.concat(customExpenseCategories).map(function(c){ return categoryRenames[c] || c; });
-  return base.concat(orphanCategoriesNotIn(base, 'expense'));
+  const hidden = new Set(hiddenCategories);
+  const expenseBase = EXPENSE_CATEGORIES.concat(customExpenseCategories).filter(function(c){ return !hidden.has(c); }).map(function(c){ return categoryRenames[c] || c; });
+  const incomeBase = INCOME_CATEGORIES.concat(customIncomeCategories).filter(function(c){ return !hidden.has(c); }).map(function(c){ return categoryRenames[c] || c; });
+  return expenseBase.concat(orphanCategoriesNotIn(expenseBase, incomeBase, 'expense'));
 }
 function allIncomeCategories(){
-  const base = INCOME_CATEGORIES.concat(customIncomeCategories).map(function(c){ return categoryRenames[c] || c; });
-  return base.concat(orphanCategoriesNotIn(base, 'income'));
+  const hidden = new Set(hiddenCategories);
+  const expenseBase = EXPENSE_CATEGORIES.concat(customExpenseCategories).filter(function(c){ return !hidden.has(c); }).map(function(c){ return categoryRenames[c] || c; });
+  const incomeBase = INCOME_CATEGORIES.concat(customIncomeCategories).filter(function(c){ return !hidden.has(c); }).map(function(c){ return categoryRenames[c] || c; });
+  return incomeBase.concat(orphanCategoriesNotIn(incomeBase, expenseBase, 'income'));
 }
 // Categories that show up on real transactions but aren't in either standard
 // list — classified by the sign of the amount they're actually used with,
 // so a category only ever used for expenses doesn't wrongly appear in the
-// income list and vice versa. Both allExpenseCategories/allIncomeCategories
-// exclude the SAME base list from each other's search here, since the base
-// list already includes both after renames are applied.
-function orphanCategoriesNotIn(base, type){
-  const known = new Set(base);
+// income list and vice versa. Critically, a category already known on the
+// OTHER side is never added here even if some transaction's sign would
+// otherwise suggest it — this is exactly the refund case: a positive amount
+// tagged with an expense category (e.g. a partial Groceries refund) must
+// never make "Groceries" start looking like an income category too, since
+// isRefundTx() depends entirely on a category existing on the expense side
+// but NOT the income side to identify a refund as a refund in the first
+// place, rather than as new income.
+function orphanCategoriesNotIn(sameBase, otherBase, type){
+  const knownSame = new Set(sameBase);
+  const knownOther = new Set(otherBase);
+  const hidden = new Set(hiddenCategories.map(function(c){ return categoryRenames[c] || c; }));
   const seen = new Set();
   const orphans = [];
   for(let i = 0; i < transactions.length; i++){
     const t = transactions[i];
     if(t.deleted || !t.category || t.category === 'Transfer') continue;
+    const cat = categoryRenames[t.category] || t.category;
+    if(knownSame.has(cat) || knownOther.has(cat) || seen.has(cat) || hidden.has(cat)) continue;
     const isExpenseTx = Number(t.amount) < 0;
     if((type === 'expense') !== isExpenseTx) continue;
-    const cat = categoryRenames[t.category] || t.category;
-    if(known.has(cat) || seen.has(cat)) continue;
     seen.add(cat);
     orphans.push(cat);
   }
@@ -931,6 +969,16 @@ window.renameCategory = function(currentName, newNameRaw){
   customCategoryRules.forEach(function(r){ if(r.category === currentName){ r.category = newName; rulesChanged = true; } });
   if(rulesChanged) persistCustomCategoryRules();
 
+  // hiddenFromViewCategories stores the display name directly (unlike
+  // hiddenCategories, which tracks an original key) — a rename would
+  // otherwise silently break the match, making a hidden category
+  // unexpectedly reappear under its new name.
+  const hideIdx = hiddenFromViewCategories.indexOf(currentName);
+  if(hideIdx !== -1){
+    hiddenFromViewCategories[hideIdx] = newName;
+    persistHiddenFromViewCategories();
+  }
+
   // Migrate any per-category budget amount set under the old name, across
   // every month that has one — summing if the new name also already has one.
   Object.keys((budgets && budgets.months) || {}).forEach(function(key){
@@ -942,6 +990,70 @@ window.renameCategory = function(currentName, newNameRaw){
   persistBudgets();
 
   renderView('settings');
+};
+
+// Categories the app relies on internally and can't safely delete or rename
+// away — Transfer/Loan/Refund have dedicated logic keyed to their exact
+// name, and Other expense/income are the fallback themselves, so deleting
+// either would have nothing left to reassign orphaned transactions to.
+const UNDELETABLE_CATEGORIES = ['Transfer', 'Loan', 'Refund', 'Other expense', 'Other income'];
+
+window.deleteCategory = function(currentName){
+  if(UNDELETABLE_CATEGORIES.indexOf(currentName) !== -1) return;
+  const isIncome = allIncomeCategories().indexOf(currentName) !== -1 && allExpenseCategories().indexOf(currentName) === -1;
+  const fallback = isIncome ? 'Other income' : 'Other expense';
+  const affectedCount = transactions.filter(function(t){ return !t.deleted && t.category === currentName; }).length;
+
+  customConfirm(
+    affectedCount > 0
+      ? `Delete "${currentName}"? ${affectedCount} transaction${affectedCount===1?'':'s'} using it will move to "${fallback}" instead. Any budget set for it moves there too.`
+      : `Delete "${currentName}"? It isn't used by any transaction right now.`,
+    function(){
+      const originalKey = findOriginalCategoryKey(currentName);
+
+      // Reassign affected transactions to the fallback.
+      transactions.forEach(function(t){ if(t.category === currentName) t.category = fallback; });
+      persist();
+
+      // Migrate any budget amount to the fallback, summing if it already has one.
+      Object.keys((budgets && budgets.months) || {}).forEach(function(key){
+        const cb = budgets.months[key].categoryBudgets;
+        if(!cb || cb[currentName] == null) return;
+        cb[fallback] = (Number(cb[fallback]) || 0) + Number(cb[currentName]);
+        delete cb[currentName];
+      });
+      persistBudgets();
+
+      // A rule that would now just assign the generic fallback serves no
+      // purpose — that's already the default when nothing matches.
+      let rulesChanged = false;
+      customCategoryRules.forEach(function(r){
+        if(!r.deleted && r.category === currentName){ r.deleted = true; r.editedAt = Date.now(); rulesChanged = true; }
+      });
+      if(rulesChanged) persistCustomCategoryRules();
+
+      // Custom categories are actually removed; built-ins (hardcoded
+      // constants) are hidden instead, since the array itself can't change.
+      const customIdx = customExpenseCategories.indexOf(originalKey);
+      const customIncomeIdx = customIncomeCategories.indexOf(originalKey);
+      if(customIdx !== -1) customExpenseCategories.splice(customIdx, 1);
+      if(customIncomeIdx !== -1) customIncomeCategories.splice(customIncomeIdx, 1);
+      if(customIdx !== -1 || customIncomeIdx !== -1){
+        persistCustomCategories();
+      } else if(hiddenCategories.indexOf(originalKey) === -1){
+        hiddenCategories.push(originalKey);
+        persistHiddenCategories();
+      }
+
+      // The rename mapping for this category no longer means anything once
+      // it's gone — leaving it in place is harmless but unnecessary clutter.
+      if(categoryRenames[originalKey]){ delete categoryRenames[originalKey]; persistCategoryRenames(); }
+
+      renderView('settings');
+      document.getElementById('manageCategoriesBody').innerHTML = manageCategoriesListHTML();
+    },
+    { title: 'Delete category?', confirmLabel: 'Delete' }
+  );
 };
 
 /* ---------- Custom auto-categorization rules ---------- */
@@ -962,14 +1074,20 @@ function matchCustomRule(desc){
   const lower = desc.toLowerCase();
   for(let i = 0; i < customCategoryRules.length; i++){
     const rule = customCategoryRules[i];
-    if(rule.keyword && lower.indexOf(rule.keyword.toLowerCase()) !== -1) return categoryRenames[rule.category] || rule.category;
+    if(rule.deleted) continue;
+    if(rule.keyword && lower.indexOf(rule.keyword.toLowerCase()) !== -1){
+      const cat = categoryRenames[rule.category] || rule.category;
+      if(!isHiddenCategory(cat)) return cat;
+    }
   }
   return null;
 }
 
 function categoryRulesListHTML(){
-  if(!customCategoryRules.length) return '<div class="empty-note">No rules yet — add one below.</div>';
-  return customCategoryRules.map(function(rule, i){
+  const active = customCategoryRules.filter(function(r){ return !r.deleted; });
+  if(!active.length) return '<div class="empty-note">No rules yet — add one below.</div>';
+  return active.map(function(rule){
+    const i = customCategoryRules.indexOf(rule);
     return `<div class="mono-acct-row">
       <div class="mono-acct-info">
         <div class="mono-acct-label">"${escapeHtml(rule.keyword)}" → ${escapeHtml(rule.category)}</div>
@@ -983,14 +1101,23 @@ window.addCategoryRule = function(){
   const keyword = document.getElementById('newRuleKeyword').value.trim();
   const category = document.getElementById('newRuleCategory').value;
   if(!keyword) return;
-  customCategoryRules.push({ keyword: keyword, category: category });
+  customCategoryRules.push({ keyword: keyword, category: category, editedAt: Date.now() });
   persistCustomCategoryRules();
   document.getElementById('newRuleKeyword').value = '';
   renderView('settings');
 };
 
 window.removeCategoryRule = function(index){
-  customCategoryRules.splice(index, 1);
+  // Tombstoned rather than spliced out — a hard delete would get silently
+  // resurrected by any later sync that still has the old, undeleted rule,
+  // since a plain union-merge by keyword can't tell "this is new from
+  // another device" apart from "this was deleted here and just hasn't
+  // propagated yet." editedAt lets the merge correctly favor whichever
+  // side acted most recently, same as transactions already do.
+  const rule = customCategoryRules[index];
+  if(!rule) return;
+  rule.deleted = true;
+  rule.editedAt = Date.now();
   persistCustomCategoryRules();
   renderView('settings');
 };
@@ -1190,6 +1317,21 @@ let transactions = [];
 let currentView = 'finance';
 let nextId = 1; // retained only for any legacy code path that still reads it; no longer used to generate new transaction ids — see generateTxId
 let showMonoData = true;
+// Reversible, toggle-able display filter — distinct from hiddenCategories
+// (which tracks a PERMANENTLY deleted built-in category whose transactions
+// have already been reassigned elsewhere). A category in this list still
+// has all its transactions exactly as they are; they're just filtered out
+// of every screen, the same treatment showMonoData already gets, and can
+// be un-hidden again at any time.
+let hiddenFromViewCategories = [];
+function loadHiddenFromViewCategories(){
+  try{ hiddenFromViewCategories = JSON.parse(localStorage.getItem('nova-hidden-from-view-categories') || '[]'); }
+  catch(e){ hiddenFromViewCategories = []; }
+}
+function persistHiddenFromViewCategories(){
+  localStorage.setItem('nova-hidden-from-view-categories', JSON.stringify(hiddenFromViewCategories));
+  scheduleCloudPush();
+}
 
 // Generates a collision-resistant unique id — timestamp + random suffix,
 // deliberately NOT a plain Date.now() or incrementing counter. A plain
@@ -1413,6 +1555,10 @@ function saveMonoDisplayFromDate(dateStr){
 function visibleTransactions(){
   let list = transactions.filter(function(t){ return !t.deleted; });
   if(!showMonoData) list = list.filter(function(t){ return !t.monoId; });
+  if(hiddenFromViewCategories.length){
+    const hiddenSet = new Set(hiddenFromViewCategories);
+    list = list.filter(function(t){ return !hiddenSet.has(t.category); });
+  }
   if(monoDisplayFromDate){
     // Only affects Monobank-sourced transactions — manual entries are never
     // touched by this, and it has no relationship to the main dashboard's
@@ -1534,6 +1680,7 @@ function totalManualAccountsValue(){
 // rates/Monobank raw rates (just refetched independently per device anyway).
 let cloudConfig = { url: null, key: null, syncId: null };
 let cloudLastPulledAt = null;
+let lastSeenRemoteBuild = null; // the APP_BUILD reported by whichever device most recently pushed — lets a version mismatch between devices be spotted from either one
 let cloudPushTimer = null;
 let cloudSyncStatus = 'idle'; // idle | syncing | synced | error | unconfigured
 let cloudSyncErrorDetail = ''; // the actual error text from Supabase, when available
@@ -1563,7 +1710,9 @@ function cloudPayload(){
     customIncomeCategories: customIncomeCategories,
     customCategoryRules: customCategoryRules,
     categoryRenames: categoryRenames,
+    hiddenCategories: hiddenCategories,
     showMonoData: showMonoData,
+    hiddenFromViewCategories: hiddenFromViewCategories,
     manualAccounts: manualAccounts,
     // If more than one device has the same Monobank token configured (e.g.
     // both a phone and a Mac), they share the same underlying rate limit
@@ -1573,7 +1722,8 @@ function cloudPayload(){
     // and back off accordingly — otherwise two devices can easily collide
     // and rate-limit each other, which looks exactly like "sync sometimes
     // just doesn't happen" from either device's perspective.
-    lastMonoRequestAt: lastMonoRequestAt
+    lastMonoRequestAt: lastMonoRequestAt,
+    appBuild: APP_BUILD
   };
 }
 
@@ -1703,6 +1853,7 @@ function mergeInTransactionsFromCloud(incomingTransactions){
 
 function applyCloudPayloadNonTransactionFields(payload){
   if(!payload) return;
+  if(payload.appBuild) lastSeenRemoteBuild = payload.appBuild;
   if(payload.budgets) budgets = mergeBudgets(budgets, payload.budgets);
   // Union-merge rather than replace — these lists only ever grow (there's no
   // delete-a-category feature, only rename), so a category added on one
@@ -1718,11 +1869,19 @@ function applyCloudPayloadNonTransactionFields(payload){
   if(payload.customCategoryRules){
     const byKeyword = new Map();
     customCategoryRules.forEach(function(r){ byKeyword.set((r.keyword||'').toLowerCase(), r); });
-    payload.customCategoryRules.forEach(function(r){ byKeyword.set((r.keyword||'').toLowerCase(), r); });
+    payload.customCategoryRules.forEach(function(incoming){
+      const key = (incoming.keyword||'').toLowerCase();
+      const local = byKeyword.get(key);
+      // Whichever side was edited more recently wins outright — including a
+      // deletion, which is exactly what a plain union could never express.
+      if(!local || (incoming.editedAt||0) >= (local.editedAt||0)) byKeyword.set(key, incoming);
+    });
     customCategoryRules = Array.from(byKeyword.values());
   }
   if(payload.categoryRenames) categoryRenames = Object.assign({}, categoryRenames, payload.categoryRenames);
+  if(payload.hiddenCategories) hiddenCategories = Array.from(new Set(hiddenCategories.concat(payload.hiddenCategories)));
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
+  if(Array.isArray(payload.hiddenFromViewCategories)) hiddenFromViewCategories = payload.hiddenFromViewCategories;
   if(typeof payload.lastMonoRequestAt === 'number') lastMonoRequestAt = Math.max(lastMonoRequestAt, payload.lastMonoRequestAt);
 
   // Cloud-sourced budgets need the exact same normalization as locally-loaded
@@ -1742,8 +1901,10 @@ function applyCloudPayloadNonTransactionFields(payload){
   localStorage.setItem('nova-custom-income-categories', JSON.stringify(customIncomeCategories));
   localStorage.setItem('nova-category-renames', JSON.stringify(categoryRenames));
   localStorage.setItem('nova-custom-category-rules', JSON.stringify(customCategoryRules));
+  localStorage.setItem('nova-hidden-categories', JSON.stringify(hiddenCategories));
   localStorage.setItem('nova-manual-accounts', JSON.stringify(manualAccounts));
   try{ localStorage.setItem('nova-show-mono-data', String(showMonoData)); }catch(e){}
+  try{ localStorage.setItem('nova-hidden-from-view-categories', JSON.stringify(hiddenFromViewCategories)); }catch(e){}
 }
 
 // Any network call can hang far longer than expected if a host is slow,
@@ -1950,6 +2111,8 @@ function init(){
   loadDisplayCurrency();
   loadMonoDisplayFromDate();
   loadCustomCategories();
+  loadHiddenCategories();
+  loadHiddenFromViewCategories();
   loadCategoryRenames();
   loadCustomCategoryRules();
   loadMonoSyncStatus();
@@ -2734,6 +2897,7 @@ function expenseDetailScreenHTML(){
       <div class="detail-title">${isIncome?'Income':'Expenses'} by category</div>
       <div style="width:32px;"></div>
     </div>
+    <div class="empty-note" style="text-align:center; margin:-4px 0 8px;">This screen has its own Weekly/Monthly/Quarterly/Yearly period below, independent of the main dashboard's date range (${rangeLabel()}) — changing one doesn't affect the other.</div>
     ${lastSyncedSummary() ? `<div class="empty-note" style="text-align:center; margin:-4px 0 8px;">Monobank data synced ${lastSyncedSummary()}</div>` : ''}
 
     <div class="type-toggle" style="margin-bottom:12px;">
@@ -2860,10 +3024,17 @@ function manageCategoriesListHTML(){
   const nonRenamable = ['Transfer', 'Refund', 'Loan'];
   const expenseCats = allExpenseCategories().filter(function(c){ return nonRenamable.indexOf(c) === -1; });
   const incomeCats = allIncomeCategories().filter(function(c){ return nonRenamable.indexOf(c) === -1 && expenseCats.indexOf(c) === -1; });
+  const hiddenSet = new Set(hiddenFromViewCategories);
   function row(c){
+    const canDelete = UNDELETABLE_CATEGORIES.indexOf(c) === -1;
+    const escaped = escapeHtml(c).replace(/'/g,"\\'");
     return `<div class="cat-row">
       <span class="cat-name">${escapeHtml(c)}</span>
-      <button class="header-btn" onclick="promptRenameCategory('${escapeHtml(c).replace(/'/g,"\\'")}')">✏️</button>
+      <label style="display:flex; align-items:center; gap:4px; font-size:12px; color:var(--muted); white-space:nowrap;">
+        <input type="checkbox" class="hide-cat-checkbox" data-cat="${escapeHtml(c)}"${hiddenSet.has(c)?' checked':''}> Hide
+      </label>
+      <button class="header-btn" onclick="promptRenameCategory('${escaped}')">✏️</button>
+      ${canDelete ? `<button class="tx-del" onclick="deleteCategory('${escaped}')">✕</button>` : ''}
     </div>`;
   }
   return `
@@ -2874,8 +3045,21 @@ function manageCategoriesListHTML(){
     <div class="side-label" style="margin:16px 0 6px;">Income</div>
     ${incomeCats.map(row).join('')}
     <button class="header-btn" style="margin-top:8px;" onclick="promptAddCategory('income')">+ Add income category</button>
+
+    <div class="modal-actions" style="justify-content:flex-start; margin-top:16px;">
+      <button class="modal-save" onclick="saveHiddenCategories()">Save</button>
+    </div>
   `;
 }
+window.saveHiddenCategories = function(){
+  const boxes = document.querySelectorAll('#manageCategoriesBody .hide-cat-checkbox');
+  const newHidden = [];
+  boxes.forEach(function(box){ if(box.checked) newHidden.push(box.getAttribute('data-cat')); });
+  hiddenFromViewCategories = newHidden;
+  persistHiddenFromViewCategories();
+  renderView(currentView);
+  document.getElementById('manageCategoriesBody').innerHTML = manageCategoriesListHTML();
+};
 window.promptRenameCategory = function(currentName){
   const newName = prompt('Rename "' + currentName + '" to:', currentName);
   if(newName === null) return; // cancelled
@@ -3823,6 +4007,11 @@ function settingsScreenHTML(){
       <button class="modal-cancel" onclick="exportCSV()">Export backup first</button>
       <button class="tx-del" style="border:1px solid var(--rose); border-radius:8px; padding:8px 14px;" onclick="resetAppData()">Reset app data</button>
     </div>
+
+    <div class="side-label" style="margin:24px 0 4px; color:var(--muted);">App version</div>
+    <div class="empty-note" style="text-align:left; margin-bottom:4px; user-select:all;">This device: <b style="color:var(--white);">${APP_BUILD}</b></div>
+    ${lastSeenRemoteBuild ? `<div class="empty-note" style="text-align:left; margin-bottom:8px; user-select:all;">Last seen from another device: <b style="color:${lastSeenRemoteBuild === APP_BUILD ? 'var(--white)' : 'var(--rose)'};">${escapeHtml(lastSeenRemoteBuild)}</b>${lastSeenRemoteBuild !== APP_BUILD ? ' ⚠ different from this device — one of them is running an older copy of the file. Re-download and replace it on whichever shows the older-looking version, then reopen.' : ' — matches this device.'}</div>` : ''}
+    <div class="empty-note" style="text-align:left; margin-bottom:8px;">This app has no auto-update — each device runs whatever copy of the file was last saved to it. A version mismatch above means one device is simply running older code, not a new bug.</div>
   `;
 }
 
@@ -4731,8 +4920,14 @@ const MCC_CATEGORY_MAP = {
 // merchant's live mcc for their own purposes, so the original code can
 // occasionally match when the current one doesn't.
 function mccCategoryFor(item){
-  if(item.mcc && MCC_CATEGORY_MAP[item.mcc]) return categoryRenames[MCC_CATEGORY_MAP[item.mcc]] || MCC_CATEGORY_MAP[item.mcc];
-  if(item.originalMcc && MCC_CATEGORY_MAP[item.originalMcc]) return categoryRenames[MCC_CATEGORY_MAP[item.originalMcc]] || MCC_CATEGORY_MAP[item.originalMcc];
+  if(item.mcc && MCC_CATEGORY_MAP[item.mcc]){
+    const cat = categoryRenames[MCC_CATEGORY_MAP[item.mcc]] || MCC_CATEGORY_MAP[item.mcc];
+    if(!isHiddenCategory(cat)) return cat;
+  }
+  if(item.originalMcc && MCC_CATEGORY_MAP[item.originalMcc]){
+    const cat = categoryRenames[MCC_CATEGORY_MAP[item.originalMcc]] || MCC_CATEGORY_MAP[item.originalMcc];
+    if(!isHiddenCategory(cat)) return cat;
+  }
   return null;
 }
 
