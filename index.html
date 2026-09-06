@@ -546,9 +546,11 @@
     <div id="monoLastError" class="status-msg error" style="margin-top:6px; display:none;"></div>
     <div id="monoAccountRow" style="margin-top:14px;">
       <div class="empty-note" style="text-align:left; margin-bottom:8px;">All accounts sync automatically — nothing to select. The first sync grabs your full history; after that it checks for anything new every minute on its own.</div>
-      <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
+      <div class="modal-actions" style="justify-content:flex-start; margin-top:0; gap:8px;">
         <button class="modal-save" onclick="syncNowManual()">Sync now</button>
+        <button class="header-btn" onclick="resyncFullHistory()">↺ Re-sync full history</button>
       </div>
+      <div class="empty-note" style="text-align:left; margin:6px 0 0;">If you suspect older transactions are missing (e.g. an earlier sync was interrupted), this re-pulls your complete history from scratch rather than just the recent catch-up window.</div>
       <div id="monoProgress" class="status-msg" style="margin-top:8px;"></div>
 
       <div class="side-label" style="margin:16px 0 4px;">Accounts</div>
@@ -670,7 +672,7 @@
 <div class="modal-overlay" id="manageCategoriesModalOverlay" onclick="if(event.target===this) closeManageCategories()">
   <div class="modal" style="max-height:80vh; overflow-y:auto;">
     <h3>Manage Categories</h3>
-    <div class="empty-note" style="text-align:left; margin-bottom:10px;">Tap ✏️ to rename a category — existing transactions and any budget for it move to the new name automatically.</div>
+    <div class="empty-note" style="text-align:left; margin-bottom:10px;">Tap ✏️ to rename a category — existing transactions and any budget for it move to the new name automatically. Check "Hide" to filter it out everywhere in the app without touching its transactions — tap Save when you're done checking boxes.</div>
     <div id="manageCategoriesBody"></div>
     <div class="modal-actions">
       <button class="modal-save" onclick="closeManageCategories()">Done</button>
@@ -784,6 +786,13 @@ const CATEGORY_ICON = {
   'Loan': 'ic-wallet'
 };
 
+// Bumped by hand whenever a new copy of this file is produced — the app has
+// no auto-update mechanism, so this is the only way to confirm two devices
+// are actually running the same code rather than one silently being stuck
+// on an older download. Follows major.minor.patch: patch for a bug fix,
+// minor for a new feature, major for a significant rework.
+const APP_BUILD = 'v1.5.0';
+
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
   "Transport","Scooter","Gifts","Charity","Groceries","Eating out","Entertainment","Electronics",
@@ -854,6 +863,27 @@ function persistCustomCategories(){
   scheduleCloudPush();
 }
 
+// Built-in categories (Groceries, Travel, etc.) are hardcoded constants, so
+// "removing" one can't mean deleting it from the array — it's tracked here
+// as hidden instead, the same overlay approach categoryRenames uses for
+// renaming a built-in without touching the constant itself.
+let hiddenCategories = [];
+function loadHiddenCategories(){
+  try{ hiddenCategories = JSON.parse(localStorage.getItem('nova-hidden-categories') || '[]'); }
+  catch(e){ hiddenCategories = []; }
+}
+function persistHiddenCategories(){
+  localStorage.setItem('nova-hidden-categories', JSON.stringify(hiddenCategories));
+  scheduleCloudPush();
+}
+// hiddenCategories stores original (pre-rename) keys — this checks a
+// CURRENT display name against the renamed version of each, so it works
+// correctly regardless of whether the category was renamed before or after
+// being hidden.
+function isHiddenCategory(displayName){
+  return hiddenCategories.some(function(orig){ return (categoryRenames[orig] || orig) === displayName; });
+}
+
 // Maps an original category name to whatever it's been renamed to, applied
 // on top of both the built-in and custom category lists. This lets a
 // built-in category (defined as a code constant) be renamed from inside the
@@ -867,8 +897,14 @@ function persistCategoryRenames(){
   localStorage.setItem('nova-category-renames', JSON.stringify(categoryRenames));
   scheduleCloudPush();
 }
-function allExpenseCategories(){ return EXPENSE_CATEGORIES.concat(customExpenseCategories).map(function(c){ return categoryRenames[c] || c; }); }
-function allIncomeCategories(){ return INCOME_CATEGORIES.concat(customIncomeCategories).map(function(c){ return categoryRenames[c] || c; }); }
+function allExpenseCategories(){
+  const hidden = new Set(hiddenCategories);
+  return EXPENSE_CATEGORIES.concat(customExpenseCategories).filter(function(c){ return !hidden.has(c); }).map(function(c){ return categoryRenames[c] || c; });
+}
+function allIncomeCategories(){
+  const hidden = new Set(hiddenCategories);
+  return INCOME_CATEGORIES.concat(customIncomeCategories).filter(function(c){ return !hidden.has(c); }).map(function(c){ return categoryRenames[c] || c; });
+}
 
 // Finds which original (un-renamed) key currently displays as currentName —
 // needed because the name shown in the UI may already be a previous rename,
@@ -892,6 +928,25 @@ window.renameCategory = function(currentName, newNameRaw){
   transactions.forEach(function(t){ if(t.category === currentName) t.category = newName; });
   persist();
 
+  // Retarget any custom auto-categorization rule pointing at the old name —
+  // otherwise a rule created before this rename would keep silently
+  // reassigning the OLD category to every future transaction it matches
+  // (e.g. a recurring Monobank import), even though the category was
+  // supposedly renamed everywhere else.
+  let rulesChanged = false;
+  customCategoryRules.forEach(function(r){ if(r.category === currentName){ r.category = newName; rulesChanged = true; } });
+  if(rulesChanged) persistCustomCategoryRules();
+
+  // hiddenFromViewCategories stores the display name directly (unlike
+  // hiddenCategories, which tracks an original key) — a rename would
+  // otherwise silently break the match, making a hidden category
+  // unexpectedly reappear under its new name.
+  const hideIdx = hiddenFromViewCategories.indexOf(currentName);
+  if(hideIdx !== -1){
+    hiddenFromViewCategories[hideIdx] = newName;
+    persistHiddenFromViewCategories();
+  }
+
   // Migrate any per-category budget amount set under the old name, across
   // every month that has one — summing if the new name also already has one.
   Object.keys((budgets && budgets.months) || {}).forEach(function(key){
@@ -903,6 +958,70 @@ window.renameCategory = function(currentName, newNameRaw){
   persistBudgets();
 
   renderView('settings');
+};
+
+// Categories the app relies on internally and can't safely delete or rename
+// away — Transfer/Loan/Refund have dedicated logic keyed to their exact
+// name, and Other expense/income are the fallback themselves, so deleting
+// either would have nothing left to reassign orphaned transactions to.
+const UNDELETABLE_CATEGORIES = ['Transfer', 'Loan', 'Refund', 'Other expense', 'Other income'];
+
+window.deleteCategory = function(currentName){
+  if(UNDELETABLE_CATEGORIES.indexOf(currentName) !== -1) return;
+  const isIncome = allIncomeCategories().indexOf(currentName) !== -1 && allExpenseCategories().indexOf(currentName) === -1;
+  const fallback = isIncome ? 'Other income' : 'Other expense';
+  const affectedCount = transactions.filter(function(t){ return !t.deleted && t.category === currentName; }).length;
+
+  customConfirm(
+    affectedCount > 0
+      ? `Delete "${currentName}"? ${affectedCount} transaction${affectedCount===1?'':'s'} using it will move to "${fallback}" instead. Any budget set for it moves there too.`
+      : `Delete "${currentName}"? It isn't used by any transaction right now.`,
+    function(){
+      const originalKey = findOriginalCategoryKey(currentName);
+
+      // Reassign affected transactions to the fallback.
+      transactions.forEach(function(t){ if(t.category === currentName) t.category = fallback; });
+      persist();
+
+      // Migrate any budget amount to the fallback, summing if it already has one.
+      Object.keys((budgets && budgets.months) || {}).forEach(function(key){
+        const cb = budgets.months[key].categoryBudgets;
+        if(!cb || cb[currentName] == null) return;
+        cb[fallback] = (Number(cb[fallback]) || 0) + Number(cb[currentName]);
+        delete cb[currentName];
+      });
+      persistBudgets();
+
+      // A rule that would now just assign the generic fallback serves no
+      // purpose — that's already the default when nothing matches.
+      let rulesChanged = false;
+      customCategoryRules.forEach(function(r){
+        if(!r.deleted && r.category === currentName){ r.deleted = true; r.editedAt = Date.now(); rulesChanged = true; }
+      });
+      if(rulesChanged) persistCustomCategoryRules();
+
+      // Custom categories are actually removed; built-ins (hardcoded
+      // constants) are hidden instead, since the array itself can't change.
+      const customIdx = customExpenseCategories.indexOf(originalKey);
+      const customIncomeIdx = customIncomeCategories.indexOf(originalKey);
+      if(customIdx !== -1) customExpenseCategories.splice(customIdx, 1);
+      if(customIncomeIdx !== -1) customIncomeCategories.splice(customIncomeIdx, 1);
+      if(customIdx !== -1 || customIncomeIdx !== -1){
+        persistCustomCategories();
+      } else if(hiddenCategories.indexOf(originalKey) === -1){
+        hiddenCategories.push(originalKey);
+        persistHiddenCategories();
+      }
+
+      // The rename mapping for this category no longer means anything once
+      // it's gone — leaving it in place is harmless but unnecessary clutter.
+      if(categoryRenames[originalKey]){ delete categoryRenames[originalKey]; persistCategoryRenames(); }
+
+      renderView('settings');
+      document.getElementById('manageCategoriesBody').innerHTML = manageCategoriesListHTML();
+    },
+    { title: 'Delete category?', confirmLabel: 'Delete' }
+  );
 };
 
 /* ---------- Custom auto-categorization rules ---------- */
@@ -923,14 +1042,20 @@ function matchCustomRule(desc){
   const lower = desc.toLowerCase();
   for(let i = 0; i < customCategoryRules.length; i++){
     const rule = customCategoryRules[i];
-    if(rule.keyword && lower.indexOf(rule.keyword.toLowerCase()) !== -1) return rule.category;
+    if(rule.deleted) continue;
+    if(rule.keyword && lower.indexOf(rule.keyword.toLowerCase()) !== -1){
+      const cat = categoryRenames[rule.category] || rule.category;
+      if(!isHiddenCategory(cat)) return cat;
+    }
   }
   return null;
 }
 
 function categoryRulesListHTML(){
-  if(!customCategoryRules.length) return '<div class="empty-note">No rules yet — add one below.</div>';
-  return customCategoryRules.map(function(rule, i){
+  const active = customCategoryRules.filter(function(r){ return !r.deleted; });
+  if(!active.length) return '<div class="empty-note">No rules yet — add one below.</div>';
+  return active.map(function(rule){
+    const i = customCategoryRules.indexOf(rule);
     return `<div class="mono-acct-row">
       <div class="mono-acct-info">
         <div class="mono-acct-label">"${escapeHtml(rule.keyword)}" → ${escapeHtml(rule.category)}</div>
@@ -944,14 +1069,23 @@ window.addCategoryRule = function(){
   const keyword = document.getElementById('newRuleKeyword').value.trim();
   const category = document.getElementById('newRuleCategory').value;
   if(!keyword) return;
-  customCategoryRules.push({ keyword: keyword, category: category });
+  customCategoryRules.push({ keyword: keyword, category: category, editedAt: Date.now() });
   persistCustomCategoryRules();
   document.getElementById('newRuleKeyword').value = '';
   renderView('settings');
 };
 
 window.removeCategoryRule = function(index){
-  customCategoryRules.splice(index, 1);
+  // Tombstoned rather than spliced out — a hard delete would get silently
+  // resurrected by any later sync that still has the old, undeleted rule,
+  // since a plain union-merge by keyword can't tell "this is new from
+  // another device" apart from "this was deleted here and just hasn't
+  // propagated yet." editedAt lets the merge correctly favor whichever
+  // side acted most recently, same as transactions already do.
+  const rule = customCategoryRules[index];
+  if(!rule) return;
+  rule.deleted = true;
+  rule.editedAt = Date.now();
   persistCustomCategoryRules();
   renderView('settings');
 };
@@ -1151,21 +1285,42 @@ let transactions = [];
 let currentView = 'finance';
 let nextId = 1; // retained only for any legacy code path that still reads it; no longer used to generate new transaction ids — see generateTxId
 let showMonoData = true;
-
-// Generates a new transaction id. Deliberately NOT a simple incrementing
-// counter — nextId is computed independently on each device from whatever
-// transactions that device has already seen, with no coordination between
-// devices. Two devices can easily produce the exact same sequential id
-// ("t1", "t2"...) for two completely unrelated transactions — most likely
-// right when a second device is first set up and both are used for a few
-// entries before their first sync. Since the sync merge is keyed by this id,
-// a collision makes it treat two different transactions as the same one and
-// silently keep only whichever has the later edit timestamp, discarding the
-// other's data entirely. Timestamp + random suffix makes a same-millisecond
-// collision between two devices astronomically unlikely.
-function generateTxId(){
-  return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+// Reversible, toggle-able display filter — distinct from hiddenCategories
+// (which tracks a PERMANENTLY deleted built-in category whose transactions
+// have already been reassigned elsewhere). A category in this list still
+// has all its transactions exactly as they are; they're just filtered out
+// of every screen, the same treatment showMonoData already gets, and can
+// be un-hidden again at any time.
+let hiddenFromViewCategories = [];
+function loadHiddenFromViewCategories(){
+  try{ hiddenFromViewCategories = JSON.parse(localStorage.getItem('nova-hidden-from-view-categories') || '[]'); }
+  catch(e){ hiddenFromViewCategories = []; }
+  // Self-corrects any existing state where a structural category (Transfer/
+  // Loan/Refund/Other expense/Other income) was hidden before this
+  // restriction existed — those are relied on by exact name throughout the
+  // app, so hiding one silently breaks whatever depends on it.
+  const before = hiddenFromViewCategories.length;
+  hiddenFromViewCategories = hiddenFromViewCategories.filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
+  if(hiddenFromViewCategories.length !== before) persistHiddenFromViewCategories();
 }
+function persistHiddenFromViewCategories(){
+  localStorage.setItem('nova-hidden-from-view-categories', JSON.stringify(hiddenFromViewCategories));
+  scheduleCloudPush();
+}
+
+// Generates a collision-resistant unique id — timestamp + random suffix,
+// deliberately NOT a plain Date.now() or incrementing counter. A plain
+// Date.now() collides whenever two ids get generated within the same
+// millisecond (easy to hit with fast, synchronous actions — e.g. adding
+// several manual accounts in a row), and a per-device incrementing counter
+// collides across two DIFFERENT devices that have no coordination with each
+// other. Since every sync merge is keyed by these ids, a collision makes
+// two genuinely different records look like the same one and silently
+// discards whichever side loses the edit-time comparison.
+function generateUniqueId(prefix){
+  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+function generateTxId(){ return generateUniqueId('t'); }
 
 let fontScale = 1;
 function loadFontScale(){
@@ -1352,7 +1507,7 @@ function setMonoVisibility(show){
   showMonoData = show;
   try{ localStorage.setItem('nova-show-mono-data', String(show)); }catch(e){}
   scheduleCloudPush(); // otherwise a periodic pull could silently restore the old value from Supabase moments later
-  renderView('finance');
+  renderView(currentView);
 }
 window.toggleMonoVisibility = function(){ setMonoVisibility(!showMonoData); };
 
@@ -1375,6 +1530,10 @@ function saveMonoDisplayFromDate(dateStr){
 function visibleTransactions(){
   let list = transactions.filter(function(t){ return !t.deleted; });
   if(!showMonoData) list = list.filter(function(t){ return !t.monoId; });
+  if(hiddenFromViewCategories.length){
+    const hiddenSet = new Set(hiddenFromViewCategories);
+    list = list.filter(function(t){ return !hiddenSet.has(t.category); });
+  }
   if(monoDisplayFromDate){
     // Only affects Monobank-sourced transactions — manual entries are never
     // touched by this, and it has no relationship to the main dashboard's
@@ -1390,6 +1549,31 @@ function visibleTransactions(){
 function isRefundTx(t){
   return Number(t.amount) >= 0 && t.category !== 'Transfer' &&
     allExpenseCategories().indexOf(t.category) !== -1 && allIncomeCategories().indexOf(t.category) === -1;
+}
+
+// Direct diagnostic — shows exactly what the app currently recognizes as a
+// refund, plus anything that LOOKS like it should be one but isn't, so a
+// mismatch between what's expected and what's actually happening is visible
+// immediately rather than needing more back-and-forth guessing.
+function refundDiagnosticHTML(){
+  const active = transactions.filter(function(t){ return !t.deleted; });
+  const recognized = active.filter(isRefundTx);
+  // "Looks like a refund but isn't recognized" — any positive amount on a
+  // category that also exists on the expense side, EXCLUDING ones already
+  // counted above. Catches an edge case this function doesn't yet know
+  // about, rather than assuming isRefundTx() is exhaustively correct.
+  const suspicious = active.filter(function(t){
+    return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' &&
+      allExpenseCategories().indexOf(t.category) !== -1 && !isRefundTx(t);
+  });
+  return `
+    <div class="side-label" style="margin:8px 0 4px; color:var(--muted);">Refund diagnostic</div>
+    <div class="empty-note" style="text-align:left; margin-bottom:8px;">
+      This device currently recognizes <b style="color:var(--white);">${recognized.length}</b> transaction${recognized.length===1?'':'s'} as a refund.
+      ${recognized.length ? '<br>' + recognized.slice(0,5).map(function(t){ return escapeHtml(t.name) + ' (' + escapeHtml(t.category) + ', ' + fmtOriginal(t.amount, t.currency) + ', ' + t.occurred_at + ')'; }).join('<br>') + (recognized.length > 5 ? '<br>…and ' + (recognized.length-5) + ' more' : '') : ''}
+      ${suspicious.length ? `<br><br><span style="color:#F5A623;">⚠ ${suspicious.length} positive-amount transaction${suspicious.length===1?'':'s'} on an expense category ${suspicious.length===1?'is':'are'} NOT currently recognized as a refund — this is the specific case to report if refunds still seem missing:<br>` + suspicious.slice(0,5).map(function(t){ return escapeHtml(t.name) + ' (' + escapeHtml(t.category) + ', ' + fmtOriginal(t.amount, t.currency) + ', ' + t.occurred_at + ')'; }).join('<br>') + '</span>' : ''}
+    </div>
+  `;
 }
 
 // Rent and Bills were merged into "Home & Bills", then renamed to "Living
@@ -1496,6 +1680,7 @@ function totalManualAccountsValue(){
 // rates/Monobank raw rates (just refetched independently per device anyway).
 let cloudConfig = { url: null, key: null, syncId: null };
 let cloudLastPulledAt = null;
+let lastSeenRemoteBuild = null; // the APP_BUILD reported by whichever device most recently pushed — lets a version mismatch between devices be spotted from either one
 let cloudPushTimer = null;
 let cloudSyncStatus = 'idle'; // idle | syncing | synced | error | unconfigured
 let cloudSyncErrorDetail = ''; // the actual error text from Supabase, when available
@@ -1525,8 +1710,20 @@ function cloudPayload(){
     customIncomeCategories: customIncomeCategories,
     customCategoryRules: customCategoryRules,
     categoryRenames: categoryRenames,
+    hiddenCategories: hiddenCategories,
     showMonoData: showMonoData,
-    manualAccounts: manualAccounts
+    hiddenFromViewCategories: hiddenFromViewCategories,
+    manualAccounts: manualAccounts,
+    // If more than one device has the same Monobank token configured (e.g.
+    // both a phone and a Mac), they share the same underlying rate limit
+    // with no way to know about each other's requests on their own. Sharing
+    // this via the same sync payload everything else already uses lets each
+    // device learn "someone, on some device, made a request this recently"
+    // and back off accordingly — otherwise two devices can easily collide
+    // and rate-limit each other, which looks exactly like "sync sometimes
+    // just doesn't happen" from either device's perspective.
+    lastMonoRequestAt: lastMonoRequestAt,
+    appBuild: APP_BUILD
   };
 }
 
@@ -1555,6 +1752,29 @@ function mergeTransactionArrays(localList, incomingList){
 // a loan tracked as a negative balance) need the same protection, since a
 // balance edit on one device shouldn't be silently overwritten by another
 // device pushing its own, older copy of the same account.
+// Merges two budgets objects month-by-month rather than replacing one
+// wholesale with the other — each month keeps whichever side edited that
+// SPECIFIC month more recently. Without this, pulling in (or reconciling
+// against, before a push) another device's budgets object would silently
+// discard this device's own not-yet-synced edit to some other month, since
+// a budget change to August has nothing to do with whether July's data is
+// any newer.
+function mergeBudgets(localBudgets, incomingBudgets){
+  const merged = { months: {} };
+  const localMonths = (localBudgets && localBudgets.months) || {};
+  const incomingMonths = (incomingBudgets && incomingBudgets.months) || {};
+  const allKeys = new Set(Object.keys(localMonths).concat(Object.keys(incomingMonths)));
+  allKeys.forEach(function(key){
+    const local = localMonths[key];
+    const incoming = incomingMonths[key];
+    if(local && !incoming){ merged.months[key] = local; return; }
+    if(incoming && !local){ merged.months[key] = incoming; return; }
+    // Both sides have this month — keep whichever was edited more recently.
+    merged.months[key] = (incoming.editedAt || 0) >= (local.editedAt || 0) ? incoming : local;
+  });
+  return merged;
+}
+
 function mergeManualAccountArrays(localList, incomingList){
   // Merge by id first, same as before — this correctly handles the normal
   // case where an account was created once and just edited on both devices.
@@ -1633,7 +1853,8 @@ function mergeInTransactionsFromCloud(incomingTransactions){
 
 function applyCloudPayloadNonTransactionFields(payload){
   if(!payload) return;
-  if(payload.budgets) budgets = payload.budgets;
+  if(payload.appBuild) lastSeenRemoteBuild = payload.appBuild;
+  if(payload.budgets) budgets = mergeBudgets(budgets, payload.budgets);
   // Union-merge rather than replace — these lists only ever grow (there's no
   // delete-a-category feature, only rename), so a category added on one
   // device must never be capable of vanishing because a sync from another,
@@ -1645,9 +1866,23 @@ function applyCloudPayloadNonTransactionFields(payload){
   // wipe out a category the transaction still referenced.
   if(payload.customExpenseCategories) customExpenseCategories = Array.from(new Set(customExpenseCategories.concat(payload.customExpenseCategories)));
   if(payload.customIncomeCategories) customIncomeCategories = Array.from(new Set(customIncomeCategories.concat(payload.customIncomeCategories)));
-  if(payload.customCategoryRules) customCategoryRules = payload.customCategoryRules;
+  if(payload.customCategoryRules){
+    const byKeyword = new Map();
+    customCategoryRules.forEach(function(r){ byKeyword.set((r.keyword||'').toLowerCase(), r); });
+    payload.customCategoryRules.forEach(function(incoming){
+      const key = (incoming.keyword||'').toLowerCase();
+      const local = byKeyword.get(key);
+      // Whichever side was edited more recently wins outright — including a
+      // deletion, which is exactly what a plain union could never express.
+      if(!local || (incoming.editedAt||0) >= (local.editedAt||0)) byKeyword.set(key, incoming);
+    });
+    customCategoryRules = Array.from(byKeyword.values());
+  }
   if(payload.categoryRenames) categoryRenames = Object.assign({}, categoryRenames, payload.categoryRenames);
+  if(payload.hiddenCategories) hiddenCategories = Array.from(new Set(hiddenCategories.concat(payload.hiddenCategories)));
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
+  if(Array.isArray(payload.hiddenFromViewCategories)) hiddenFromViewCategories = payload.hiddenFromViewCategories.filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
+  if(typeof payload.lastMonoRequestAt === 'number') lastMonoRequestAt = Math.max(lastMonoRequestAt, payload.lastMonoRequestAt);
 
   // Cloud-sourced budgets need the exact same normalization as locally-loaded
   // ones — otherwise a budget pulled from an older data shape leaves
@@ -1666,8 +1901,10 @@ function applyCloudPayloadNonTransactionFields(payload){
   localStorage.setItem('nova-custom-income-categories', JSON.stringify(customIncomeCategories));
   localStorage.setItem('nova-category-renames', JSON.stringify(categoryRenames));
   localStorage.setItem('nova-custom-category-rules', JSON.stringify(customCategoryRules));
+  localStorage.setItem('nova-hidden-categories', JSON.stringify(hiddenCategories));
   localStorage.setItem('nova-manual-accounts', JSON.stringify(manualAccounts));
   try{ localStorage.setItem('nova-show-mono-data', String(showMonoData)); }catch(e){}
+  try{ localStorage.setItem('nova-hidden-from-view-categories', JSON.stringify(hiddenFromViewCategories)); }catch(e){}
 }
 
 // Any network call can hang far longer than expected if a host is slow,
@@ -1684,13 +1921,25 @@ function fetchWithTimeout(url, opts, timeoutMs){
 
 async function pullCloudSync(){
   if(!cloudConfigured()) { cloudSyncStatus = 'unconfigured'; return; }
-  if(cloudPushTimer) return; // a local change is still waiting to be pushed — don't risk overwriting it with a stale pull
+  if(cloudPushTimer){
+    if((Date.now() - cloudPushScheduledAt) < 15000) return; // a local change is still waiting to be pushed (within its normal ~2s window) — don't risk overwriting it with a stale pull
+    // Beyond that, the timer is stuck rather than genuinely pending — e.g.
+    // iOS Safari is known to aggressively suspend JS timers the moment an
+    // app backgrounds, even briefly, which could mean this one simply never
+    // fired. Left alone, this guard would otherwise block every future pull
+    // on this device forever, since nothing else ever resets cloudPushTimer
+    // back to null. Clear it and reschedule a fresh push so the original
+    // local change this was meant to save still actually reaches the cloud.
+    clearTimeout(cloudPushTimer);
+    cloudPushTimer = null;
+    scheduleCloudPush();
+  }
   cloudSyncStatus = 'syncing';
   try{
     const res = await fetchWithTimeout(
       `${cloudConfig.url}/rest/v1/nova_sync?sync_id=eq.${encodeURIComponent(cloudConfig.syncId)}&select=data,updated_at`,
       { headers: { 'apikey': cloudConfig.key, 'Authorization': 'Bearer ' + cloudConfig.key } },
-      10000
+      30000 // generous enough for a large transaction history (potentially several MB after years of Monobank data) on a slower mobile connection — 10s was too easy to time out on, which looked exactly like "sync sometimes just doesn't work"
     );
     if(!res.ok){
       cloudSyncStatus = 'error';
@@ -1721,11 +1970,15 @@ async function pullCloudSync(){
           localStorage.setItem('nova-transactions', JSON.stringify(transactions));
         }catch(e){}
       }
-      // Everything else (budgets, custom categories/rules) doesn't have
-      // per-item edit tracking, so it still relies on whole-payload "only
-      // apply if genuinely newer" — otherwise a periodic pull could
-      // silently undo a local edit made moments earlier.
-      if(!localLastModifiedAt || new Date(cloudUpdatedAt) > new Date(localLastModifiedAt)){
+      // Categories, rules, renames, and budgets all merge safely now
+      // (additively/edit-time-aware, never a blind whole-payload
+      // replacement) — so this always applies on every pull, regardless of
+      // which side's timestamp is newer. A timestamp gate here would skip
+      // the merge itself in the very common case where this device has
+      // made ANY local edit more recently than the cloud's last push,
+      // which has nothing to do with whether the cloud has something this
+      // device still needs to merge in.
+      if(payload){
         applyCloudPayloadNonTransactionFields(payload);
         cloudLastPulledAt = cloudUpdatedAt;
       }
@@ -1748,7 +2001,7 @@ async function pushCloudSyncNow(){
       const getRes = await fetchWithTimeout(
         `${cloudConfig.url}/rest/v1/nova_sync?sync_id=eq.${encodeURIComponent(cloudConfig.syncId)}&select=data`,
         { headers: { 'apikey': cloudConfig.key, 'Authorization': 'Bearer ' + cloudConfig.key } },
-        10000
+        30000
       );
       if(getRes.ok){
         const rows = await getRes.json();
@@ -1761,6 +2014,12 @@ async function pushCloudSyncNow(){
             manualAccounts = result.accounts;
             applyManualAccountIdRemap(result.idRemap);
           }
+          // Categories, category rules, renames, and budgets all need the
+          // same reconcile-before-push treatment — without this, pushing
+          // from this device would silently overwrite the cloud's version
+          // of any of these with whatever this device's own, possibly
+          // stale, local copy happens to be.
+          applyCloudPayloadNonTransactionFields(rows[0].data);
         }
       }
     }catch(e){ /* if this reconcile step fails, still proceed with the push below rather than blocking entirely */ }
@@ -1774,7 +2033,7 @@ async function pushCloudSyncNow(){
         'Prefer': 'resolution=merge-duplicates,return=minimal'
       },
       body: JSON.stringify({ sync_id: cloudConfig.syncId, data: cloudPayload(), updated_at: new Date().toISOString() })
-    }, 10000);
+    }, 30000);
     cloudSyncStatus = res.ok ? 'synced' : 'error';
     if(res.ok){
       cloudLastPulledAt = new Date().toISOString();
@@ -1787,11 +2046,13 @@ async function pushCloudSyncNow(){
 
 let localLastModifiedAt = null; // guards against a periodic pull silently reverting a not-yet-pushed local change
 
+let cloudPushScheduledAt = 0;
 function scheduleCloudPush(){
   if(!cloudConfigured()) return;
   localLastModifiedAt = new Date().toISOString();
   if(cloudPushTimer) clearTimeout(cloudPushTimer);
-  cloudPushTimer = setTimeout(pushCloudSyncNow, 2000); // debounce rapid successive edits into one push
+  cloudPushScheduledAt = Date.now();
+  cloudPushTimer = setTimeout(function(){ pushCloudSyncNow().catch(function(){ /* see checkForUpdates in init() — same reasoning: fail silently, next scheduled push/pull will retry */ }); }, 2000); // debounce rapid successive edits into one push
 }
 
 window.saveCloudConfigFromForm = async function(){
@@ -1805,8 +2066,16 @@ window.saveCloudConfigFromForm = async function(){
   cloudConfig = { url: url, key: key, syncId: syncId };
   saveCloudConfig();
   document.getElementById('cloudStatus').textContent = 'Connecting…';
-  await pullCloudSync();
-  await pushCloudSyncNow(); // make sure this device's existing local data is captured too, not just overwritten silently
+  try{
+    await pullCloudSync();
+    await pushCloudSyncNow(); // make sure this device's existing local data is captured too, not just overwritten silently
+  }catch(e){
+    // pullCloudSync/pushCloudSyncNow already catch their own network errors
+    // internally — this is only a last-resort net for anything unexpected,
+    // so a failure here shows as a clear status message instead of a raw
+    // unhandled-rejection banner.
+    document.getElementById('cloudStatus').textContent = 'Something went wrong connecting — check your details and try again.';
+  }
   renderView('settings');
 };
 
@@ -1819,8 +2088,14 @@ window.disconnectCloudSync = function(){
 };
 
 window.manualCloudSync = async function(){
-  await pullCloudSync();
-  await pushCloudSyncNow();
+  try{
+    await pullCloudSync();
+    await pushCloudSyncNow();
+  }catch(e){
+    // Same reasoning as saveCloudConfigFromForm above.
+    const statusEl = document.getElementById('cloudStatus');
+    if(statusEl) statusEl.textContent = 'Sync hit an unexpected error — try again in a moment.';
+  }
   renderView('settings');
 };
 
@@ -1836,6 +2111,8 @@ function init(){
   loadDisplayCurrency();
   loadMonoDisplayFromDate();
   loadCustomCategories();
+  loadHiddenCategories();
+  loadHiddenFromViewCategories();
   loadCategoryRenames();
   loadCustomCategoryRules();
   loadMonoSyncStatus();
@@ -1846,16 +2123,37 @@ function init(){
   renderView('finance');
   refreshExchangeRates();
   setInterval(refreshExchangeRates, 24 * 60 * 60 * 1000); // rates only actually change ~once a day on the free API anyway
-  autoSyncMonobank();
-  setInterval(autoSyncMonobank, 60 * 1000); // keep Monobank data current without needing a manual sync
 
   function pullCloudAndRender(){
     return pullCloudSync().then(function(){ if(currentView === 'finance') renderView('finance'); });
   }
+  // Cloud pull runs first, Monobank sync after — this ensures
+  // autoSyncMonobank() always has the freshest possible cross-device
+  // Monobank rate-limit info (shared via the cloud payload) before it
+  // decides whether it's safe to make a request. Reversing this order
+  // would mean the very sync attempt that most needs this information is
+  // the one that never gets it in time.
+  //
+  // The whole body is wrapped here (rather than relying solely on each
+  // inner function's own try/catch) as a safety net — this function is
+  // fired from five different places (initial load, the 60s interval,
+  // visibilitychange, focus, and click) with none of them awaiting or
+  // catching its result, so any error that slipped past an inner
+  // try/catch would otherwise surface to the user as a raw "unhandled
+  // promise rejection" banner for what's ordinarily just a routine
+  // network hiccup — exactly the kind of thing every other network path
+  // in this app already fails silently on and retries later instead.
+  async function checkForUpdates(){
+    try{
+      if(cloudConfigured()) await pullCloudAndRender();
+      await autoSyncMonobank();
+    }catch(e){ /* offline, CORS, a transient error, etc. — next scheduled check will retry */ }
+  }
+  checkForUpdates();
+  setInterval(checkForUpdates, 60 * 1000); // keep both Monobank and cloud data current without needing a manual sync
 
   if(cloudConfigured()){
-    pullCloudAndRender();
-    setInterval(pullCloudAndRender, 60 * 1000);
+    setInterval(function(){ pullCloudAndRender().catch(function(){ /* see checkForUpdates — same reasoning */ }); }, 60 * 1000);
   }
 
   // Background tabs get setInterval throttled by the browser (a standard
@@ -1868,14 +2166,10 @@ function init(){
   // too. Catching both up the moment you return to the tab means a
   // backgrounded period never causes a real, lasting gap on any device.
   document.addEventListener('visibilitychange', function(){
-    if(document.visibilityState === 'visible'){
-      autoSyncMonobank();
-      if(cloudConfigured()) pullCloudAndRender();
-    }
+    if(document.visibilityState === 'visible') checkForUpdates();
   });
   window.addEventListener('focus', function(){
-    autoSyncMonobank();
-    if(cloudConfigured()) pullCloudAndRender();
+    checkForUpdates();
   });
 
   // Extra insurance beyond tab-focus: any tap/click anywhere in the app also
@@ -1886,8 +2180,7 @@ function init(){
     const now = Date.now();
     if(now - lastInteractionCheck < 30000) return;
     lastInteractionCheck = now;
-    autoSyncMonobank();
-    if(cloudConfigured()) pullCloudAndRender();
+    checkForUpdates();
   });
 }
 
@@ -2604,6 +2897,7 @@ function expenseDetailScreenHTML(){
       <div class="detail-title">${isIncome?'Income':'Expenses'} by category</div>
       <div style="width:32px;"></div>
     </div>
+    <div class="empty-note" style="text-align:center; margin:-4px 0 8px;">This screen has its own Weekly/Monthly/Quarterly/Yearly period below, independent of the main dashboard's date range (${rangeLabel()}) — changing one doesn't affect the other.</div>
     ${lastSyncedSummary() ? `<div class="empty-note" style="text-align:center; margin:-4px 0 8px;">Monobank data synced ${lastSyncedSummary()}</div>` : ''}
 
     <div class="type-toggle" style="margin-bottom:12px;">
@@ -2727,13 +3021,22 @@ window.openManageCategories = function(){
   openModal('manageCategoriesModalOverlay');
 };
 function manageCategoriesListHTML(){
-  const nonRenamable = ['Transfer', 'Refund', 'Loan'];
-  const expenseCats = allExpenseCategories().filter(function(c){ return nonRenamable.indexOf(c) === -1; });
-  const incomeCats = allIncomeCategories().filter(function(c){ return nonRenamable.indexOf(c) === -1 && expenseCats.indexOf(c) === -1; });
+  const expenseCats = allExpenseCategories();
+  const incomeCats = allIncomeCategories().filter(function(c){ return expenseCats.indexOf(c) === -1; });
+  const hiddenSet = new Set(hiddenFromViewCategories);
   function row(c){
+    const isStructural = UNDELETABLE_CATEGORIES.indexOf(c) !== -1; // Transfer/Loan/Refund/Other expense/Other income — relied on by exact name throughout the app, so hiding one silently breaks whatever depends on it
+    const canDelete = !isStructural;
+    const canRename = !isStructural;
+    const canHide = !isStructural;
+    const escaped = escapeHtml(c).replace(/'/g,"\\'");
     return `<div class="cat-row">
       <span class="cat-name">${escapeHtml(c)}</span>
-      <button class="header-btn" onclick="promptRenameCategory('${escapeHtml(c).replace(/'/g,"\\'")}')">✏️</button>
+      ${canHide ? `<label style="display:flex; align-items:center; gap:4px; font-size:12px; color:var(--muted); white-space:nowrap;">
+        <input type="checkbox" class="hide-cat-checkbox" data-cat="${escapeHtml(c)}"${hiddenSet.has(c)?' checked':''}> Hide
+      </label>` : ''}
+      ${canRename ? `<button class="header-btn" onclick="promptRenameCategory('${escaped}')">✏️</button>` : ''}
+      ${canDelete ? `<button class="tx-del" onclick="deleteCategory('${escaped}')">✕</button>` : ''}
     </div>`;
   }
   return `
@@ -2744,8 +3047,21 @@ function manageCategoriesListHTML(){
     <div class="side-label" style="margin:16px 0 6px;">Income</div>
     ${incomeCats.map(row).join('')}
     <button class="header-btn" style="margin-top:8px;" onclick="promptAddCategory('income')">+ Add income category</button>
+
+    <div class="modal-actions" style="justify-content:flex-start; margin-top:16px;">
+      <button class="modal-save" onclick="saveHiddenCategories()">Save</button>
+    </div>
   `;
 }
+window.saveHiddenCategories = function(){
+  const boxes = document.querySelectorAll('#manageCategoriesBody .hide-cat-checkbox');
+  const newHidden = [];
+  boxes.forEach(function(box){ if(box.checked) newHidden.push(box.getAttribute('data-cat')); });
+  hiddenFromViewCategories = newHidden;
+  persistHiddenFromViewCategories();
+  renderView(currentView);
+  document.getElementById('manageCategoriesBody').innerHTML = manageCategoriesListHTML();
+};
 window.promptRenameCategory = function(currentName){
   const newName = prompt('Rename "' + currentName + '" to:', currentName);
   if(newName === null) return; // cancelled
@@ -3113,7 +3429,7 @@ window.addManualAccount = function(){
   if(!name) return;
   const currency = document.getElementById('newManualAccountCurrency').value;
   const startingBalance = parseAmountInput(document.getElementById('newManualAccountBalance').value);
-  manualAccounts.push({ id: 'macc' + Date.now(), name: name, balances: [{ currency: currency, amount: isNaN(startingBalance) ? 0 : startingBalance }], editedAt: Date.now() });
+  manualAccounts.push({ id: generateUniqueId('macc'), name: name, balances: [{ currency: currency, amount: isNaN(startingBalance) ? 0 : startingBalance }], editedAt: Date.now() });
   persistManualAccounts();
   nameEl.value = '';
   document.getElementById('newManualAccountBalance').value = '';
@@ -3358,6 +3674,7 @@ window.saveBudgetEdit = function(){
     if(val > 0) mb.categoryBudgets[cat] = val;
     else delete mb.categoryBudgets[cat];
   });
+  mb.editedAt = Date.now(); // lets a cross-device merge pick whichever device edited THIS specific month more recently
   persistBudgets();
   closeModal('budgetModalOverlay');
   renderView('finance');
@@ -3477,8 +3794,19 @@ window.openHistory = function(type){
   historyType = type;
   historyCategoryFilter = 'all';
   historySearch = '';
-  historyDateFrom = '';
-  historyDateTo = '';
+  // Refunds default to all-time rather than this month — they're typically
+  // sparse, so someone opening this view almost certainly wants to see
+  // every refund they've ever gotten, not just however many landed in the
+  // current calendar month. Every other history type still defaults to
+  // this month, matching the dashboard's normal scope.
+  if(type === 'refund'){
+    const earliest = visibleTransactions().reduce(function(min, t){ return (!min || t.occurred_at < min) ? t.occurred_at : min; }, null);
+    historyDateFrom = earliest || todayStr();
+    historyDateTo = todayStr();
+  } else {
+    historyDateFrom = '';
+    historyDateTo = '';
+  }
   financeSubView = 'history';
   renderView('finance');
 };
@@ -3626,7 +3954,9 @@ function historyScreenHTML(){
 
 function settingsScreenHTML(){
   return `
-    <h2 style="font-family:'Sora',sans-serif; font-size:20px; margin:0 0 18px;">Settings</h2>
+    <h2 style="font-family:'Sora',sans-serif; font-size:20px; margin:0 0 4px;">Settings</h2>
+    <div class="empty-note" style="text-align:left; margin-bottom:14px; user-select:all;">Version <b style="color:var(--white);">${APP_BUILD}</b>${lastSeenRemoteBuild ? ` · other device: <b style="color:${lastSeenRemoteBuild === APP_BUILD ? 'var(--white)' : 'var(--rose)'};">${escapeHtml(lastSeenRemoteBuild)}</b>${lastSeenRemoteBuild !== APP_BUILD ? ' ⚠ mismatch — re-download and reopen on whichever looks older' : ''}` : ''}</div>
+    ${refundDiagnosticHTML()}
     <div class="settings-row" onclick="openMonoModal()">
       <span>🏦 Bank</span><span class="chevron">›</span>
     </div>
@@ -3742,6 +4072,7 @@ window.recategorizeTransactions = function(){
       let newCategory = null;
       if(type === 'expense') newCategory = mccCategoryFor(t);
       if(!newCategory) newCategory = matchCategory(t.name, type);
+      if(newCategory) newCategory = categoryRenames[newCategory] || newCategory;
       if(newCategory && newCategory !== t.category){
         t.category = newCategory;
         changed++;
@@ -3760,17 +4091,26 @@ function cloudConnectedHTML(){
   const statusText = {
     syncing: 'Syncing…', synced: 'Up to date',
     error: "Couldn't reach the sync server — double-check your Project URL and anon key",
-    timeout: "Timed out reaching the sync server (10s) — check your Project URL and internet connection",
+    timeout: "Timed out reaching the sync server (30s) — check your Project URL and internet connection",
     idle: 'Connected', unconfigured: 'Connected'
   }[cloudSyncStatus] || 'Connected';
+  const monoTxCount = transactions.filter(function(t){ return t.monoId && !t.deleted; }).length;
+  const totalTxCount = transactions.filter(function(t){ return !t.deleted; }).length;
   return `
     <div class="setup-box" style="margin-bottom:12px;">
       <p style="margin:0 0 6px;"><b>✅ Synced across your devices</b></p>
       <p style="margin:0; font-size:11px;">${escapeHtml(statusText)}${cloudLastPulledAt ? ' · last update ' + timeAgo(new Date(cloudLastPulledAt).getTime()) : ''}</p>
       ${cloudSyncStatus === 'error' && cloudSyncErrorDetail ? `<p style="margin:8px 0 0; font-size:10.5px; color:var(--rose); white-space:pre-wrap; word-break:break-word;">${escapeHtml(cloudSyncErrorDetail)}</p>` : ''}
     </div>
-    <div class="modal-actions" style="justify-content:flex-start; margin-top:0;">
+    <div class="empty-note" style="text-align:left; margin-bottom:10px;">
+      Sync ID on this device: <b style="color:var(--white); user-select:all;">${escapeHtml(cloudConfig.syncId || '')}</b> — must be <b>character-for-character identical</b> on every device for them to share data. Compare this against your other device if transactions aren't showing up here.<br><br>
+      This device has <b style="color:var(--white);">${totalTxCount}</b> transaction${totalTxCount===1?'':'s'} total locally (<b style="color:var(--white);">${monoTxCount}</b> from Monobank). Compare this count against your other device too — a mismatch here (rather than just missing Monobank ones specifically) points at the sync itself rather than anything Monobank-related.
+      ${!showMonoData ? '<br><br><span style="color:#F5A623;">⚠ Monobank data is currently set to hidden on this device — that alone would explain transactions not appearing, even if they\'ve synced correctly. Tap below to show them.</span>' : ''}
+      ${cloudPushTimer ? '<br><br><span style="color:#F5A623;">⏳ A change on this device is queued to sync in a moment — if this message doesn\'t go away, tap "Sync now" below.</span>' : ''}
+    </div>
+    <div class="modal-actions" style="justify-content:flex-start; margin-top:0; flex-wrap:wrap;">
       <button class="modal-save" onclick="manualCloudSync()">Sync now</button>
+      <button class="header-btn" onclick="toggleMonoVisibility()">${showMonoData ? 'Hide' : 'Show'} Monobank data</button>
       <button class="modal-cancel" onclick="disconnectCloudSync()">Disconnect</button>
     </div>
   `;
@@ -3956,7 +4296,7 @@ function financeHTML(){
   const LP = '';
 
   const transfers = sortMostRecentFirst(thisMonthTx().filter(function(t){ return t.category === 'Transfer'; }));
-  const refunds = sortMostRecentFirst(thisMonthTx().filter(isRefundTx));
+  const refunds = sortMostRecentFirst(visibleTransactions().filter(isRefundTx));
 
   const blockHTML = {
     overview: `<div class="charts-row">${financeOverviewSummaryHTML(LP)}</div>`,
@@ -4246,6 +4586,7 @@ function setTxType(type){
   } else {
     populateCategorySelect(type);
   }
+  refreshAllCustomSelectLabels();
 }
 
 function openModal(id){ document.getElementById(id).classList.add('open'); }
@@ -4302,8 +4643,7 @@ function editTx(id){
   document.getElementById('txModalTitle').textContent = 'Edit Transaction';
   openModal('txModalOverlay');
   const isTransfer = t.category === 'Transfer';
-  const isRefund = !isTransfer && Number(t.amount) >= 0 &&
-    allExpenseCategories().indexOf(t.category) !== -1 && allIncomeCategories().indexOf(t.category) === -1;
+  const isRefund = !isTransfer && isRefundTx(t);
   const type = isTransfer ? 'transfer' : (isRefund ? 'refund' : (Number(t.amount) >= 0 ? 'income' : 'expense'));
   setTxType(type);
   document.getElementById('txName').value = t.name;
@@ -4590,8 +4930,14 @@ const MCC_CATEGORY_MAP = {
 // merchant's live mcc for their own purposes, so the original code can
 // occasionally match when the current one doesn't.
 function mccCategoryFor(item){
-  if(item.mcc && MCC_CATEGORY_MAP[item.mcc]) return MCC_CATEGORY_MAP[item.mcc];
-  if(item.originalMcc && MCC_CATEGORY_MAP[item.originalMcc]) return MCC_CATEGORY_MAP[item.originalMcc];
+  if(item.mcc && MCC_CATEGORY_MAP[item.mcc]){
+    const cat = categoryRenames[MCC_CATEGORY_MAP[item.mcc]] || MCC_CATEGORY_MAP[item.mcc];
+    if(!isHiddenCategory(cat)) return cat;
+  }
+  if(item.originalMcc && MCC_CATEGORY_MAP[item.originalMcc]){
+    const cat = categoryRenames[MCC_CATEGORY_MAP[item.originalMcc]] || MCC_CATEGORY_MAP[item.originalMcc];
+    if(!isHiddenCategory(cat)) return cat;
+  }
   return null;
 }
 
@@ -4602,7 +4948,7 @@ function matchCategory(raw, type){
   const exact = list.find(function(c){ return c.toLowerCase() === clean; });
   if(exact) return exact;
   if(CATEGORY_ALIASES[clean]){
-    const alias = CATEGORY_ALIASES[clean];
+    const alias = categoryRenames[CATEGORY_ALIASES[clean]] || CATEGORY_ALIASES[clean];
     if(list.indexOf(alias) !== -1) return alias;
   }
   // Fallback: real bank/merchant descriptions (e.g. "SUPERMARKET HASO",
@@ -4610,7 +4956,7 @@ function matchCategory(raw, type){
   // known keyword appearing anywhere in the description instead.
   for(const keyword in CATEGORY_ALIASES){
     if(clean.indexOf(keyword) !== -1){
-      const alias = CATEGORY_ALIASES[keyword];
+      const alias = categoryRenames[CATEGORY_ALIASES[keyword]] || CATEGORY_ALIASES[keyword];
       if(list.indexOf(alias) !== -1) return alias;
     }
   }
@@ -4698,6 +5044,7 @@ function importFromCSVText(text){
 
     let category = matchCategory(rawCategory, inferredType);
     if(!category) category = inferredType === 'income' ? 'Other income' : 'Other expense';
+    category = categoryRenames[category] || category;
 
     const name = rawDesc || rawCategory || (inferredType === 'income' ? 'Imported income' : 'Imported expense');
 
@@ -4860,7 +5207,7 @@ window.openMonoModal = function(){
   renderMonoAccountList();
   openModal('monoModalOverlay');
   refreshMonoVisibilityLabel();
-  if(token) connectMonobank();
+  if(token && !monoAccounts.length) connectMonobank(); // only needed to establish the connection the first time — once we have accounts cached, the regular background sync keeps things current without this modal needing to make its own request every time it's opened
 };
 
 window.applyMonoDisplayFromDate = function(){
@@ -4896,10 +5243,23 @@ window.connectMonobank = async function(){
   const statusEl = document.getElementById('monoStatus');
   if(!token){ statusEl.textContent = 'Paste your personal token first.'; statusEl.classList.add('error'); return; }
 
+  // This request shares the exact same per-token rate limit as every
+  // automatic sync — without checking/updating lastMonoRequestAt here too,
+  // opening this modal (a natural thing to do while checking on a sync
+  // issue) would silently consume a real request the rest of the app has
+  // no record of, causing the next automatic sync to come back genuinely
+  // rate-limited even though its own tracking thought enough time had passed.
+  if(Date.now() - lastMonoRequestAt < 61000){
+    statusEl.textContent = 'Just synced a moment ago — wait a bit before checking again (Monobank allows about once a minute).';
+    statusEl.classList.add('error');
+    return;
+  }
+
   statusEl.textContent = 'Connecting…';
   statusEl.classList.remove('error');
 
   try{
+    lastMonoRequestAt = Date.now();
     const res = await fetch('https://api.monobank.ua/personal/client-info', {
       headers: { 'X-Token': token }
     });
@@ -4964,6 +5324,17 @@ function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 // chosen to connect and sync at least once.
 let autoSyncInProgress = false;
 let monoSyncSessionId = 0; // bumped on disconnect/token-switch so any in-flight sync can detect it's gone stale and stop itself
+// Tracks the last actual request made to ANY Monobank endpoint for this
+// token — the rate limit (1 request/minute) applies across the whole token,
+// not per-endpoint, so a fresh sync attempt starting too soon after a
+// previous one's last request would just get rate-limited on its very first
+// call. Used to skip an attempt outright rather than making a request
+// destined to fail.
+let lastMonoRequestAt = 0;
+async function waitForMonoRateLimit(){
+  const elapsed = Date.now() - lastMonoRequestAt;
+  if(elapsed < 61000) await sleep(61000 - elapsed);
+}
 
 function hasEverManuallySynced(){
   try{ return localStorage.getItem('nova-mono-manual-sync-done') === 'true'; }catch(e){ return false; }
@@ -4985,24 +5356,63 @@ function isIOSDevice(){
   return /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
 }
 
+let hasSkippedInitialClientInfo = false;
 async function autoSyncMonobank(){
   if(autoSyncInProgress) return;
   const token = loadMonoToken();
   if(!token) return; // never connected — nothing to keep in sync
 
+  // Skip outright if we'd be making a request less than a minute after the
+  // last one — Monobank's limit is 1 request/minute across the whole token,
+  // so this call would almost certainly come back rate-limited. Better to
+  // let the next scheduled trigger (interval, focus, click) pick it up than
+  // to burn an attempt on a call destined to fail silently.
+  if(Date.now() - lastMonoRequestAt < 61000) return;
+
   const mySessionId = monoSyncSessionId; // if this changes mid-run (disconnect/reconnect), this specific run stops itself rather than continuing with stale credentials
   autoSyncInProgress = true;
   try{
-    updateMonoProgressUI('Connecting to Monobank…');
-    const res = await fetch('https://api.monobank.ua/personal/client-info', { headers: { 'X-Token': token } });
-    if(mySessionId !== monoSyncSessionId) return; // disconnected/reconnected while this was in flight — stop here, a fresh run will have already started or will start soon
-    if(!res.ok){ updateMonoProgressUI(''); return; } // rate-limited or token issue — just try again next round, no need to surface an error silently in the background
-    const data = await res.json();
-    if(mySessionId !== monoSyncSessionId) return;
-    const accounts = data.accounts || [];
+    let accounts;
+    // The very first sync of a fresh page load can skip straight to
+    // fetching transactions using whatever account list is already cached
+    // from last time, rather than spending the first ~minute of the app
+    // being open on a client-info call before a single transaction can be
+    // requested. The account list/balances themselves might be a little
+    // stale until the NEXT sync cycle (60s later) refreshes them the normal
+    // way — an acceptable trade since the balances shown are already from
+    // this same cache regardless.
+    if(!hasSkippedInitialClientInfo && monoAccounts.length){
+      hasSkippedInitialClientInfo = true;
+      accounts = monoAccounts;
+      updateMonoProgressUI('Checking for new transactions…');
+    } else {
+      updateMonoProgressUI('Connecting to Monobank…');
+      lastMonoRequestAt = Date.now();
+      const res = await fetch('https://api.monobank.ua/personal/client-info', { headers: { 'X-Token': token } });
+      if(mySessionId !== monoSyncSessionId) return; // disconnected/reconnected while this was in flight — stop here, a fresh run will have already started or will start soon
+      if(!res.ok){
+        // Previously silent here — but a persistently-failing client-info call
+        // (repeated rate-limiting, an expired token, etc.) is exactly what
+        // "sync sometimes just doesn't happen, with no explanation" looks
+        // like from the outside. Tracked the same way a statement-request
+        // failure already was, so it's at least visible in the Bank modal.
+        let bodyText = '';
+        try{ bodyText = await res.text(); }catch(e2){}
+        const errMsg = `Connection check failed (HTTP ${res.status})${bodyText ? ': ' + bodyText.slice(0,200) : ''}`;
+        try{ localStorage.setItem('nova-mono-last-error', errMsg); }catch(e){}
+        try{ localStorage.setItem('nova-mono-last-sync-attempt', String(Date.now())); }catch(e){}
+        updateMonoProgressUI('');
+        return;
+      }
+      const data = await res.json();
+      if(mySessionId !== monoSyncSessionId) return;
+      accounts = data.accounts || [];
+      if(accounts.length){
+        monoAccounts = accounts; // keep this fresh so the Bank modal reflects the same list if opened
+        persistMonoAccounts();
+      }
+    }
     if(!accounts.length){ updateMonoProgressUI(''); return; }
-    monoAccounts = accounts; // keep this fresh so the Bank modal reflects the same list if opened
-    persistMonoAccounts();
 
     const myOwnIbans = new Set(accounts.filter(function(a){ return a.iban; }).map(function(a){ return a.iban; }));
     const existingIds = new Set(transactions.filter(function(t){ return t.monoId; }).map(function(t){ return t.monoId; }));
@@ -5016,20 +5426,23 @@ async function autoSyncMonobank(){
     const totalWindow = to - from;
 
     // Monobank's 1-request-per-minute limit applies across ALL endpoints for
-    // a token, not per-endpoint — without this wait, the very first statement
-    // request right after client-info would get silently rate-limited every
-    // single time, which is exactly what "accounts show up but no
-    // transactions ever appear" looks like from the outside.
+    // a token, not per-endpoint — waitForMonoRateLimit() below is what
+    // actually enforces the gap when one's needed (e.g. after a client-info
+    // call just made); when this is the very first request of the session
+    // (the skip-ahead path above), lastMonoRequestAt is old enough that it
+    // resolves immediately, so transactions really do start arriving right
+    // away rather than a fixed minute-long wait every single time.
     updateMonoProgressUI(isFirstRun
-      ? 'Connected. Starting your full history sync in about a minute (this respects Monobank\'s rate limit — it can take a while for 5 years of data, but your recent transactions arrive first)…'
-      : `Connected. Checking for anything new from ${localDateStr(new Date(from*1000))} through ${localDateStr(new Date(to*1000))}…`);
-    await sleep(61000);
+      ? 'Starting your full history sync (this respects Monobank\'s rate limit — it can take a while for 5 years of data, but your recent transactions arrive first)…'
+      : `Checking for anything new from ${localDateStr(new Date(from*1000))} through ${localDateStr(new Date(to*1000))}…`);
+    await waitForMonoRateLimit();
     if(mySessionId !== monoSyncSessionId) return;
 
     let anyImported = false;
     let totalImportedSoFar = 0;
     let totalRawItemsSeen = 0; // how many items Monobank actually returned, regardless of whether they were new — helps tell apart "Monobank didn't send it" from "something here discarded it"
     let lastSyncError = null;
+    let syncRanToCompletion = true; // false if any account's chunk loop stopped early for any reason (error OR a stale-session break) — first-run history sync must only be marked done once every chunk has actually been requested
 
     async function syncOneAccount(account, accountLabel){
       const currency = MONO_CURRENCY_MAP[account.currencyCode] || 'UAH';
@@ -5043,12 +5456,15 @@ async function autoSyncMonobank(){
         // very last thing to arrive after the whole historical pull finishes.
         let chunkEnd = to;
         while(chunkEnd > from){
-          if(mySessionId !== monoSyncSessionId) break; // stale run — abort this account's chunk loop too
+          if(mySessionId !== monoSyncSessionId){ syncRanToCompletion = false; break; } // stale run — abort this account's chunk loop too
           const chunkStart = Math.max(chunkEnd - MAX_WINDOW, from);
           const pctDone = isFirstRun ? Math.round(((to - chunkEnd) / totalWindow) * 100) : null;
           updateMonoProgressUI(`Importing… ${accountLabel}${pctDone !== null ? `, ~${pctDone}% through your history` : ''} — ${totalImportedSoFar} transaction${totalImportedSoFar===1?'':'s'} imported so far`);
+          await waitForMonoRateLimit(); // covers every case uniformly: between chunks of one account, AND the handoff from one account's last request to the next account's first
+          if(mySessionId !== monoSyncSessionId){ syncRanToCompletion = false; break; }
+          lastMonoRequestAt = Date.now();
           const sres = await fetch(`https://api.monobank.ua/personal/statement/${account.id}/${chunkStart}/${chunkEnd}`, { headers: { 'X-Token': token } });
-          if(mySessionId !== monoSyncSessionId) break; // disconnected mid-request — discard this response rather than importing it under the new session
+          if(mySessionId !== monoSyncSessionId){ syncRanToCompletion = false; break; } // disconnected mid-request — discard this response rather than importing it under the new session
           if(sres.ok){
             const items = await sres.json();
             totalRawItemsSeen += items.length;
@@ -5080,6 +5496,7 @@ async function autoSyncMonobank(){
                 if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
               }
               const occurred_at = localDateStr(new Date(item.time * 1000));
+              category = categoryRenames[category] || category;
               transactions.unshift({
                 id: generateTxId(), monoId: item.id, monoAccountId: account.id, accountId: 'mono:' + account.id, name: desc, category: category,
                 amount: amount, currency: currency, occurred_at: occurred_at, occurredAtMs: item.time * 1000, mcc: item.mcc || null, originalMcc: item.originalMcc || null,
@@ -5110,19 +5527,22 @@ async function autoSyncMonobank(){
             let bodyText = '';
             try{ bodyText = await sres.text(); }catch(e2){}
             lastSyncError = `Statement request failed (HTTP ${sres.status})${bodyText ? ': ' + bodyText.slice(0,200) : ''}`;
+            syncRanToCompletion = false;
           }
           chunkEnd = chunkStart;
-          if(chunkEnd > from) await sleep(61000); // respect the 1-request-per-minute limit for repeated requests to this SAME account's history
         }
-      }catch(e){ lastSyncError = 'Network error reaching Monobank: ' + e.message; }
+      }catch(e){ lastSyncError = 'Network error reaching Monobank: ' + e.message; syncRanToCompletion = false; }
     }
 
-    // All accounts sync in parallel — each one's own chunk requests still
-    // wait for that account specifically, but different accounts don't
-    // block on each other at all.
-    await Promise.all(accounts.map(function(account, i){
-      return syncOneAccount(account, `account ${i+1} of ${accounts.length}`);
-    }));
+    // Accounts sync one at a time, not in parallel — they share the same
+    // token, and Monobank's rate limit applies across the whole token, not
+    // per-account. Syncing them concurrently would mean two accounts' first
+    // requests landing close together and getting rate-limited, which is
+    // exactly the kind of failure this function otherwise goes out of its
+    // way to avoid for a single account's own chunk requests.
+    for(let i = 0; i < accounts.length; i++){
+      await syncOneAccount(accounts[i], `account ${i+1} of ${accounts.length}`);
+    }
 
     try{ localStorage.setItem('nova-mono-last-sync-attempt', String(Date.now())); }catch(e){}
 
@@ -5136,7 +5556,7 @@ async function autoSyncMonobank(){
         : `Sync complete — up to date, nothing new. Monobank returned ${totalRawItemsSeen} transaction${totalRawItemsSeen===1?'':'s'} for ${localDateStr(new Date(from*1000))} through ${localDateStr(new Date(to*1000))}${totalRawItemsSeen===0 ? ' — if you expected some, they may not be visible via Monobank\'s API yet.' : ', all already synced.'}`);
     }
 
-    if(isFirstRun) markManuallySyncedOnce(); // subsequent runs use the lightweight window from here on
+    if(isFirstRun && syncRanToCompletion && !lastSyncError) markManuallySyncedOnce(); // only switch to the lightweight window once the full history genuinely finished — otherwise the next run retries the full pull
 
     if(anyImported){
       if(currentView === 'finance') renderView('finance');
@@ -5151,6 +5571,20 @@ window.syncNowManual = async function(){
   statusEl.textContent = '';
   statusEl.classList.remove('error');
   progressEl.textContent = 'Syncing…';
+  await autoSyncMonobank();
+  progressEl.textContent = '';
+  renderMonoAccountList();
+  statusEl.textContent = 'Sync complete.';
+};
+
+window.resyncFullHistory = async function(){
+  if(!confirm('Re-pull your complete transaction history from Monobank? This can take a while (up to an hour or more, respecting Monobank\'s rate limit) but never creates duplicates — already-imported transactions are simply skipped.')) return;
+  try{ localStorage.removeItem('nova-mono-manual-sync-done'); }catch(e){}
+  const statusEl = document.getElementById('monoStatus');
+  const progressEl = document.getElementById('monoProgress');
+  statusEl.textContent = '';
+  statusEl.classList.remove('error');
+  progressEl.textContent = 'Starting full history re-sync…';
   await autoSyncMonobank();
   progressEl.textContent = '';
   renderMonoAccountList();
