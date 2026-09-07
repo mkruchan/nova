@@ -807,7 +807,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.5.2';
+const APP_BUILD = 'v1.5.3';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -1360,18 +1360,19 @@ window.setMergeTransactionPanels = function(val){
   renderView('finance');
 };
 
-// Every reorderable dashboard block, in the default order. Transfers/Refunds
-// only actually render when there's matching data that month, but they still
-// have a fixed place in the ordering so the user can position them ahead of
-// time.
+// Every reorderable dashboard block, in the default order. Transfers only
+// actually renders when there's matching data that month, but it still has a
+// fixed place in the ordering so the user can position it ahead of time.
+// Refunds have no block of their own — they're listed inline with everything
+// else in Transactions, tagged "· Refund", since they're just expenses
+// running in reverse.
 const DASHBOARD_BLOCKS = [
   { id: 'overview', label: 'Overview' },
   { id: 'budget', label: 'Monthly Budget' },
   { id: 'topExpenses', label: 'Top Expense Categories' },
   { id: 'transactions', label: 'Transactions' },
   { id: 'accounts', label: 'Accounts' },
-  { id: 'transfers', label: 'Transfers' },
-  { id: 'refunds', label: 'Refunds' }
+  { id: 'transfers', label: 'Transfers' }
 ];
 let dashboardBlockOrder = DASHBOARD_BLOCKS.map(function(b){ return b.id; });
 function loadDashboardBlockOrder(){
@@ -4052,9 +4053,15 @@ function historyScreenHTML(){
       <div style="width:32px;"></div>
     </div>
 
+    ${isRefund ? '<div class="empty-note" style="text-align:left; margin:-4px 0 10px;">Credited back against a prior expense — reduces what you\'ve effectively spent, not counted as new income. Refunds also appear inline in Transactions, tagged "· Refund".</div>' : ''}
+
     <div class="filter-row detail-filters">
       ${(isTransfer || isRefund || isAll) ? '' : `<div class="custom-select-wrap"><button type="button" class="custom-select-btn" onclick="openCustomPicker('historyCategorySelect','Category')"><span id="historyCategorySelect_label"></span><span class="chevron-down">⌄</span></button><select id="historyCategorySelect" class="native-select-hidden" onchange="setHistoryCategory(this.value)">${catOptions}</select></div>`}
       <input class="filter-select" type="text" placeholder="Search by name…" value="${escapeHtml(historySearch)}" oninput="setHistorySearch(this.value)" style="flex:1;">
+      ${/* Refunds no longer have a dashboard block of their own, so this is
+           the way into the refunds-only view — and back out of it again. */''}
+      ${(isAll || (!isTransfer && !isRefund && !isIncome)) ? '<button class="header-btn" onclick="openHistory(\'refund\')">Refunds</button>' : ''}
+      ${isRefund ? '<button class="header-btn" onclick="openHistory(\'all\')">All</button>' : ''}
     </div>
     <div class="filter-row detail-filters" style="align-items:center;">
       <input class="filter-select" type="date" value="${historyDateFrom}" onchange="setHistoryDateFrom(this.value)" style="flex:1;">
@@ -4415,7 +4422,6 @@ function financeHTML(){
   const LP = '';
 
   const transfers = sortMostRecentFirst(thisMonthTx().filter(function(t){ return t.category === 'Transfer'; }));
-  const refunds = sortMostRecentFirst(visibleTransactions().filter(isRefundTx));
 
   const blockHTML = {
     overview: `<div class="charts-row">${financeOverviewSummaryHTML(LP)}</div>`,
@@ -4490,22 +4496,6 @@ function financeHTML(){
               <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
               <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${transferMeta}${niceDate(t.occurred_at)}</div></div>
               <div class="tx-amt">${amtDisplay}</div>
-              <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
-              <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>`,
-    refunds: !refunds.length ? '' : `<div class="bottom-row" style="grid-template-columns:minmax(0,1fr);">
-        <div class="panel-card clickable-card" ${LP} onclick="if(blockClickGuard())return; openHistory('refund')">
-          <div class="panel-title"><h3>Refunds</h3><span class="chevron">›</span></div>
-          <div class="empty-note" style="text-align:left; padding:0 0 8px;">Credited back against a prior expense — reduces what you've effectively spent, not counted as new income.</div>
-          ${refunds.slice(0,4).map(function(t){
-            const icon = CATEGORY_ICON[t.category] || 'ic-wallet';
-            return `<div class="tx-row">
-              <div class="tx-icon"><svg class="icon"><use href="#${icon}"/></svg></div>
-              <div class="tx-info"><div class="tx-name">${escapeHtml(t.name)}</div><div class="tx-meta">${niceDate(t.occurred_at)} · ${escapeHtml(t.category)}</div></div>
-              <div class="tx-amt refund">+${fmtOriginal(t.amount, t.currency)}</div>
               <button class="tx-edit" onclick="event.stopPropagation(); editTx('${t.id}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
               <button class="tx-del" onclick="event.stopPropagation(); deleteTx('${t.id}')">✕</button>
             </div>`;
