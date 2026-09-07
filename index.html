@@ -818,7 +818,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.5.5';
+const APP_BUILD = 'v1.5.6';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -898,6 +898,18 @@ let hiddenCategories = [];
 function loadHiddenCategories(){
   try{ hiddenCategories = JSON.parse(localStorage.getItem('nova-hidden-categories') || '[]'); }
   catch(e){ hiddenCategories = []; }
+  // Structural categories (Transfer/Loan/Refund/Other expense/Other income)
+  // can never be hidden through the UI — Manage Categories doesn't even
+  // render a Hide checkbox for them — but nothing here was self-correcting
+  // if one ended up in this list anyway (an old backup restore, a cloud
+  // payload from before this restriction existed, etc.). Once that happens
+  // there's no way back: allExpenseCategories()/allIncomeCategories() both
+  // filter by this list, and Manage Categories itself is built from those
+  // same two functions, so the category silently disappears from every
+  // picker in the app with no screen left to un-hide it from.
+  const before = hiddenCategories.length;
+  hiddenCategories = hiddenCategories.filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
+  if(hiddenCategories.length !== before) persistHiddenCategories();
 }
 function persistHiddenCategories(){
   localStorage.setItem('nova-hidden-categories', JSON.stringify(hiddenCategories));
@@ -1935,7 +1947,7 @@ function applyCloudPayloadNonTransactionFields(payload){
     customCategoryRules = Array.from(byKeyword.values());
   }
   if(payload.categoryRenames) categoryRenames = Object.assign({}, categoryRenames, payload.categoryRenames);
-  if(payload.hiddenCategories) hiddenCategories = Array.from(new Set(hiddenCategories.concat(payload.hiddenCategories)));
+  if(payload.hiddenCategories) hiddenCategories = Array.from(new Set(hiddenCategories.concat(payload.hiddenCategories))).filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
   if(Array.isArray(payload.hiddenFromViewCategories)) hiddenFromViewCategories = payload.hiddenFromViewCategories.filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
   if(Array.isArray(payload.overviewExcludedCategories)) overviewExcludedCategories = payload.overviewExcludedCategories.filter(function(c){ return c !== 'Transfer'; });
