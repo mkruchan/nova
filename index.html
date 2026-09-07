@@ -684,6 +684,17 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="overviewExcludeModalOverlay" onclick="if(event.target===this) closeOverviewExcludeModal()">
+  <div class="modal" style="max-height:80vh; overflow-y:auto;">
+    <h3>Exclude from Top Expenses & Overview</h3>
+    <div class="empty-note" style="text-align:left; margin-bottom:10px;">Tap a category to leave it out of Spent, Income, Net Profit/Loss, Avg Daily Spend, Savings Rate, and the Top Expense Categories chart. Its transactions stay exactly as they are everywhere else — Transactions, History, Budgets.</div>
+    <div id="overviewExcludeBody"></div>
+    <div class="modal-actions">
+      <button class="modal-save" onclick="closeOverviewExcludeModal()">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="fixRefundsModalOverlay" onclick="if(event.target===this) closeFixRefunds()">
   <div class="modal" style="max-height:80vh; overflow-y:auto;">
     <h3>Fix Refund Categories</h3>
@@ -807,7 +818,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.5.3';
+const APP_BUILD = 'v1.5.4';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -1324,6 +1335,35 @@ function persistHiddenFromViewCategories(){
   scheduleCloudPush();
 }
 
+// A lighter touch than hiddenFromViewCategories above: that one removes a
+// category from every screen in the app, transactions and all. This one
+// only pulls a category's totals out of the Overview stats (Spent, Income,
+// Net Profit/Loss, Avg Daily Spend, Savings Rate) and out of the Top Expense
+// Categories breakdown — the transactions themselves stay fully visible
+// everywhere else (Transactions, History, Budgets). Useful for something
+// like a category you don't count as "real" spending (e.g. money moved into
+// savings that's tagged as an expense) without hiding it outright.
+let overviewExcludedCategories = [];
+function loadOverviewExcludedCategories(){
+  try{ overviewExcludedCategories = JSON.parse(localStorage.getItem('nova-overview-excluded-categories') || '[]'); }
+  catch(e){ overviewExcludedCategories = []; }
+  // Same self-correction as hiddenFromViewCategories: Transfer/Loan/Refund/
+  // Other expense/Other income are structural and relied on by exact name,
+  // so excluding one from Overview math would be silently confusing rather
+  // than useful (a Transfer, for instance, is already excluded from Spent
+  // and Income everywhere).
+  const before = overviewExcludedCategories.length;
+  overviewExcludedCategories = overviewExcludedCategories.filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
+  if(overviewExcludedCategories.length !== before) persistOverviewExcludedCategories();
+}
+function persistOverviewExcludedCategories(){
+  localStorage.setItem('nova-overview-excluded-categories', JSON.stringify(overviewExcludedCategories));
+  scheduleCloudPush();
+}
+function isOverviewExcludedCategory(t){
+  return overviewExcludedCategories.indexOf(t.category) !== -1;
+}
+
 // Generates a collision-resistant unique id — timestamp + random suffix,
 // deliberately NOT a plain Date.now() or incrementing counter. A plain
 // Date.now() collides whenever two ids get generated within the same
@@ -1724,6 +1764,7 @@ function cloudPayload(){
     hiddenCategories: hiddenCategories,
     showMonoData: showMonoData,
     hiddenFromViewCategories: hiddenFromViewCategories,
+    overviewExcludedCategories: overviewExcludedCategories,
     manualAccounts: manualAccounts,
     // If more than one device has the same Monobank token configured (e.g.
     // both a phone and a Mac), they share the same underlying rate limit
@@ -1893,6 +1934,7 @@ function applyCloudPayloadNonTransactionFields(payload){
   if(payload.hiddenCategories) hiddenCategories = Array.from(new Set(hiddenCategories.concat(payload.hiddenCategories)));
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
   if(Array.isArray(payload.hiddenFromViewCategories)) hiddenFromViewCategories = payload.hiddenFromViewCategories.filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
+  if(Array.isArray(payload.overviewExcludedCategories)) overviewExcludedCategories = payload.overviewExcludedCategories.filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
   if(typeof payload.lastMonoRequestAt === 'number') lastMonoRequestAt = Math.max(lastMonoRequestAt, payload.lastMonoRequestAt);
 
   // Cloud-sourced budgets need the exact same normalization as locally-loaded
@@ -1916,6 +1958,7 @@ function applyCloudPayloadNonTransactionFields(payload){
   localStorage.setItem('nova-manual-accounts', JSON.stringify(manualAccounts));
   try{ localStorage.setItem('nova-show-mono-data', String(showMonoData)); }catch(e){}
   try{ localStorage.setItem('nova-hidden-from-view-categories', JSON.stringify(hiddenFromViewCategories)); }catch(e){}
+  try{ localStorage.setItem('nova-overview-excluded-categories', JSON.stringify(overviewExcludedCategories)); }catch(e){}
 }
 
 // Any network call can hang far longer than expected if a host is slow,
@@ -2124,6 +2167,7 @@ function init(){
   loadCustomCategories();
   loadHiddenCategories();
   loadHiddenFromViewCategories();
+  loadOverviewExcludedCategories();
   loadCategoryRenames();
   loadCustomCategoryRules();
   loadMonoSyncStatus();
@@ -2512,13 +2556,13 @@ window.showNetWorthBreakdown = function(){
 };
 
 function monthIncome(){
-  return thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' && !isRefundTx(t); })
+  return thisMonthTx().filter(function(t){ return Number(t.amount) > 0 && t.category !== 'Transfer' && t.category !== 'Loan' && !isRefundTx(t) && !isOverviewExcludedCategory(t); })
     .reduce(function(s,t){ return s + toDisplay(t.amount, t.currency); }, 0);
 }
 function monthSpend(){
-  const expenses = thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer'; })
+  const expenses = thisMonthTx().filter(function(t){ return Number(t.amount) < 0 && t.category !== 'Transfer' && !isOverviewExcludedCategory(t); })
     .reduce(function(s,t){ return s + Math.abs(toDisplay(t.amount, t.currency)); }, 0);
-  const refunds = thisMonthTx().filter(isRefundTx)
+  const refunds = thisMonthTx().filter(function(t){ return isRefundTx(t) && !isOverviewExcludedCategory(t); })
     .reduce(function(s,t){ return s + toDisplay(t.amount, t.currency); }, 0);
   return Math.max(0, expenses - refunds);
 }
@@ -2834,7 +2878,7 @@ function donutWithCenterLabel(data, total, sublabel){
 
 // Compact clickable card shown on the main dashboard
 function expenseCategorySummaryHTML(LP){
-  const inRange = thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer'; });
+  const inRange = thisMonthTx().filter(function(t){ return (Number(t.amount) < 0 || isRefundTx(t)) && t.category !== 'Transfer' && !isOverviewExcludedCategory(t); });
   const data = categoryBreakdown(inRange);
   const total = data.reduce(function(s,d){ return s + d[1]; }, 0);
   const top = data.slice(0,4);
@@ -2880,7 +2924,7 @@ function expenseCategorySummaryHTML(LP){
           ${donutWithCenterLabel(donutData, Math.abs(total), 'Total expenses')}
           <div class="cat-list">${rows}${moreRow}</div>
         </div>
-      ` : '<div class="empty-note">No expenses logged this month yet.</div>'}
+      ` : `<div class="empty-note">No expenses logged this month yet${overviewExcludedCategories.length ? ' (with the current exclusions)' : ''}.</div>`}
     </div>`;
 }
 
@@ -3214,6 +3258,42 @@ window.toggleExcludedCategory = function(cat){
 };
 window.closeExcludeCategoriesModal = function(){
   closeModal('excludeCategoriesModalOverlay');
+};
+
+window.openOverviewExcludeModal = function(){
+  // Structural categories (Transfer/Loan/Refund/Other expense/Other income)
+  // are relied on by exact name throughout the app's own math — Loan is
+  // already excluded from Income, a Refund already nets against Spend
+  // rather than adding to Income, etc. — so offering them here would let
+  // someone "exclude" one only to have it silently revert on next load,
+  // which is exactly the self-correction loadOverviewExcludedCategories
+  // already applies to whatever ends up in this list.
+  const expenseCats = allExpenseCategories().filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
+  const incomeCats = allIncomeCategories().filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1 && expenseCats.indexOf(c) === -1; });
+  function section(label, cats){
+    if(!cats.length) return '';
+    return `<div class="side-label" style="margin:12px 0 4px;">${label}</div>` + cats.map(function(c){
+      const isExcluded = overviewExcludedCategories.indexOf(c) !== -1;
+      return `<div class="cat-row" onclick="toggleOverviewExcludedCategory('${escapeHtml(c)}')" style="cursor:pointer;">
+        <span class="cat-name"${isExcluded?' style="color:var(--muted-dim); text-decoration:line-through;"':''}>${escapeHtml(c)}</span>
+        <span style="color:${isExcluded?'var(--rose)':'var(--muted-dim)'};">${isExcluded ? '✕ Excluded' : 'Included'}</span>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('overviewExcludeBody').innerHTML = section('Expense categories', expenseCats) + section('Income categories', incomeCats);
+  openModal('overviewExcludeModalOverlay');
+};
+window.toggleOverviewExcludedCategory = function(cat){
+  const idx = overviewExcludedCategories.indexOf(cat);
+  if(idx === -1) overviewExcludedCategories.push(cat);
+  else overviewExcludedCategories.splice(idx, 1);
+  persistOverviewExcludedCategories();
+  const modalEl = document.getElementById('overviewExcludeModalOverlay');
+  if(modalEl && modalEl.classList.contains('open')) openOverviewExcludeModal(); // refresh the modal's own checkmarks
+  renderView('finance');
+};
+window.closeOverviewExcludeModal = function(){
+  closeModal('overviewExcludeModalOverlay');
 };
 
 window.viewCategoryTransactions = function(categoryName){
@@ -4092,6 +4172,9 @@ function settingsScreenHTML(){
     </div>
     <div class="settings-row" onclick="openRatesDetail()">
       <span>💱 Exchange rates</span><span class="chevron">›</span>
+    </div>
+    <div class="settings-row" onclick="openOverviewExcludeModal()">
+      <span>🚫 Exclude from Top Expenses & Overview${overviewExcludedCategories.length ? ` <b style="color:var(--muted);">(${overviewExcludedCategories.length})</b>` : ''}</span><span class="chevron">›</span>
     </div>
 
     <div class="side-label" style="margin:20px 0 8px;">Text Size</div>
