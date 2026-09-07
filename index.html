@@ -818,7 +818,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.5.6';
+const APP_BUILD = 'v1.5.7';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -2597,6 +2597,24 @@ function escapeHtml(str){
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+// For embedding a value as a single-quoted JS string argument inside an
+// inline onclick="…('${arg}')" attribute. escapeHtml() alone is NOT safe
+// here: the browser decodes HTML entities in an attribute value before
+// handing that value to the JS parser, so escapeHtml()'s &#39; comes back
+// out as a literal ' — landing right back inside the JS string it was
+// meant to protect. Escaping backslash and quote for JS FIRST, then making
+// the result attribute-safe (for a literal & or " in the value), keeps both
+// layers intact: the browser's entity-decode only ever un-escapes the outer
+// HTML layer, never the inner JS one.
+function jsAttrArg(str){
+  return String(str == null ? '' : str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 function fmt(n){
   const sym = CURRENCY_SYMBOLS[DISPLAY_CURRENCY] || '';
@@ -3288,7 +3306,18 @@ window.openOverviewExcludeModal = function(){
     if(!cats.length) return '';
     return `<div class="side-label" style="margin:12px 0 4px;">${label}</div>` + cats.map(function(c){
       const isExcluded = overviewExcludedCategories.indexOf(c) !== -1;
-      return `<div class="cat-row" onclick="toggleOverviewExcludedCategory('${escapeHtml(c)}')" style="cursor:pointer;">
+      // escapeHtml() alone isn't enough for a single-quoted onclick argument:
+      // it turns a literal ' into &#39;, but the browser decodes HTML
+      // entities in an attribute value BEFORE handing it to the JS parser —
+      // so &#39; comes back out as a literal ' again, right where it can
+      // break the string this argument sits inside. A category like
+      // "Nastya's stuff" would render as onclick="…('Nastya&#39;s stuff')",
+      // which the browser hands to JS as …('Nastya's stuff') — a syntax
+      // error — so tapping that one row silently did nothing while every
+      // other row worked fine. JS-escaping the quote (as \') first makes it
+      // survive intact, and only THEN is the whole thing made attribute-safe.
+      const jsArg = jsAttrArg(c);
+      return `<div class="cat-row" onclick="toggleOverviewExcludedCategory('${jsArg}')" style="cursor:pointer;">
         <span class="cat-name"${isExcluded?' style="color:var(--muted-dim); text-decoration:line-through;"':''}>${escapeHtml(c)}</span>
         <span style="color:${isExcluded?'var(--rose)':'var(--muted-dim)'};">${isExcluded ? '✕ Excluded' : 'Included'}</span>
       </div>`;
