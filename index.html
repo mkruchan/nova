@@ -818,7 +818,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.5.4';
+const APP_BUILD = 'v1.5.5';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -1347,13 +1347,17 @@ let overviewExcludedCategories = [];
 function loadOverviewExcludedCategories(){
   try{ overviewExcludedCategories = JSON.parse(localStorage.getItem('nova-overview-excluded-categories') || '[]'); }
   catch(e){ overviewExcludedCategories = []; }
-  // Same self-correction as hiddenFromViewCategories: Transfer/Loan/Refund/
-  // Other expense/Other income are structural and relied on by exact name,
-  // so excluding one from Overview math would be silently confusing rather
-  // than useful (a Transfer, for instance, is already excluded from Spent
-  // and Income everywhere).
+  // Unlike hiddenFromViewCategories, only Transfer is a true no-op to
+  // exclude here — it's the one category monthSpend()/monthIncome() already
+  // strip out unconditionally regardless of this list. Loan, Refund, Other
+  // expense and Other income are NOT specially excluded from Spend and Top
+  // Expenses today (only Loan is excluded from Income, and a Refund nets
+  // against Spend rather than skipping it) — a Loan repayment, for
+  // instance, is a perfectly normal expense category as far as those two
+  // numbers are concerned, so excluding it here has real effect and should
+  // stay available.
   const before = overviewExcludedCategories.length;
-  overviewExcludedCategories = overviewExcludedCategories.filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
+  overviewExcludedCategories = overviewExcludedCategories.filter(function(c){ return c !== 'Transfer'; });
   if(overviewExcludedCategories.length !== before) persistOverviewExcludedCategories();
 }
 function persistOverviewExcludedCategories(){
@@ -1934,7 +1938,7 @@ function applyCloudPayloadNonTransactionFields(payload){
   if(payload.hiddenCategories) hiddenCategories = Array.from(new Set(hiddenCategories.concat(payload.hiddenCategories)));
   if(typeof payload.showMonoData === 'boolean') showMonoData = payload.showMonoData;
   if(Array.isArray(payload.hiddenFromViewCategories)) hiddenFromViewCategories = payload.hiddenFromViewCategories.filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
-  if(Array.isArray(payload.overviewExcludedCategories)) overviewExcludedCategories = payload.overviewExcludedCategories.filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
+  if(Array.isArray(payload.overviewExcludedCategories)) overviewExcludedCategories = payload.overviewExcludedCategories.filter(function(c){ return c !== 'Transfer'; });
   if(typeof payload.lastMonoRequestAt === 'number') lastMonoRequestAt = Math.max(lastMonoRequestAt, payload.lastMonoRequestAt);
 
   // Cloud-sourced budgets need the exact same normalization as locally-loaded
@@ -3261,15 +3265,13 @@ window.closeExcludeCategoriesModal = function(){
 };
 
 window.openOverviewExcludeModal = function(){
-  // Structural categories (Transfer/Loan/Refund/Other expense/Other income)
-  // are relied on by exact name throughout the app's own math — Loan is
-  // already excluded from Income, a Refund already nets against Spend
-  // rather than adding to Income, etc. — so offering them here would let
-  // someone "exclude" one only to have it silently revert on next load,
-  // which is exactly the self-correction loadOverviewExcludedCategories
-  // already applies to whatever ends up in this list.
-  const expenseCats = allExpenseCategories().filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
-  const incomeCats = allIncomeCategories().filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1 && expenseCats.indexOf(c) === -1; });
+  // Transfer is the only category monthSpend()/monthIncome() strip out
+  // unconditionally regardless of this list, so it's the only one left off
+  // here — everything else (Loan, Refund, Other expense, Other income
+  // included) has a real, visible effect on Spend/Income/Top Expenses when
+  // toggled, same as any custom category.
+  const expenseCats = allExpenseCategories().filter(function(c){ return c !== 'Transfer'; });
+  const incomeCats = allIncomeCategories().filter(function(c){ return c !== 'Transfer' && expenseCats.indexOf(c) === -1; });
   function section(label, cats){
     if(!cats.length) return '';
     return `<div class="side-label" style="margin:12px 0 4px;">${label}</div>` + cats.map(function(c){
@@ -3280,8 +3282,27 @@ window.openOverviewExcludeModal = function(){
       </div>`;
     }).join('');
   }
-  document.getElementById('overviewExcludeBody').innerHTML = section('Expense categories', expenseCats) + section('Income categories', incomeCats);
+  document.getElementById('overviewExcludeBody').innerHTML =
+    `<div class="filter-row" style="margin-bottom:4px;">
+      <button class="header-btn" onclick="excludeAllOverviewCategories()">Exclude all</button>
+      <button class="header-btn" onclick="clearOverviewExcludedCategories()">Include all</button>
+    </div>`
+    + section('Expense categories', expenseCats) + section('Income categories', incomeCats);
   openModal('overviewExcludeModalOverlay');
+};
+window.excludeAllOverviewCategories = function(){
+  const expenseCats = allExpenseCategories().filter(function(c){ return c !== 'Transfer'; });
+  const incomeCats = allIncomeCategories().filter(function(c){ return c !== 'Transfer' && expenseCats.indexOf(c) === -1; });
+  overviewExcludedCategories = expenseCats.concat(incomeCats);
+  persistOverviewExcludedCategories();
+  openOverviewExcludeModal();
+  renderView('finance');
+};
+window.clearOverviewExcludedCategories = function(){
+  overviewExcludedCategories = [];
+  persistOverviewExcludedCategories();
+  openOverviewExcludeModal();
+  renderView('finance');
 };
 window.toggleOverviewExcludedCategory = function(cat){
   const idx = overviewExcludedCategories.indexOf(cat);
