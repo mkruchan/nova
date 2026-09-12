@@ -809,7 +809,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.5.10';
+const APP_BUILD = 'v1.5.11';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -5651,12 +5651,21 @@ async function autoSyncMonobank(){
   const token = loadMonoToken();
   if(!token) return; // never connected — nothing to keep in sync
 
-  // Skip outright if we'd be making a request less than a minute after the
-  // last one — Monobank's limit is 1 request/minute across the whole token,
-  // so this call would almost certainly come back rate-limited. Better to
-  // let the next scheduled trigger (interval, focus, click) pick it up than
-  // to burn an attempt on a call destined to fail silently.
-  if(Date.now() - lastMonoRequestAt < 61000) return;
+  // Skip outright if we'd be making a request less than ~a minute after the
+  // last one — Monobank's limit is 1 request/minute across the whole token.
+  // This threshold is deliberately kept a few seconds UNDER the 60-second
+  // interval below, not equal to Monobank's actual 60-second limit: it used
+  // to be 61000, one second OVER the interval, which meant a clean periodic
+  // tick (fired every 60000ms) was ALWAYS just short of clearing it — every
+  // single scheduled background sync after the very first one in a session
+  // silently skipped itself, forever, with no self-correction. Automatic
+  // syncing only ever worked by accident, when some unrelated trigger
+  // (switching back to the tab, a click) happened to land more than 61
+  // seconds after the last attempt. The actual per-minute limit is still
+  // enforced precisely by waitForMonoRateLimit() just below, which waits out
+  // whatever's left rather than abandoning the whole cycle — this check only
+  // needs to avoid piling up concurrent attempts from rapid clicking.
+  if(Date.now() - lastMonoRequestAt < 55000) return;
 
   const mySessionId = monoSyncSessionId; // if this changes mid-run (disconnect/reconnect), this specific run stops itself rather than continuing with stale credentials
   autoSyncInProgress = true;
@@ -5758,43 +5767,66 @@ async function autoSyncMonobank(){
             const items = await sres.json();
             totalRawItemsSeen += items.length;
             let imported = 0;
+            let itemErrorCount = 0;
+            let firstItemError = null;
             items.forEach(function(item){
-              if(existingIds.has(item.id)) return;
-              const amount = item.amount / 100;
-              const type = amount >= 0 ? 'income' : 'expense';
-              const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
-              // Card-to-card transfers between your own Monobank cards don't
-              // always get a populated counterIban, even when they genuinely
-              // are transfers — "Переказ на картку" (outgoing) and "З білої/
-              // чорної картки" (incoming, from Monobank's white/black card
-              // products) are treated as reliable signals on their own, on
-              // top of the verified counterIban check.
-              const descLower = desc.toLowerCase();
-              const looksLikeCardTransfer = descLower.indexOf('переказ на картку') !== -1 ||
-                /з\s+(біло|чорно)/i.test(desc);
-              const customRuleCategory = matchCustomRule(desc);
-              let category;
-              if((item.counterIban && myOwnIbans.has(item.counterIban)) || looksLikeCardTransfer){
-                category = 'Transfer';
-              } else if(customRuleCategory){
-                category = customRuleCategory;
-              } else if(type === 'expense' && mccCategoryFor(item)){
-                category = mccCategoryFor(item);
-              } else {
-                category = matchCategory(desc, type);
-                if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
+              try{
+                if(existingIds.has(item.id)) return;
+                const amount = item.amount / 100;
+                const type = amount >= 0 ? 'income' : 'expense';
+                const desc = item.description || (type === 'income' ? 'Monobank income' : 'Monobank expense');
+                // Card-to-card transfers between your own Monobank cards don't
+                // always get a populated counterIban, even when they genuinely
+                // are transfers — "Переказ на картку" (outgoing) and "З білої/
+                // чорної картки" (incoming, from Monobank's white/black card
+                // products) are treated as reliable signals on their own, on
+                // top of the verified counterIban check.
+                const descLower = desc.toLowerCase();
+                const looksLikeCardTransfer = descLower.indexOf('переказ на картку') !== -1 ||
+                  /з\s+(біло|чорно)/i.test(desc);
+                const customRuleCategory = matchCustomRule(desc);
+                let category;
+                if((item.counterIban && myOwnIbans.has(item.counterIban)) || looksLikeCardTransfer){
+                  category = 'Transfer';
+                } else if(customRuleCategory){
+                  category = customRuleCategory;
+                } else if(type === 'expense' && mccCategoryFor(item)){
+                  category = mccCategoryFor(item);
+                } else {
+                  category = matchCategory(desc, type);
+                  if(!category) category = type === 'income' ? 'Other income' : 'Other expense';
+                }
+                const occurred_at = localDateStr(new Date(item.time * 1000));
+                category = categoryRenames[category] || category;
+                transactions.unshift({
+                  id: generateTxId(), monoId: item.id, monoAccountId: account.id, accountId: 'mono:' + account.id, name: desc, category: category,
+                  amount: amount, currency: currency, occurred_at: occurred_at, occurredAtMs: item.time * 1000, mcc: item.mcc || null, originalMcc: item.originalMcc || null,
+                  editedAt: 0 // baseline — any manual edit on either device always outranks a freshly-synced import of the same transaction
+                });
+                existingIds.add(item.id);
+                imported++;
+                totalImportedSoFar++;
+              }catch(itemErr){
+                // One bad item (an unusual MCC, an unexpected field, a
+                // regex edge case) must never take the rest of this batch
+                // down with it. Without this, a single throw here aborted
+                // items.forEach entirely — and since Monobank returns items
+                // newest-first, that meant every item AFTER the bad one
+                // (typically the most recent days) silently never got
+                // imported, while older, already-synced history from a
+                // previous successful run looked completely unaffected.
+                // That combination — recent days missing, everything older
+                // fine — is exactly what looks like "the last few days
+                // aren't pulling," with no real explanation, since the
+                // outer catch below would have mislabeled this as a generic
+                // network error instead.
+                itemErrorCount++;
+                if(!firstItemError) firstItemError = itemErr.message;
               }
-              const occurred_at = localDateStr(new Date(item.time * 1000));
-              category = categoryRenames[category] || category;
-              transactions.unshift({
-                id: generateTxId(), monoId: item.id, monoAccountId: account.id, accountId: 'mono:' + account.id, name: desc, category: category,
-                amount: amount, currency: currency, occurred_at: occurred_at, occurredAtMs: item.time * 1000, mcc: item.mcc || null, originalMcc: item.originalMcc || null,
-                editedAt: 0 // baseline — any manual edit on either device always outranks a freshly-synced import of the same transaction
-              });
-              existingIds.add(item.id);
-              imported++;
-              totalImportedSoFar++;
             });
+            if(itemErrorCount > 0){
+              lastSyncError = `${itemErrorCount} transaction${itemErrorCount===1?'':'s'} in this window couldn't be processed and ${itemErrorCount===1?'was':'were'} skipped (first error: ${firstItemError}) — everything else in this window still imported normally.`;
+            }
             if(imported > 0){
               anyImported = true;
               const prevCount = (monoSyncStatus[account.id] && monoSyncStatus[account.id].count) || 0;
