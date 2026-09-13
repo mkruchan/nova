@@ -809,7 +809,7 @@ const CATEGORY_ICON = {
 // are actually running the same code rather than one silently being stuck
 // on an older download. Follows major.minor.patch: patch for a bug fix,
 // minor for a new feature, major for a significant rework.
-const APP_BUILD = 'v1.5.11';
+const APP_BUILD = 'v1.5.12';
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -1781,7 +1781,8 @@ function cloudPayload(){
     // and back off accordingly — otherwise two devices can easily collide
     // and rate-limit each other, which looks exactly like "sync sometimes
     // just doesn't happen" from either device's perspective.
-    lastMonoRequestAt: lastMonoRequestAt,
+    monoRequestAt: monoRequestAt,
+    lastMonoRequestAt: monoLastRequestAt(), // kept for devices still on an older build that only understands the single scalar
     appBuild: APP_BUILD
   };
 }
@@ -1958,7 +1959,22 @@ function applyCloudPayloadNonTransactionFields(payload, opts){
     if(Array.isArray(payload.hiddenFromViewCategories)) hiddenFromViewCategories = Array.from(new Set(hiddenFromViewCategories.concat(payload.hiddenFromViewCategories))).filter(function(c){ return UNDELETABLE_CATEGORIES.indexOf(c) === -1; });
     if(Array.isArray(payload.overviewExcludedCategories)) overviewExcludedCategories = Array.from(new Set(overviewExcludedCategories.concat(payload.overviewExcludedCategories))).filter(function(c){ return c !== 'Transfer'; });
   }
-  if(typeof payload.lastMonoRequestAt === 'number') lastMonoRequestAt = Math.max(lastMonoRequestAt, payload.lastMonoRequestAt);
+  // Per-key merge — each endpoint/account keeps whichever device hit it most
+  // recently, so two devices still can't collide on the SAME key while
+  // remaining free to work on different ones concurrently.
+  if(payload.monoRequestAt && typeof payload.monoRequestAt === 'object'){
+    for(const k in payload.monoRequestAt){
+      if(typeof payload.monoRequestAt[k] === 'number'){
+        monoRequestAt[k] = Math.max(monoRequestAt[k] || 0, payload.monoRequestAt[k]);
+      }
+    }
+  } else if(typeof payload.lastMonoRequestAt === 'number'){
+    // Legacy payload from a device on an older build: it only knew about one
+    // shared clock, so the safest reading is that client-info specifically
+    // may have been called then. Applying it to every account key instead
+    // would recreate exactly the over-throttling this change removes.
+    monoRequestAt['client-info'] = Math.max(monoRequestAt['client-info'] || 0, payload.lastMonoRequestAt);
+  }
 
   // Cloud-sourced budgets need the exact same normalization as locally-loaded
   // ones — otherwise a budget pulled from an older data shape leaves
@@ -5532,14 +5548,14 @@ window.connectMonobank = async function(){
   const statusEl = document.getElementById('monoStatus');
   if(!token){ statusEl.textContent = 'Paste your personal token first.'; statusEl.classList.add('error'); return; }
 
-  // This request shares the exact same per-token rate limit as every
-  // automatic sync — without checking/updating lastMonoRequestAt here too,
-  // opening this modal (a natural thing to do while checking on a sync
-  // issue) would silently consume a real request the rest of the app has
-  // no record of, causing the next automatic sync to come back genuinely
-  // rate-limited even though its own tracking thought enough time had passed.
-  if(Date.now() - lastMonoRequestAt < 61000){
-    statusEl.textContent = 'Just synced a moment ago — wait a bit before checking again (Monobank allows about once a minute).';
+  // This request hits /personal/client-info, so it consumes that endpoint's
+  // own once-a-minute budget — tracked and checked under the same key the
+  // automatic sync uses, so opening this modal (a natural thing to do while
+  // checking on a sync issue) can't silently consume a request the rest of
+  // the app has no record of. It does NOT touch any account's statement
+  // budget, which is tracked separately.
+  if(monoRateReadyIn(monoRateKey('client-info')) > 0){
+    statusEl.textContent = 'Just checked a moment ago — wait a bit before checking again (Monobank allows about once a minute).';
     statusEl.classList.add('error');
     return;
   }
@@ -5548,7 +5564,7 @@ window.connectMonobank = async function(){
   statusEl.classList.remove('error');
 
   try{
-    lastMonoRequestAt = Date.now();
+    markMonoRequest(monoRateKey('client-info'));
     const res = await fetch('https://api.monobank.ua/personal/client-info', {
       headers: { 'X-Token': token }
     });
@@ -5619,10 +5635,38 @@ let monoSyncSessionId = 0; // bumped on disconnect/token-switch so any in-flight
 // previous one's last request would just get rate-limited on its very first
 // call. Used to skip an attempt outright rather than making a request
 // destined to fail.
-let lastMonoRequestAt = 0;
-async function waitForMonoRateLimit(){
-  const elapsed = Date.now() - lastMonoRequestAt;
-  if(elapsed < 61000) await sleep(61000 - elapsed);
+// Monobank's documented rate limits are PER ENDPOINT, and for statements
+// PER ACCOUNT: /personal/client-info is 1 call/60s, and /personal/statement
+// is 1 call/60s for each individual account. They do NOT share one budget
+// across the token.
+//
+// This used to be tracked as a single global timestamp covering every
+// request of any kind, which made the app enforce a limit drastically
+// stricter than the one that actually exists. The consequences were exactly
+// the two symptoms of "nothing updates when I open the app":
+//   * Transactions: with N accounts, syncing was serialized into N separate
+//     61-second waits. On a 4-account setup the last account's transactions
+//     couldn't arrive until ~3 minutes after opening.
+//   * Balances: they come only from client-info, and the startup path
+//     deliberately SKIPS client-info to get transactions moving sooner — so
+//     balances couldn't refresh until that entire serialized statement run
+//     had finished AND a further gap had elapsed on top.
+// Keyed per endpoint/account, all of it can happen at once instead.
+let monoRequestAt = {}; // { [rateKey]: epoch ms of last request on that key }
+function monoRateKey(kind, accountId){ return accountId ? kind + ':' + accountId : kind; }
+function monoLastRequestAt(){
+  let max = 0;
+  for(const k in monoRequestAt){ if(monoRequestAt[k] > max) max = monoRequestAt[k]; }
+  return max;
+}
+function markMonoRequest(key){ monoRequestAt[key] = Date.now(); }
+function monoRateReadyIn(key){
+  const elapsed = Date.now() - (monoRequestAt[key] || 0);
+  return elapsed >= 61000 ? 0 : 61000 - elapsed;
+}
+async function waitForMonoRateLimit(key){
+  const wait = monoRateReadyIn(key);
+  if(wait > 0) await sleep(wait);
 }
 
 function hasEverManuallySynced(){
@@ -5645,72 +5689,58 @@ function isIOSDevice(){
   return /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream;
 }
 
-let hasSkippedInitialClientInfo = false;
 async function autoSyncMonobank(){
-  if(autoSyncInProgress) return;
+  if(autoSyncInProgress) return; // re-entrancy guard — this is what prevents overlapping runs, so no global time-based gate is needed on top of it
   const token = loadMonoToken();
   if(!token) return; // never connected — nothing to keep in sync
-
-  // Skip outright if we'd be making a request less than ~a minute after the
-  // last one — Monobank's limit is 1 request/minute across the whole token.
-  // This threshold is deliberately kept a few seconds UNDER the 60-second
-  // interval below, not equal to Monobank's actual 60-second limit: it used
-  // to be 61000, one second OVER the interval, which meant a clean periodic
-  // tick (fired every 60000ms) was ALWAYS just short of clearing it — every
-  // single scheduled background sync after the very first one in a session
-  // silently skipped itself, forever, with no self-correction. Automatic
-  // syncing only ever worked by accident, when some unrelated trigger
-  // (switching back to the tab, a click) happened to land more than 61
-  // seconds after the last attempt. The actual per-minute limit is still
-  // enforced precisely by waitForMonoRateLimit() just below, which waits out
-  // whatever's left rather than abandoning the whole cycle — this check only
-  // needs to avoid piling up concurrent attempts from rapid clicking.
-  if(Date.now() - lastMonoRequestAt < 55000) return;
 
   const mySessionId = monoSyncSessionId; // if this changes mid-run (disconnect/reconnect), this specific run stops itself rather than continuing with stale credentials
   autoSyncInProgress = true;
   try{
-    let accounts;
-    // The very first sync of a fresh page load can skip straight to
-    // fetching transactions using whatever account list is already cached
-    // from last time, rather than spending the first ~minute of the app
-    // being open on a client-info call before a single transaction can be
-    // requested. The account list/balances themselves might be a little
-    // stale until the NEXT sync cycle (60s later) refreshes them the normal
-    // way — an acceptable trade since the balances shown are already from
-    // this same cache regardless.
-    if(!hasSkippedInitialClientInfo && monoAccounts.length){
-      hasSkippedInitialClientInfo = true;
-      accounts = monoAccounts;
-      updateMonoProgressUI('Checking for new transactions…');
-    } else {
-      updateMonoProgressUI('Connecting to Monobank…');
-      lastMonoRequestAt = Date.now();
-      const res = await fetch('https://api.monobank.ua/personal/client-info', { headers: { 'X-Token': token } });
-      if(mySessionId !== monoSyncSessionId) return; // disconnected/reconnected while this was in flight — stop here, a fresh run will have already started or will start soon
-      if(!res.ok){
-        // Previously silent here — but a persistently-failing client-info call
-        // (repeated rate-limiting, an expired token, etc.) is exactly what
-        // "sync sometimes just doesn't happen, with no explanation" looks
-        // like from the outside. Tracked the same way a statement-request
-        // failure already was, so it's at least visible in the Bank modal.
-        let bodyText = '';
-        try{ bodyText = await res.text(); }catch(e2){}
-        const errMsg = `Connection check failed (HTTP ${res.status})${bodyText ? ': ' + bodyText.slice(0,200) : ''}`;
-        try{ localStorage.setItem('nova-mono-last-error', errMsg); }catch(e){}
-        try{ localStorage.setItem('nova-mono-last-sync-attempt', String(Date.now())); }catch(e){}
-        updateMonoProgressUI('');
-        return;
-      }
-      const data = await res.json();
-      if(mySessionId !== monoSyncSessionId) return;
-      accounts = data.accounts || [];
-      if(accounts.length){
-        monoAccounts = accounts; // keep this fresh so the Bank modal reflects the same list if opened
-        persistMonoAccounts();
-      }
+    // Balances come from client-info; transactions come from statement.
+    // Separate endpoints, separate budgets — so this fires immediately and
+    // runs ALONGSIDE the statement requests below rather than either being
+    // skipped (which left balances stale for minutes) or being waited on
+    // first (which delayed every transaction behind it).
+    const clientInfoKey = monoRateKey('client-info');
+    const clientInfoPromise = (async function(){
+      if(monoRateReadyIn(clientInfoKey) > 0) return null; // called too recently — keep the cached list this cycle rather than burning a wait
+      markMonoRequest(clientInfoKey);
+      try{
+        const res = await fetch('https://api.monobank.ua/personal/client-info', { headers: { 'X-Token': token } });
+        if(mySessionId !== monoSyncSessionId) return null;
+        if(!res.ok){
+          // A persistently-failing client-info call (an expired token,
+          // repeated rate-limiting) is exactly what "sync sometimes just
+          // doesn't happen, with no explanation" looks like from outside.
+          let bodyText = '';
+          try{ bodyText = await res.text(); }catch(e2){}
+          try{ localStorage.setItem('nova-mono-last-error', `Balance refresh failed (HTTP ${res.status})${bodyText ? ': ' + bodyText.slice(0,200) : ''}`); }catch(e){}
+          return null;
+        }
+        const data = await res.json();
+        if(mySessionId !== monoSyncSessionId) return null;
+        const fresh = data.accounts || [];
+        if(fresh.length){
+          monoAccounts = fresh; // balances land here — this is the ONLY thing that refreshes what the Accounts list shows
+          persistMonoAccounts();
+          if(currentView === 'finance') renderView('finance'); // reflect new balances the moment they arrive, without waiting for transactions
+        }
+        return fresh;
+      }catch(e){ return null; }
+    })();
+
+    // Statements can start from the cached account list right away. Only
+    // when there's no cached list at all is there anything to wait for.
+    let accounts = monoAccounts.length ? monoAccounts : (await clientInfoPromise) || [];
+    if(mySessionId !== monoSyncSessionId) return;
+    if(!accounts.length){
+      await clientInfoPromise;
+      try{ localStorage.setItem('nova-mono-last-sync-attempt', String(Date.now())); }catch(e){}
+      updateMonoProgressUI('');
+      return;
     }
-    if(!accounts.length){ updateMonoProgressUI(''); return; }
+    updateMonoProgressUI('Checking for new transactions…');
 
     const myOwnIbans = new Set(accounts.filter(function(a){ return a.iban; }).map(function(a){ return a.iban; }));
     const existingIds = new Set(transactions.filter(function(t){ return t.monoId; }).map(function(t){ return t.monoId; }));
@@ -5723,17 +5753,13 @@ async function autoSyncMonobank(){
     const MAX_WINDOW = 31 * 24 * 60 * 60 - 3600;
     const totalWindow = to - from;
 
-    // Monobank's 1-request-per-minute limit applies across ALL endpoints for
-    // a token, not per-endpoint — waitForMonoRateLimit() below is what
-    // actually enforces the gap when one's needed (e.g. after a client-info
-    // call just made); when this is the very first request of the session
-    // (the skip-ahead path above), lastMonoRequestAt is old enough that it
-    // resolves immediately, so transactions really do start arriving right
-    // away rather than a fixed minute-long wait every single time.
+    // Each account's statement endpoint has its OWN once-a-minute budget, so
+    // no global pre-wait belongs here — waiting is done per account inside
+    // syncOneAccount below, which lets every account's first request go out
+    // immediately and in parallel.
     updateMonoProgressUI(isFirstRun
       ? 'Starting your full history sync (this respects Monobank\'s rate limit — it can take a while for 5 years of data, but your recent transactions arrive first)…'
       : `Checking for anything new from ${localDateStr(new Date(from*1000))} through ${localDateStr(new Date(to*1000))}…`);
-    await waitForMonoRateLimit();
     if(mySessionId !== monoSyncSessionId) return;
 
     let anyImported = false;
@@ -5744,6 +5770,7 @@ async function autoSyncMonobank(){
 
     async function syncOneAccount(account, accountLabel){
       const currency = MONO_CURRENCY_MAP[account.currencyCode] || 'UAH';
+      const stmtKey = monoRateKey('statement', account.id);
       try{
         // A first-run full history pull needs chunking (Monobank caps each
         // request at ~31 days); the regular lightweight catch-up never
@@ -5758,9 +5785,9 @@ async function autoSyncMonobank(){
           const chunkStart = Math.max(chunkEnd - MAX_WINDOW, from);
           const pctDone = isFirstRun ? Math.round(((to - chunkEnd) / totalWindow) * 100) : null;
           updateMonoProgressUI(`Importing… ${accountLabel}${pctDone !== null ? `, ~${pctDone}% through your history` : ''} — ${totalImportedSoFar} transaction${totalImportedSoFar===1?'':'s'} imported so far`);
-          await waitForMonoRateLimit(); // covers every case uniformly: between chunks of one account, AND the handoff from one account's last request to the next account's first
+          await waitForMonoRateLimit(stmtKey); // this ACCOUNT's own statement budget — unrelated to other accounts or to client-info
           if(mySessionId !== monoSyncSessionId){ syncRanToCompletion = false; break; }
-          lastMonoRequestAt = Date.now();
+          markMonoRequest(stmtKey);
           const sres = await fetch(`https://api.monobank.ua/personal/statement/${account.id}/${chunkStart}/${chunkEnd}`, { headers: { 'X-Token': token } });
           if(mySessionId !== monoSyncSessionId){ syncRanToCompletion = false; break; } // disconnected mid-request — discard this response rather than importing it under the new session
           if(sres.ok){
@@ -5855,15 +5882,19 @@ async function autoSyncMonobank(){
       }catch(e){ lastSyncError = 'Network error reaching Monobank: ' + e.message; syncRanToCompletion = false; }
     }
 
-    // Accounts sync one at a time, not in parallel — they share the same
-    // token, and Monobank's rate limit applies across the whole token, not
-    // per-account. Syncing them concurrently would mean two accounts' first
-    // requests landing close together and getting rate-limited, which is
-    // exactly the kind of failure this function otherwise goes out of its
-    // way to avoid for a single account's own chunk requests.
-    for(let i = 0; i < accounts.length; i++){
-      await syncOneAccount(accounts[i], `account ${i+1} of ${accounts.length}`);
-    }
+    // Accounts sync in PARALLEL. Monobank's statement limit is one call per
+    // 60s *per account*, so separate accounts never compete for the same
+    // budget and there's nothing to serialize. This used to be a sequential
+    // loop on the belief that the limit was per-token, which forced a
+    // 61-second wait between accounts — the single biggest reason nothing
+    // appeared to update on opening the app, since with several accounts the
+    // later ones simply couldn't arrive for minutes. Each account's own
+    // chunk loop still waits on its own key, so a first-run multi-chunk
+    // history pull stays correctly throttled per account.
+    await Promise.all(accounts.map(function(account, i){
+      return syncOneAccount(account, `account ${i+1} of ${accounts.length}`);
+    }));
+    await clientInfoPromise; // let the balance refresh finish too, so the summary below reflects a fully-settled cycle
 
     try{ localStorage.setItem('nova-mono-last-sync-attempt', String(Date.now())); }catch(e){}
 
