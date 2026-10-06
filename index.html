@@ -4,17 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Nova</title>
+<script>try{var m=localStorage.getItem("nova-theme");document.documentElement.setAttribute("data-theme",(m==="light"||m==="dark")?m:"auto");var g=parseFloat(localStorage.getItem("nova-glass"));if(!isNaN(g))document.documentElement.style.setProperty("--glass-strength",String(Math.max(0,Math.min(1,g))));}catch(e){}</script>
 
 <!-- PWA / "Add to Home Screen" support for iPhone -->
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Nova">
-<meta name="theme-color" content="#0A0D18">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ECEEF5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#05060B" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230E1220'/%3E%3Ctext x='50' y='68' font-size='56' font-family='sans-serif' font-weight='800' fill='%235B8CFF' text-anchor='middle'%3EN%3C/text%3E%3C/svg%3E">
-<link rel="manifest" href='data:application/manifest+json,{"name":"Nova","short_name":"Nova","start_url":".","display":"standalone","background_color":"%230A0D18","theme_color":"%230A0D18"}'>
+<link rel="manifest" href='data:application/manifest+json,{"name":"Nova","short_name":"Nova","start_url":".","display":"standalone","background_color":"%23ECEEF5","theme_color":"%23ECEEF5"}'>
 
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap');
 
   :root{
     --bg:#0A0D18; --window:#0E1220; --panel:#141A2E; --panel-2:#182035;
@@ -26,7 +28,7 @@
   *{ box-sizing:border-box; }
   html,body{ margin:0; padding:0; height:100%; overflow-x:hidden; max-width:100%; }
   body{
-    background:#050710; font-family:'Inter', sans-serif; color:var(--white);
+    background:#050710; font-family:var(--font); color:var(--white);
     min-height:100vh; -webkit-font-smoothing:antialiased;
   }
   button{ font-family:inherit; cursor:pointer; }
@@ -37,8 +39,8 @@
   /* ---------- Loading / Auth screens ---------- */
   .center-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:16px; padding:24px; text-align:center; }
   .brand-lockup{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
-  .brand-mark-lg{ width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg, var(--blue), #7CA9FF); display:flex; align-items:center; justify-content:center; font-family:'Sora', sans-serif; font-weight:800; font-size:calc(23px * var(--font-scale, 1)); color:#0A0D18; }
-  .brand-name-lg{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(30px * var(--font-scale, 1)); }
+  .brand-mark-lg{ width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg, var(--blue), #7CA9FF); display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:800; font-size:calc(23px * var(--font-scale, 1)); color:#0A0D18; }
+  .brand-name-lg{ font-family:var(--font-display); font-weight:700; font-size:calc(30px * var(--font-scale, 1)); }
   .center-screen p{ color:var(--muted); font-size:calc(16px * var(--font-scale, 1)); max-width:380px; line-height:1.6; }
   .auth-input{ background:var(--panel); border:1px solid var(--border-2); color:var(--white); border-radius:10px; padding:11px 14px; font-size:calc(16px * var(--font-scale, 1)); width:280px; max-width:80vw; outline:none; }
   .auth-input:focus{ border-color:var(--blue); }
@@ -57,10 +59,10 @@
 
   .sidebar{ width:224px; background:var(--panel); border-right:1px solid var(--border); padding:20px 14px; flex-shrink:0; display:none; flex-direction:column; }
   .brand{ display:flex; align-items:center; gap:8px; margin:2px 4px 18px; }
-  .brand-mark{ width:22px; height:22px; border-radius:7px; background:linear-gradient(135deg, var(--blue), #7CA9FF); display:flex; align-items:center; justify-content:center; font-family:'Sora', sans-serif; font-weight:800; font-size:calc(14px * var(--font-scale, 1)); color:#0A0D18; }
-  .brand-name{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(20px * var(--font-scale, 1)); }
+  .brand-mark{ width:22px; height:22px; border-radius:7px; background:linear-gradient(135deg, var(--blue), #7CA9FF); display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:800; font-size:calc(14px * var(--font-scale, 1)); color:#0A0D18; }
+  .brand-name{ font-family:var(--font-display); font-weight:700; font-size:calc(20px * var(--font-scale, 1)); }
 
-  .side-label{ font-family:'Sora', sans-serif; font-size:calc(12px * var(--font-scale, 1)); font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted-dim); margin:14px 8px 8px; }
+  .side-label{ font-family:var(--font-display); font-size:calc(12px * var(--font-scale, 1)); font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted-dim); margin:14px 8px 8px; }
   .side-item{ display:flex; justify-content:space-between; align-items:center; padding:9px 10px; border-radius:7px; font-size:calc(17px * var(--font-scale, 1)); color:var(--muted); margin-bottom:2px; border:none; background:none; width:100%; text-align:left; }
   .side-item.active{ background:rgba(91,140,255,0.14); color:var(--white); }
   .side-item .tag{ font-size:calc(11px * var(--font-scale, 1)); font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted-dim); background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:5px; }
@@ -75,7 +77,7 @@
   .main-dim.on{ background:rgba(5,7,16,0.55); }
 
   .main-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:10px; }
-  .main-title{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(22px * var(--font-scale, 1)); }
+  .main-title{ font-family:var(--font-display); font-weight:700; font-size:calc(22px * var(--font-scale, 1)); }
   .main-title span{ color:var(--muted); font-weight:500; }
   .live-badge{ display:flex; align-items:center; gap:8px; font-size:calc(14px * var(--font-scale, 1)); color:var(--muted); flex-wrap:wrap; }
   .header-btn{ background:var(--panel-2); border:1px solid var(--border-2); color:var(--muted); border-radius:7px; padding:6px 12px; font-size:calc(13px * var(--font-scale, 1)); font-weight:600; white-space:nowrap; }
@@ -132,20 +134,20 @@
   .stats-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:18px; }
   .stat-card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
   .stat-label{ font-size:calc(14px * var(--font-scale, 1)); color:var(--muted); margin-bottom:10px; }
-  .stat-num{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(26px * var(--font-scale, 1)); margin-bottom:8px; }
+  .stat-num{ font-family:var(--font-display); font-weight:700; font-size:calc(26px * var(--font-scale, 1)); margin-bottom:8px; }
   .stat-delta{ font-size:calc(14px * var(--font-scale, 1)); font-weight:600; color:var(--muted-dim); }
 
   .mini-stats-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:10px 0 14px; }
   .mini-stat{ text-align:left; }
   .mini-stat-label{ font-size:calc(12px * var(--font-scale, 1)); color:var(--muted); margin-bottom:4px; }
-  .mini-stat-num{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(17px * var(--font-scale, 1)); color:var(--white); }
+  .mini-stat-num{ font-family:var(--font-display); font-weight:700; font-size:calc(17px * var(--font-scale, 1)); color:var(--white); }
   @media (max-width: 500px){
     .mini-stats-grid{ grid-template-columns:repeat(2,1fr); }
   }
 
   .charts-row{ display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:14px; margin-bottom:18px; }
   .chart-card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
-  .chart-title{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(16px * var(--font-scale, 1)); margin-bottom:12px; }
+  .chart-title{ font-family:var(--font-display); font-weight:700; font-size:calc(16px * var(--font-scale, 1)); margin-bottom:12px; }
   .chart-legend{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
   .legend-chip{ display:flex; align-items:center; gap:6px; font-size:calc(13px * var(--font-scale, 1)); color:var(--muted); background:var(--panel-2); border-radius:6px; padding:4px 8px; }
   .legend-swatch{ width:9px; height:9px; border-radius:2px; flex-shrink:0; }
@@ -169,7 +171,7 @@
   .picker-option-row .check{ color:var(--blue); }
   .filter-select:focus{ border-color:var(--blue); }
   .breakdown-total-label{ font-size:calc(13px * var(--font-scale, 1)); color:var(--muted); margin-top:6px; }
-  .breakdown-total{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(30px * var(--font-scale, 1)); margin-bottom:14px; }
+  .breakdown-total{ font-family:var(--font-display); font-weight:700; font-size:calc(30px * var(--font-scale, 1)); margin-bottom:14px; }
   .breakdown-body{ display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
   .breakdown-body .donut-wrap{ flex-shrink:0; }
   .cat-list{ flex:1; min-width:220px; }
@@ -205,7 +207,7 @@
 
   .detail-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
   .back-btn{ width:32px; height:32px; border-radius:50%; background:var(--panel); border:1px solid var(--border-2); color:var(--white); font-size:calc(21px * var(--font-scale, 1)); display:flex; align-items:center; justify-content:center; }
-  .detail-title{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(20px * var(--font-scale, 1)); }
+  .detail-title{ font-family:var(--font-display); font-weight:700; font-size:calc(20px * var(--font-scale, 1)); }
   .detail-filters{ margin-bottom:20px; }
   .detail-donut-row{ display:flex; justify-content:center; margin-bottom:20px; }
   .detail-donut-large .donut-wrap-mini svg{ width:220px; height:220px; }
@@ -227,7 +229,7 @@
   .budget-bar-fill{ height:100%; background:var(--blue); border-radius:5px; transition:width 0.3s ease; }
   .budget-bar-fill.over{ background:var(--rose); }
   .budget-headline{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin:8px 0 2px; }
-  .budget-headline-num{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(25px * var(--font-scale, 1)); color:var(--white); }
+  .budget-headline-num{ font-family:var(--font-display); font-weight:700; font-size:calc(25px * var(--font-scale, 1)); color:var(--white); }
   .budget-headline-num.over{ color:var(--rose); }
   .budget-headline-sub{ font-size:calc(14px * var(--font-scale, 1)); color:var(--muted); }
   .budget-headline-target{ margin-left:auto; font-size:calc(16px * var(--font-scale, 1)); font-weight:700; color:var(--white); font-variant-numeric:tabular-nums; }
@@ -236,7 +238,7 @@
   .month-nav{ display:flex; align-items:center; justify-content:center; gap:20px; margin-bottom:16px; }
   .month-nav-btn{ background:none; border:none; color:var(--muted); font-size:calc(21px * var(--font-scale, 1)); padding:4px 10px; }
   .month-nav-btn:hover{ color:var(--white); }
-  .month-nav-label{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(17px * var(--font-scale, 1)); min-width:140px; text-align:center; }
+  .month-nav-label{ font-family:var(--font-display); font-weight:700; font-size:calc(17px * var(--font-scale, 1)); min-width:140px; text-align:center; }
 
   .budget-total-row{ margin-bottom:16px; }
   .budget-total-head{ display:flex; justify-content:space-between; font-size:calc(14px * var(--font-scale, 1)); color:var(--white); margin-bottom:4px; }
@@ -270,9 +272,9 @@
   .bottom-row{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; margin-bottom:18px; }
   .panel-card{ background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
   .panel-title{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-  .panel-total{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(20px * var(--font-scale, 1)); color:var(--white); }
+  .panel-total{ font-family:var(--font-display); font-weight:700; font-size:calc(20px * var(--font-scale, 1)); color:var(--white); }
   .panel-total.neg{ color:var(--white); } .panel-total.pos{ color:var(--green); }
-  .panel-title h3{ font-family:'Sora', sans-serif; font-weight:700; font-size:calc(16px * var(--font-scale, 1)); margin:0; }
+  .panel-title h3{ font-family:var(--font-display); font-weight:700; font-size:calc(16px * var(--font-scale, 1)); margin:0; }
   .add-btn{ background:var(--blue-dim); color:var(--blue-light); border:none; border-radius:7px; padding:5px 10px; font-size:calc(13px * var(--font-scale, 1)); font-weight:600; }
 
   .tx-row{ display:flex; align-items:center; gap:11px; padding:9px 0; border-bottom:1px solid var(--border); min-height:44px; overflow:hidden; }
@@ -303,14 +305,14 @@
   /* Placeholder module screens */
   .placeholder-screen{ display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:60px 20px; color:var(--muted); }
   .placeholder-screen svg.icon{ width:38px; height:38px; color:var(--blue-dim); margin-bottom:14px; }
-  .placeholder-screen h2{ font-family:'Sora', sans-serif; color:var(--white); font-size:calc(21px * var(--font-scale, 1)); margin:0 0 8px; }
+  .placeholder-screen h2{ font-family:var(--font-display); color:var(--white); font-size:calc(21px * var(--font-scale, 1)); margin:0 0 8px; }
   .placeholder-screen p{ font-size:calc(15px * var(--font-scale, 1)); max-width:320px; line-height:1.6; }
 
   /* Modal */
   .modal-overlay{ position:fixed; inset:0; background:rgba(5,7,16,0.7); display:none; align-items:center; justify-content:center; z-index:100; padding:20px; }
   .modal-overlay.open{ display:flex; }
   .modal{ background:var(--panel); border:1px solid var(--border-2); border-radius:14px; padding:22px 24px; width:360px; max-width:100%; }
-  .modal h3{ font-family:'Sora', sans-serif; margin:0 0 16px; font-size:calc(18px * var(--font-scale, 1)); }
+  .modal h3{ font-family:var(--font-display); margin:0 0 16px; font-size:calc(18px * var(--font-scale, 1)); }
   .form-row{ margin-bottom:12px; }
   .form-row label{ display:block; font-size:calc(13px * var(--font-scale, 1)); color:var(--muted); margin-bottom:5px; }
   .form-row input, .form-row select{ width:100%; background:var(--panel-2); border:1px solid var(--border-2); color:var(--white); border-radius:8px; padding:9px 11px; font-size:calc(18px * var(--font-scale, 1)); outline:none; }
@@ -446,6 +448,377 @@
 .scan-toast{ position:fixed; left:50%; bottom:calc(96px + env(safe-area-inset-bottom)); transform:translate(-50%, 20px); background:var(--panel-2); border:1px solid var(--border-2); color:var(--white); padding:10px 16px; border-radius:20px; font-size:calc(14px * var(--font-scale, 1)); opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease; z-index:200; max-width:90vw; }
 .scan-toast.show{ opacity:1; transform:translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce){ .scan-sub, .add-opt-chev, .sheet, .scan-spinner, .voice-mic.on, .scan-toast, .scan-bar > div{ transition:none !important; animation:none !important; } }
+
+/* =====================================================================
+   Nova Glass — design system (iOS 27 / macOS 27 Liquid Glass, emulated in CSS)
+   Real Liquid Glass lensing isn't available to web content; this recreates the look with layered blur,
+   saturation, specular edges and tinted translucency — and honours the iOS 27 "translucency" control.
+   ===================================================================== */
+:root{
+  color-scheme: light dark;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* ink + surfaces */
+  --bg: light-dark(#ECEEF5, #05060B);
+  --window: transparent;
+  --panel: light-dark(#FFFFFF, #14161F);
+  --panel-2: light-dark(rgba(116,118,140,0.12), rgba(255,255,255,0.075));
+  --border: light-dark(rgba(50,54,80,0.09), rgba(255,255,255,0.075));
+  --border-2: light-dark(rgba(50,54,80,0.17), rgba(255,255,255,0.14));
+  --white: light-dark(#0D0F16, #F5F6FB);            /* primary text (name kept for the existing code) */
+  --muted: light-dark(#51566A, #AEB3CB);
+  --muted-dim: light-dark(#666B7E, #8F96B3);
+  --blue: #0A84FF;
+  --blue-light: light-dark(#0062CC, #82BCFF);
+  --blue-dim: light-dark(rgba(10,132,255,0.14), rgba(10,132,255,0.30));
+  --green: light-dark(#0F9D58, #3FDB98);
+  --rose: light-dark(#D92D43, #FF7A8C);
+  --warn: light-dark(#A24A00, #F5C26B);
+  --solid-bg: light-dark(#111218, #F5F6FB);          /* prominent button */
+  --solid-fg: light-dark(#FFFFFF, #0D0F16);
+
+  /* glass */
+  --glass-strength: 0.55;                              /* 0 = solid … 1 = clearest — set from Settings, like iOS 27's slider */
+  --glass-tint: light-dark(#FFFFFF, #1B1E2B);
+  --glass-opacity: calc(1 - var(--glass-strength) * 0.5);
+  --glass-bg: color-mix(in srgb, var(--glass-tint) calc(var(--glass-opacity) * 100%), transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--glass-tint) calc((var(--glass-opacity) + 1) * 50%), transparent);
+  --glass-blur: calc(12px + var(--glass-strength) * 22px);
+  --glass-sheen: light-dark(rgba(255,255,255,0.65), rgba(255,255,255,0.10));
+  --glass-hi: light-dark(rgba(255,255,255,0.95), rgba(255,255,255,0.15));
+  --glass-lo: light-dark(rgba(20,24,50,0.04), rgba(0,0,0,0.25));
+  --glass-edge: light-dark(rgba(255,255,255,0.8), rgba(255,255,255,0.07));
+  --hairline: light-dark(rgba(30,34,66,0.09), rgba(255,255,255,0.05));
+  --shadow: light-dark(rgba(40,50,100,0.22), rgba(0,0,0,0.6));
+  --scrim: light-dark(rgba(24,28,52,0.30), rgba(0,0,0,0.55));
+  --seg-active: light-dark(#FFFFFF, rgba(255,255,255,0.17));
+  --cat-sheen: light-dark(rgba(255,255,255,0.6), rgba(255,255,255,0.13));
+  --blob-1: light-dark(rgba(125,160,255,0.45), rgba(52,86,214,0.34));
+  --blob-2: light-dark(rgba(255,166,196,0.42), rgba(168,66,170,0.24));
+  --blob-3: light-dark(rgba(120,226,196,0.38), rgba(24,150,150,0.22));
+  --blob-4: light-dark(rgba(255,214,150,0.40), rgba(210,120,50,0.15));
+  --r-card: 26px; --r-ctl: 16px;
+}
+:root[data-theme="light"]{ color-scheme: light; }
+:root[data-theme="dark"]{ color-scheme: dark; }
+@media (prefers-reduced-transparency: reduce){ :root{ --glass-strength: 0 !important; --glass-blur: 0px !important; } }   /* the OS setting always wins over the in-app slider */
+@media (prefers-contrast: more){ :root{ --glass-strength: 0 !important; --glass-blur: 0px !important; --border: light-dark(rgba(0,0,0,.35), rgba(255,255,255,.4)); --border-2: light-dark(rgba(0,0,0,.5), rgba(255,255,255,.6)); --muted-dim: light-dark(#444958, #C3C8DC); } }
+
+html{ -webkit-text-size-adjust:100%; }
+body{ font-family:var(--font); background:var(--bg); color:var(--white); position:relative; isolation:isolate; letter-spacing:-0.005em; }
+body::before{ content:""; position:fixed; inset:-15%; z-index:-1; pointer-events:none;
+  background:
+    radial-gradient(42% 34% at 14% 8%, var(--blob-1), transparent 72%),
+    radial-gradient(36% 30% at 92% 18%, var(--blob-2), transparent 72%),
+    radial-gradient(46% 38% at 78% 96%, var(--blob-3), transparent 72%),
+    radial-gradient(34% 32% at 4% 86%, var(--blob-4), transparent 72%); }
+#app, .main-col, .main{ background:transparent; }
+.brand-name, .main-title, .chart-title, .panel-title h3, .detail-title, .stat-num, .mini-stat-num, .breakdown-total, .budget-headline-num, .panel-total, .modal h3, .month-nav-label, .placeholder-screen h2, .side-label{ font-family:var(--font-display); }
+:focus-visible{ outline:2px solid var(--blue); outline-offset:2px; }
+button{ -webkit-tap-highlight-color:transparent; }
+
+/* ---------- glass material ---------- */
+.chart-card, .stat-card, .panel-card, .ask-nova, .manual-acct-group, .setup-box, .modal, .sheet, .sidebar, .tabbar, .tx-sheet, .glass{
+  background: linear-gradient(180deg, var(--glass-sheen), transparent 50%), var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
+  border:1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), 0 0 0 0.5px var(--hairline), 0 16px 36px -18px var(--shadow);
+}
+.chart-card, .stat-card, .panel-card, .ask-nova{ border-radius:var(--r-card); }
+.manual-acct-group{ border-radius:20px; box-shadow: inset 0 1px 0 var(--glass-hi), 0 0 0 0.5px var(--hairline); }
+.panel-card, .chart-card{ padding:18px 20px; }
+.clickable-card{ transition:transform .18s ease, box-shadow .18s ease; }
+@media (hover:hover){ .clickable-card:hover{ transform:translateY(-1px); border-color:var(--glass-edge); } }
+.clickable-card:active{ transform:scale(0.992); }
+.chart-title, .panel-title h3{ font-size:calc(17px * var(--font-scale, 1)); font-weight:700; letter-spacing:-0.015em; }
+.mini-stat-num, .stat-num{ font-weight:700; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; }
+.mini-stat-label, .stat-label{ color:var(--muted); font-weight:500; }
+.breakdown-total{ letter-spacing:-0.03em; }
+.empty-note{ color:var(--muted-dim); }
+
+/* ---------- controls ---------- */
+.header-btn, .range-pill, .legend-chip, .add-btn{ background:var(--panel-2); border:none; color:var(--white); border-radius:999px; padding:7px 14px; font-weight:600; -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); }
+.header-btn svg.icon, .settings-row span svg.icon, .manual-acct-name svg.icon{ width:16px; height:16px; vertical-align:-3px; margin-right:6px; }
+.header-btn:hover, .range-pill:hover{ color:var(--white); background:var(--blue-dim); }
+.add-btn{ background:var(--blue-dim); color:var(--blue-light); }
+.header-icon-btn{ padding:7px 11px; }
+.range-preset-btn, .filter-select, .custom-select-btn{ background:var(--panel-2); border:none; color:var(--white); border-radius:14px; }
+.range-preset-btn:hover{ background:var(--blue-dim); color:var(--blue-light); border:none; }
+.custom-select-btn{ padding:10px 14px; }
+.filter-select{ padding:8px 12px; }
+.back-btn{ background:var(--glass-bg); border:1px solid var(--glass-edge); box-shadow: inset 0 1px 0 var(--glass-hi), 0 0 0 .5px var(--hairline); width:36px; height:36px; -webkit-backdrop-filter:blur(var(--glass-blur)); backdrop-filter:blur(var(--glass-blur)); }
+.btn-primary{ background:var(--solid-bg); color:var(--solid-fg); border-radius:999px; padding:12px 22px; }
+.btn-secondary{ background:var(--panel-2); color:var(--white); border:none; border-radius:999px; }
+.auth-input, .form-row input, .form-row select{ background:var(--panel-2); border:1px solid transparent; color:var(--white); border-radius:var(--r-ctl); padding:12px 14px; }
+.auth-input:focus, .form-row input:focus, .form-row select:focus{ border-color:var(--blue); background:var(--panel-2); }
+.form-row label{ color:var(--muted); font-weight:500; }
+.settings-row{ border-bottom-color:var(--border); padding:14px 2px; }
+.settings-row:hover{ color:var(--blue-light); }
+.side-label{ color:var(--muted-dim); letter-spacing:0.08em; font-weight:700; }
+.cat-row, .tx-row, .account-row, .mono-acct-row{ border-bottom-color:var(--border); }
+.day-header{ color:var(--white); }
+.live-dot{ color:var(--green); }
+
+/* segmented controls (Settings toggles etc.) */
+.type-toggle{ display:flex; gap:2px; padding:3px; background:var(--panel-2); border-radius:999px; }
+.type-btn{ background:transparent; border:none; border-radius:999px; color:var(--muted); padding:9px 0; }
+.type-btn.active, .type-btn[data-type].active{ background:var(--seg-active); color:var(--white); box-shadow:0 1px 3px rgba(0,0,0,.14), 0 0 0 .5px var(--hairline); }
+.type-btn[data-type="expense"].active, .type-btn[data-type="transfer"].active, .type-btn[data-type="refund"].active, .type-btn[data-type="income"].active{ background:var(--seg-active); color:var(--white); }
+
+/* ---------- list rows & colourful category tiles ---------- */
+.tx-icon{ width:42px; height:42px; border-radius:0; background:none; border:none; padding:0; color:inherit; }
+.tx-icon svg.icon{ width:42px; height:42px; }
+.tx-row{ gap:13px; padding:10px 0; min-height:60px; }
+.tx-name{ font-weight:600; font-size:calc(16px * var(--font-scale, 1)); letter-spacing:-0.01em; }
+.tx-meta{ color:var(--muted-dim); }
+.tx-amt{ font-weight:650; letter-spacing:-0.01em; }
+.tx-amt.neg{ color:var(--white); }
+.budget-cat-head .tx-icon, .manual-acct-name .tx-icon{ width:36px; height:36px; }
+.budget-cat-head .tx-icon svg.icon{ width:36px; height:36px; }
+.cat-swatch{ width:11px; height:11px; border-radius:4px; }
+
+/* ---------- progress ---------- */
+.budget-bar{ height:10px; border-radius:999px; background:var(--panel-2); }
+.budget-bar-fill{ border-radius:999px; background:linear-gradient(90deg, var(--blue), #5E9BFF); }
+.budget-bar-fill.over{ background:linear-gradient(90deg, var(--rose), #FF9A8B); }
+.budget-warning{ color:var(--warn); }
+.month-bar{ background:var(--panel-2); }
+.month-bar.current{ background:linear-gradient(180deg, #5E9BFF, var(--blue)); }
+
+/* ---------- app shell: floating glass tab bar (mobile) / inset glass sidebar (desktop) ---------- */
+.brand-mark, .brand-mark-lg{ background:linear-gradient(135deg, #5AA2FF, #6B5BFF); color:#fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 6px 14px -6px rgba(80,90,255,.6); }
+.side-item{ border-radius:14px; color:var(--muted); font-weight:600; padding:10px 12px; }
+.side-item.active{ background:var(--blue-dim); color:var(--white); box-shadow: inset 0 1px 0 var(--glass-hi); }
+.side-item.active .si-left svg.icon{ color:var(--blue-light); }
+.side-item .tag{ background:var(--panel-2); color:var(--muted-dim); }
+.side-footer{ border-top-color:var(--border); }
+.main-col{ position:relative; }
+.tabbar{ position:absolute; left:14px; right:14px; bottom:calc(10px + env(safe-area-inset-bottom)); border-radius:32px; padding:7px; gap:2px; border:1px solid var(--glass-edge); z-index:30; }
+.tab{ flex:1; border-radius:26px; padding:7px 4px 6px; color:var(--muted); font-weight:600; font-size:calc(11px * var(--font-scale, 1)); gap:3px; transition:background .2s ease, color .2s ease; }
+.tab .ic{ width:auto; height:auto; background:none !important; }
+.tab .ic svg.icon{ width:23px; height:23px; }
+.tab.active{ background:var(--blue-dim); color:var(--blue-light); box-shadow: inset 0 1px 0 var(--glass-hi); }
+.tab.active .ic{ background:none; }
+.fab-add{ background:linear-gradient(145deg, #4DA0FF, #5B6CFF); box-shadow: inset 0 1.5px 0 rgba(255,255,255,.55), inset 0 -2px 6px rgba(20,30,160,.25), 0 14px 30px -8px rgba(54,92,255,.65); width:58px; height:58px; border:1px solid rgba(255,255,255,.35); transition:transform .18s ease; }
+.fab-add svg{ color:#fff; width:26px; height:26px; stroke-width:2.2; }
+.fab-add:active{ transform:scale(.94); }
+@media (max-width: 760px){
+  .fab-add{ bottom:calc(96px + env(safe-area-inset-bottom)); }
+  .main{ padding-bottom:calc(172px + env(safe-area-inset-bottom)); }
+}
+@media (min-width: 761px){
+  #app{ padding:14px; gap:14px; }
+  .sidebar{ width:236px; margin:0; border-radius:30px; padding:20px 14px; height:100%; }
+  .main-col{ border-radius:30px; }
+  .main{ padding:26px 34px 120px; border-radius:30px; }
+  .fab-add{ right:34px; bottom:34px; }
+  .tabbar{ display:none; }
+}
+.ask-nova{ padding:13px 18px; }
+.orb{ background:radial-gradient(circle at 35% 30%, #BFE0FF, #4DA0FF 55%, #6B5BFF); }
+
+/* ---------- sheets & modals ---------- */
+.modal-overlay{ background:var(--scrim); }   /* no backdrop-filter here: it would stop the sheet's own glass from seeing the page */
+.modal{ border-radius:30px; padding:24px; border:1px solid var(--glass-edge); background: linear-gradient(180deg, var(--glass-sheen), transparent 40%), var(--glass-bg-strong); }
+.sheet{ background: linear-gradient(180deg, var(--glass-sheen), transparent 40%), var(--glass-bg-strong); }
+.modal h3, .sheet h3{ font-size:calc(20px * var(--font-scale, 1)); font-weight:700; letter-spacing:-0.02em; }
+.modal-actions button{ border-radius:999px; padding:12px 22px; font-weight:650; }
+.modal-cancel{ background:var(--panel-2); color:var(--white); }
+.modal-save{ background:var(--solid-bg); color:var(--solid-fg); }
+.modal-save:disabled{ opacity:.4; }
+.picker-option-row{ padding:15px 6px; }
+.picker-option-row.selected, .picker-option-row .check{ color:var(--blue-light); }
+@media (max-width: 760px){
+  .modal-overlay{ align-items:flex-end; padding:0; }
+  #confirmModalOverlay{ align-items:center; padding:20px; }
+  .modal-overlay:not(#confirmModalOverlay) .modal{ width:100%; max-width:560px; border-radius:32px 32px 0 0; padding:22px 20px calc(22px + env(safe-area-inset-bottom)); }
+  #confirmModalOverlay .modal{ border-radius:28px; }
+}
+.scan-toast{ background:var(--glass-bg-strong); -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(1.8); backdrop-filter:blur(var(--glass-blur)) saturate(1.8); border:1px solid var(--glass-edge); box-shadow: inset 0 1px 0 var(--glass-hi), 0 12px 30px -10px var(--shadow); font-weight:600; }
+
+/* ---------- scan/review components pick up the theme ---------- */
+.add-opt, .add-sub{ background:var(--panel-2); border:1px solid transparent; border-radius:20px; }
+.add-opt-ic{ background:var(--blue-dim); color:var(--blue-light); border-radius:14px; }
+.add-opt.expanded{ border-color:var(--blue); }
+.scan-notice{ background:var(--blue-dim); border:none; color:var(--blue-light); border-radius:14px; }
+.scan-notice .warn, .imp-note, .imp-badge.warn, .imp-badge.dupe{ color:var(--warn); }
+.imp-note{ background:color-mix(in srgb, var(--warn) 12%, transparent); border-color:color-mix(in srgb, var(--warn) 30%, transparent); border-radius:14px; }
+.imp-badge.warn, .imp-badge.dupe{ border-color:color-mix(in srgb, var(--warn) 40%, transparent); }
+.imp-row.dupe{ background:color-mix(in srgb, var(--warn) 7%, transparent); }
+.import-list{ border:none; background:var(--panel-2); border-radius:20px; }
+.imp-row input[type=text], .imp-row input[type=date], .imp-row select{ background:var(--panel); border-color:var(--border); }
+.voice-mic{ background:var(--panel-2); box-shadow:none; }
+.voice-text, .voice-lang, .import-modal .form-row select, .imp-ctl-c select{ background:var(--panel-2); border:1px solid transparent; border-radius:16px; }
+.voice-preview{ color:var(--green); }
+.scan-spinner{ border-color:var(--border-2); border-top-color:var(--blue); }
+
+/* ---------- reduce transparency: opaque surfaces ---------- */
+@media (prefers-reduced-transparency: reduce){
+  .chart-card, .stat-card, .panel-card, .ask-nova, .modal, .sheet, .sidebar, .tabbar, .tx-sheet, .glass, .scan-toast{ -webkit-backdrop-filter:none; backdrop-filter:none; background:var(--panel); }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+  .chart-card, .stat-card, .panel-card, .ask-nova, .modal, .sheet, .sidebar, .tabbar, .tx-sheet, .glass{ background:var(--panel); }
+}
+@media (prefers-reduced-motion: reduce){ .clickable-card, .tab, .fab-add{ transition:none !important; } }
+
+/* ---------- appearance block in Settings ---------- */
+.glass-slider{ margin:14px 2px 8px; }
+.glass-slider-head{ display:flex; justify-content:space-between; font-weight:600; font-size:calc(15px * var(--font-scale, 1)); margin-bottom:6px; }
+.glass-slider input[type=range]{ width:100%; accent-color:var(--blue); height:30px; }
+.glass-slider-scale{ display:flex; justify-content:space-between; font-size:calc(12px * var(--font-scale, 1)); color:var(--muted-dim); }
+.dashboard-cal{ display:inline-flex; width:38px; height:38px; align-items:center; justify-content:center; border-radius:13px; background:var(--blue-dim); color:var(--blue-light); }
+.dashboard-cal svg.icon{ width:20px; height:20px; }
+
+.chart-title-row{ flex-wrap:nowrap; gap:12px; align-items:flex-start; }
+.chart-title-row .chart-title{ min-width:0; }
+.chart-title-row .chevron{ margin-top:2px; }
+
+/* row actions: quiet by default */
+.tx-row .tx-edit, .tx-row .tx-del{ opacity:.55; padding:6px; }
+.tx-row .tx-edit svg{ width:17px; height:17px; }
+@media (max-width: 760px){ .tx-row .tx-del{ display:none; } .tx-row .tx-edit{ opacity:.7; } }
+@media (hover:hover) and (min-width: 761px){
+  .tx-row .tx-edit, .tx-row .tx-del{ opacity:0; transition:opacity .15s ease; }
+  .tx-row:hover .tx-edit, .tx-row:hover .tx-del, .tx-row:focus-within .tx-edit, .tx-row:focus-within .tx-del{ opacity:.85; }
+}
+
+.cat-tile{ width:30px; height:30px; flex-shrink:0; display:inline-flex; } .cat-tile svg.icon{ width:30px; height:30px; }
+@media (max-width:760px){ .cat-tile, .cat-tile svg.icon{ width:26px; height:26px; } }
+
+/* ===================== New add / edit transaction form ===================== */
+.glass-btn{ width:44px; height:44px; border-radius:50%; border:1px solid var(--glass-edge); background:linear-gradient(180deg, var(--glass-sheen), transparent 60%), var(--glass-bg); -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(1.8); backdrop-filter:blur(var(--glass-blur)) saturate(1.8); box-shadow: inset 0 1px 0 var(--glass-hi), 0 0 0 .5px var(--hairline), 0 8px 18px -10px var(--shadow); color:var(--white); display:flex; align-items:center; justify-content:center; flex-shrink:0; padding:0; transition:transform .15s ease; }
+.glass-btn:active{ transform:scale(.93); }
+.glass-btn svg.icon{ width:20px; height:20px; stroke-width:2; }
+.glass-btn.small{ width:38px; height:38px; }
+
+.tx-overlay{ align-items:flex-end; padding:0; }
+.tx-sheet{ width:100%; max-width:520px; height:calc(100dvh - 10px - env(safe-area-inset-top)); max-height:940px; border-radius:42px 42px 0 0; padding:14px 14px calc(12px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:10px; position:relative; overflow:hidden; animation:scSheetUp .26s ease; background: linear-gradient(180deg, var(--glass-sheen), transparent 35%), var(--glass-bg-strong); }
+@media (min-width: 761px){ .tx-overlay{ align-items:center; padding:20px; } .tx-sheet{ border-radius:38px; height:min(880px, 94vh); } }
+
+.tx-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-shrink:0; }
+.tx-seg{ flex:0 1 auto; min-width:0; gap:0; margin:0; padding:3px; border:1px solid var(--glass-edge); background:linear-gradient(180deg, var(--glass-sheen), transparent 70%), var(--glass-bg); -webkit-backdrop-filter:blur(var(--glass-blur)); backdrop-filter:blur(var(--glass-blur)); box-shadow: inset 0 1px 0 var(--glass-hi), 0 0 0 .5px var(--hairline); }
+.tx-seg .type-btn{ display:flex; align-items:center; justify-content:center; gap:6px; min-width:38px; height:40px; padding:0 9px; flex:0 0 auto; transition:background .2s ease, color .2s ease; }
+.tx-seg .type-btn svg.icon{ width:19px; height:19px; stroke-width:2.1; }
+.tx-seg .type-btn span{ display:none; font-weight:650; font-size:calc(16px * var(--font-scale,1)); }
+.tx-seg .type-btn.active span{ display:inline; }
+.tx-seg .type-btn[data-type="income"] svg{ color:var(--green); }
+.tx-seg .type-btn[data-type="expense"] svg{ color:light-dark(#EA580C, #FF9F5A); }
+.tx-seg .type-btn[data-type="transfer"] svg{ color:var(--blue-light); }
+.tx-seg .type-btn[data-type="refund"] svg{ color:light-dark(#7C3AED, #B79BFF); }
+.tx-seg .type-btn.active[data-type="income"]{ background:color-mix(in srgb, var(--green) 18%, transparent); color:var(--green); box-shadow:none; }
+.tx-seg .type-btn.active[data-type="expense"]{ background:color-mix(in srgb, #FF8A3D 20%, transparent); color:light-dark(#C2410C, #FFB37A); box-shadow:none; }
+.tx-seg .type-btn.active[data-type="transfer"]{ background:var(--blue-dim); color:var(--blue-light); box-shadow:none; }
+.tx-seg .type-btn.active[data-type="refund"]{ background:color-mix(in srgb, #8B5CF6 18%, transparent); color:light-dark(#6D28D9, #C4B0FF); box-shadow:none; }
+.tx-menu{ position:absolute; right:14px; top:68px; z-index:5; min-width:250px; padding:6px; border-radius:22px; background:var(--glass-bg-strong); -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(1.8); backdrop-filter:blur(var(--glass-blur)) saturate(1.8); border:1px solid var(--glass-edge); box-shadow: inset 0 1px 0 var(--glass-hi), 0 18px 40px -12px var(--shadow); }
+.tx-menu[hidden]{ display:none; }
+.tx-menu button{ display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:none; border:none; color:var(--white); padding:12px 12px; border-radius:16px; font-size:calc(15px * var(--font-scale,1)); font-weight:550; }
+.tx-menu button:hover{ background:var(--panel-2); }
+.tx-menu button.danger{ color:var(--rose); }
+.tx-menu svg.icon{ width:18px; height:18px; }
+
+.tx-body{ flex:1 1 auto; min-height:84px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:4px; padding:0 8px; }
+.tx-caption{ font-size:calc(13px * var(--font-scale,1)); font-weight:600; color:var(--muted); letter-spacing:.01em; }
+.tx-amount{ font-family:var(--font-display); font-weight:700; letter-spacing:-0.04em; font-size:clamp(44px, 9.4dvh, 84px); line-height:1.05; display:flex; align-items:baseline; justify-content:center; gap:.08em; max-width:100%; overflow:hidden; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.tx-sym{ opacity:.9; } .tx-amount .tx-empty{ color:var(--muted-dim); }
+.tx-amount.shake{ animation:txShake .35s ease; color:var(--rose); }
+@keyframes txShake{ 20%{ transform:translateX(-8px); } 40%{ transform:translateX(7px); } 60%{ transform:translateX(-5px); } 80%{ transform:translateX(3px); } }
+.tx-sub{ min-height:20px; font-size:calc(14px * var(--font-scale,1)); color:var(--muted); display:flex; gap:10px; justify-content:center; flex-wrap:wrap; font-variant-numeric:tabular-nums; }
+#txExprResult{ font-weight:650; color:var(--blue-light); }
+.tx-amt-label{ display:none; font-size:calc(12px * var(--font-scale,1)); font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--muted-dim); }
+.tx-is-transfer .tx-amt-label{ display:block; }
+
+.tx-chips{ display:flex; gap:8px; align-items:stretch; flex-shrink:0; }
+.tx-acct-wrap{ flex:1 1 auto; min-width:0; display:flex; }
+.tx-chip{ position:relative; display:flex; align-items:center; gap:10px; height:58px; border-radius:999px; border:none; background:var(--panel-2); color:var(--white); padding:0 18px; font-size:calc(16px * var(--font-scale,1)); font-weight:550; text-align:left; transition:background .15s ease; }
+.tx-chip:active{ background:var(--blue-dim); }
+.tx-chip-acct{ flex:1; min-width:0; padding:0 18px 0 8px; }
+svg.icon.tx-acct-ic{ width:42px; height:42px; flex-shrink:0; }
+.tx-chip-txt{ display:flex; flex-direction:column; min-width:0; line-height:1.2; }
+.tx-chip-txt b{ font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.tx-chip-txt small{ color:var(--muted); font-size:calc(13px * var(--font-scale,1)); font-weight:500; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.tx-chip-date{ flex:0 0 auto; justify-content:center; cursor:pointer; }
+.tx-chip-date input{ position:absolute; inset:0; width:100%; height:100%; opacity:0; font-size:16px; cursor:pointer; border:none; padding:0; background:none; }
+.tx-chip-cur{ flex:0 0 58px; justify-content:center; padding:0; font-size:calc(20px * var(--font-scale,1)); font-weight:650; }
+.tx-is-transfer #txAccountRow{ display:none !important; }
+
+.tx-transfer-block{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; flex-shrink:0; }
+.tx-transfer-block > #txTransferToAmountRow, .tx-transfer-block > #txTransferConversionPreview{ grid-column:1 / -1; }
+.tx-transfer-block:empty, .tx-transfer-block .form-row{ margin:0; }
+.tx-transfer-block .form-row label{ font-size:calc(12px * var(--font-scale,1)); margin:0 0 5px 8px; }
+.tx-transfer-block .custom-select-btn{ border-radius:20px; padding:14px 16px; background:var(--panel-2); }
+.tx-transfer-block input{ border-radius:20px; }
+
+.tx-note{ flex-shrink:0; width:100%; height:54px; border-radius:22px; border:1px solid transparent; background:var(--panel-2); color:var(--white); padding:0 18px; font-size:16px; font-family:inherit; outline:none; }
+.tx-note::placeholder{ color:var(--muted-dim); }
+.tx-note:focus{ border-color:var(--blue); }
+
+.tx-cats{ flex-shrink:0; background:var(--panel-2); border-radius:26px; padding:10px 0 8px; overflow:hidden; }
+.tx-cat-scroll{ display:flex; gap:9px; overflow-x:auto; padding:14px 14px 10px; scrollbar-width:none; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; align-items:center; }
+.tx-cat-scroll::-webkit-scrollbar{ display:none; }
+.tx-cat-tiles{ display:contents; }
+.tx-cat-util, .tx-cat{ flex:0 0 auto; width:54px; height:54px; border-radius:18px; padding:0; border:none; scroll-snap-align:center; display:flex; align-items:center; justify-content:center; transition:transform .2s cubic-bezier(.3,1.4,.5,1), box-shadow .2s ease; background:none; }
+.tx-cat-util{ border:1.5px dashed var(--border-2); color:var(--muted); background:transparent; }
+.tx-cat-util svg.icon{ width:22px; height:22px; }
+.tx-cat svg.icon{ width:54px; height:54px; fill:none; stroke:none; }
+.tx-cat[aria-selected="true"]{ transform:scale(1.2); box-shadow:0 0 0 2.5px var(--white), 0 10px 20px -8px var(--shadow); margin:0 7px; }
+.tx-cat-label{ text-align:center; font-size:calc(15px * var(--font-scale,1)); font-weight:600; color:var(--muted); padding:6px 14px 0; min-height:24px; letter-spacing:-0.005em; }
+
+.tx-keypad{ display:grid; grid-template-columns:repeat(3, 1fr) 0.62fr; gap:8px; flex-shrink:0; }
+.tx-key{ height:clamp(46px, 7dvh, 62px); border-radius:22px; border:none; background:light-dark(rgba(110,112,135,.20), rgba(255,255,255,.13)); color:var(--white); font-family:var(--font-display); font-size:calc(27px * var(--font-scale,1)); font-weight:500; padding:0; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; touch-action:manipulation; transition:transform .1s ease, background .15s ease; }
+.tx-key.tx-op, .tx-key.tx-soft{ background:var(--panel-2); font-size:calc(26px * var(--font-scale,1)); }
+.tx-key:active{ transform:scale(.94); background:var(--blue-dim); }
+.tx-key svg.icon{ width:26px; height:26px; stroke-width:1.8; }
+.tx-save{ flex-shrink:0; height:58px; border-radius:999px; border:none; background:var(--solid-bg); color:var(--solid-fg); font-size:calc(18px * var(--font-scale,1)); font-weight:650; letter-spacing:-0.01em; box-shadow:0 14px 28px -14px var(--shadow); transition:transform .12s ease; }
+.tx-save:active{ transform:scale(.985); }
+@media (max-height: 700px){ .tx-sheet{ gap:7px; } .tx-note{ height:46px; } .tx-chip{ height:50px; } .tx-chip-cur{ flex-basis:50px; } .tx-acct-ic{ width:36px; height:36px; } .tx-cat-util, .tx-cat, .tx-cat svg.icon{ width:46px; height:46px; } .tx-save{ height:52px; } .tx-cats{ padding:6px 0 4px; } }
+
+/* category sheet */
+.tx-cat-sheet{ max-width:520px; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
+.tx-cs-head{ display:flex; align-items:center; justify-content:space-between; margin:0 4px 10px; }
+.tx-cs-head h3{ margin:0; }
+.tx-search{ display:flex; align-items:center; gap:10px; background:var(--panel-2); border-radius:18px; padding:0 14px; margin-bottom:12px; color:var(--muted); }
+.tx-search svg.icon{ width:18px; height:18px; flex-shrink:0; }
+.tx-search input{ flex:1; border:none; background:none; outline:none; height:46px; color:var(--white); font-size:16px; font-family:inherit; min-width:0; }
+.tx-cat-grid{ display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px 8px; max-height:44vh; overflow-y:auto; padding:2px 2px 8px; -webkit-overflow-scrolling:touch; }
+.tx-cat-grid h4{ grid-column:1/-1; margin:6px 4px 0; font-size:calc(12px * var(--font-scale,1)); text-transform:uppercase; letter-spacing:.08em; color:var(--muted-dim); }
+.tx-cg{ display:flex; flex-direction:column; align-items:center; gap:6px; background:none; border:none; color:var(--white); padding:4px 2px; border-radius:16px; font-size:calc(12px * var(--font-scale,1)); font-weight:550; text-align:center; line-height:1.2; }
+.tx-cg svg.icon{ width:52px; height:52px; fill:none; stroke:none; }
+.tx-cg{ min-width:0; } .tx-cg span{ max-width:100%; overflow:hidden; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.tx-cg[aria-selected="true"] svg.icon{ filter:drop-shadow(0 0 0 transparent); outline:2.5px solid var(--white); outline-offset:2px; border-radius:17px; }
+.tx-cg:active{ background:var(--blue-dim); }
+.tx-newcat{ display:flex; gap:8px; margin-top:12px; }
+.tx-newcat input{ flex:1; min-width:0; height:46px; border-radius:18px; border:1px solid transparent; background:var(--panel-2); color:var(--white); padding:0 14px; font-size:16px; font-family:inherit; outline:none; }
+.tx-newcat input:focus{ border-color:var(--blue); }
+.tx-newcat button{ border:none; border-radius:999px; padding:0 22px; background:var(--solid-bg); color:var(--solid-fg); font-weight:650; font-size:15px; }
+.tx-empty-note{ grid-column:1/-1; text-align:center; color:var(--muted-dim); padding:18px 0; }
+
+.tx-sheet:not(.tx-is-transfer) #txTransferConversionPreview{ display:none !important; }
+.tx-cats{ padding:2px 0 6px; }
+
+/* transfer mode: compact so everything (incl. Save) fits */
+.tx-is-transfer .tx-body{ flex:0 0 auto; min-height:0; padding-top:2px; }
+.tx-is-transfer .tx-amount{ font-size:clamp(34px, 6.4dvh, 54px); }
+.tx-is-transfer .tx-chips{ gap:8px; } .tx-is-transfer .tx-chip{ height:48px; } .tx-is-transfer .tx-chip-date{ flex:1; } .tx-is-transfer .tx-chip-cur{ flex-basis:48px; }
+.tx-is-transfer .tx-note{ height:46px; }
+.tx-is-transfer .tx-key{ height:clamp(40px, 5.8dvh, 54px); border-radius:18px; }
+.tx-is-transfer .tx-save{ height:52px; }
+.tx-is-transfer #txTransferConversionPreview{ font-size:calc(12.5px * var(--font-scale,1)); margin:0 6px !important; }
+.tx-transfer-block .custom-select-btn{ padding:11px 14px; }
+.tx-transfer-block .amount-currency-row{ gap:8px; }
+.tx-transfer-block .form-row label{ margin-bottom:3px; }
+.tx-transfer-block .form-row input{ padding:11px 14px; }
+
+/* short windows (laptops): keep the amount fully visible */
+.tx-body{ min-height:108px; }
+.tx-amount{ line-height:1.2; padding-block:2px; }
+@media (max-height: 900px){
+  .tx-sheet{ gap:8px; }
+  .tx-key{ height:clamp(40px, 6.2dvh, 56px); border-radius:18px; }
+  .tx-chip{ height:52px; } .tx-chip-cur{ flex-basis:52px; } .tx-note{ height:48px; } .tx-save{ height:52px; }
+  .tx-cat-scroll{ padding:10px 14px 6px; }
+}
 </style>
 </head>
 <body>
@@ -476,6 +849,7 @@
     <symbol id="ic-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></symbol>
     <symbol id="ic-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></symbol>
     <symbol id="ic-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></symbol>
+    <linearGradient id="cg-sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--cat-sheen,rgba(255,255,255,.55))"/><stop offset=".6" style="stop-color:rgba(255,255,255,0)"/></linearGradient><symbol id="ic-c-education" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#6366F1" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#6366F1" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#6366F1" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 9.5 12 5l9.5 4.5L12 14z" fill="#6366F1" fill-opacity=".26"/><path d="M6.5 11.8V16c0 1.4 2.5 2.8 5.5 2.8s5.5-1.4 5.5-2.8v-4.2"/><path d="M21.5 9.5V15"/></g></symbol><symbol id="ic-c-travel" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#0EA5E9" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#0EA5E9" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#0EA5E9" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7.5" width="17" height="12.5" rx="3" fill="#0EA5E9" fill-opacity=".26"/><path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5"/><path d="M3.5 13.5h17"/></g></symbol><symbol id="ic-c-home" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#14B8A6" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#14B8A6" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#14B8A6" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 10.5 12 4l7.5 6.5V19a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19z" fill="#14B8A6" fill-opacity=".26"/><path d="M9.8 20.5v-5.2h4.4v5.2"/></g></symbol><symbol id="ic-c-health" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#F43F5E" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#F43F5E" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#F43F5E" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 4h5v5.5H20v5h-5.5V20h-5v-5.5H4v-5h5.5z" fill="#F43F5E" fill-opacity=".26"/></g></symbol><symbol id="ic-c-living" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#3B82F6" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#3B82F6" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#3B82F6" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h12v17l-3-1.8-3 1.8-3-1.8-3 1.8z" fill="#3B82F6" fill-opacity=".26"/><path d="M9.2 8.5h5.6M9.2 12h5.6"/></g></symbol><symbol id="ic-c-family" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#FB7185" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#FB7185" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#FB7185" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3" fill="#FB7185" fill-opacity=".26"/><circle cx="17" cy="9.2" r="2.3"/><path d="M3.5 19.5c0-3.2 2.5-5.5 5.5-5.5s5.5 2.3 5.5 5.5"/><path d="M15.8 14.2c2.8.1 4.7 2 4.7 4.8"/></g></symbol><symbol id="ic-c-star" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#8B5CF6" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#8B5CF6" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#8B5CF6" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3.5 2.6 5.5 6 .8-4.4 4.1 1.1 5.9L12 16.9 6.7 19.8l1.1-5.9L3.4 9.8l6-.8z" fill="#8B5CF6" fill-opacity=".26"/></g></symbol><symbol id="ic-c-transport" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#2563EB" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#2563EB" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#2563EB" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 11.5 6.6 7a2 2 0 0 1 1.9-1.3h7a2 2 0 0 1 1.9 1.3L19 11.5"/><rect x="3.5" y="11.5" width="17" height="6.5" rx="2.5" fill="#2563EB" fill-opacity=".26"/><circle cx="7.8" cy="18.2" r="1.6" fill="#2563EB"/><circle cx="16.2" cy="18.2" r="1.6" fill="#2563EB"/></g></symbol><symbol id="ic-c-scooter" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#06B6D4" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#06B6D4" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#06B6D4" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17.5" r="2.6" fill="#06B6D4" fill-opacity=".26"/><circle cx="18" cy="17.5" r="2.6" fill="#06B6D4" fill-opacity=".26"/><path d="M8.6 17.5H16"/><path d="M15.6 17 17.7 5H20"/></g></symbol><symbol id="ic-c-gift" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#D946EF" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#D946EF" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#D946EF" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="10.5" width="17" height="10" rx="2" fill="#D946EF" fill-opacity=".26"/><rect x="3" y="7" width="18" height="3.8" rx="1.4"/><path d="M12 7v13.5"/><path d="M12 7C10.6 3.6 7 3.8 7.3 6c.2 1.3 2.4 1.2 4.7 1ZM12 7c1.4-3.4 5-3.2 4.7-1-.2 1.3-2.4 1.2-4.7 1Z"/></g></symbol><symbol id="ic-c-charity" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#E11D48" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#E11D48" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#E11D48" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.3-7-9.8A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7 2.6C19 15.7 12 20 12 20Z" fill="#E11D48" fill-opacity=".26"/><path d="M12 11.2v3.6M10.2 13h3.6"/></g></symbol><symbol id="ic-c-groceries" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#F59E0B" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#F59E0B" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#F59E0B" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 10.2h17.6l-1.7 8.4a2 2 0 0 1-2 1.6H6.9a2 2 0 0 1-2-1.6z" fill="#F59E0B" fill-opacity=".26"/><path d="m8 10.2 3-6.2M16 10.2 13 4"/><path d="M9 13.5v3.8M12 13.5v3.8M15 13.5v3.8"/></g></symbol><symbol id="ic-c-eating" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#EF4444" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#EF4444" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#EF4444" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3.5v5.5a2.4 2.4 0 0 0 4.8 0V3.5"/><path d="M7.4 3.5v17"/><path d="M19.5 20.5V3.5c-2.7 1-4.2 3.4-4.2 6.5v3a1.5 1.5 0 0 0 1.5 1.5h2.7"/></g></symbol><symbol id="ic-c-entertainment" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#A855F7" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#A855F7" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#A855F7" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16a1 1 0 0 1 1 1v2.7a2.3 2.3 0 0 0 0 4.6v2.7a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2.7a2.3 2.3 0 0 0 0-4.6V7.5a1 1 0 0 1 1-1z" fill="#A855F7" fill-opacity=".26"/><path d="M14.5 7v10" stroke-dasharray="1.6 2.2"/></g></symbol><symbol id="ic-c-electronics" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#0891B2" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#0891B2" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#0891B2" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="5" width="15" height="11" rx="2" fill="#0891B2" fill-opacity=".26"/><path d="M2.5 19.5h19"/></g></symbol><symbol id="ic-c-digital" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#7C3AED" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#7C3AED" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#7C3AED" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5a4.5 4.5 0 0 1-.6-8.9 6 6 0 0 1 11.5 1.7 3.6 3.6 0 0 1-.9 7.2z" fill="#7C3AED" fill-opacity=".26"/><path d="M12 12.5v4.5M10 15l2 2 2-2"/></g></symbol><symbol id="ic-c-clothing" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#F97316" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#F97316" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#F97316" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8.2 3.5 3 6.3l2 4.2 3-1.3v11.3h8V9.2l3 1.3 2-4.2-5.2-2.8a3.8 3.8 0 0 1-7.6 0z" fill="#F97316" fill-opacity=".26"/></g></symbol><symbol id="ic-c-leisure" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#22C55E" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#22C55E" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#22C55E" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="16.5" r="3.5" fill="#22C55E" fill-opacity=".26"/><circle cx="18" cy="16.5" r="3.5" fill="#22C55E" fill-opacity=".26"/><path d="M6 16.5 9.5 9h5l3.5 7.5M14.5 9 12 16.5H6M9.5 9 8.3 6.2H6.6"/></g></symbol><symbol id="ic-c-entrepreneur" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#EAB308" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#EAB308" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#EAB308" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17.8h6M10 21h4"/><path d="M12 3.5a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1 2v.5h5.2v-.5c0-.8.4-1.5 1-2A6 6 0 0 0 12 3.5z" fill="#EAB308" fill-opacity=".26"/></g></symbol><symbol id="ic-c-investments" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#10B981" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#10B981" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#10B981" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m3.5 17 5.5-5.5 4 4 7.5-7.5"/><path d="M15 8h5.5v5.5"/><path d="M3.5 20.5h17" stroke-opacity=".45"/></g></symbol><symbol id="ic-c-flowers" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#F472B6" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#F472B6" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#F472B6" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6.3" r="3" fill="#F472B6" fill-opacity=".26"/><circle cx="17.7" cy="12" r="3" fill="#F472B6" fill-opacity=".26"/><circle cx="12" cy="17.7" r="3" fill="#F472B6" fill-opacity=".26"/><circle cx="6.3" cy="12" r="3" fill="#F472B6" fill-opacity=".26"/><circle cx="12" cy="12" r="2" fill="#F472B6" stroke="none"/></g></symbol><symbol id="ic-c-smoking" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#78716C" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#78716C" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#78716C" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="14" width="14" height="4" rx="1" fill="#78716C" fill-opacity=".26"/><path d="M16.5 14v4M19.5 14v4"/><path d="M17.5 5.5c0 1.8 2.2 1.8 2.2 3.6M21 4c0 1.4 1.1 1.4 1.1 2.8"/></g></symbol><symbol id="ic-c-selfcare" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#C084FC" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#C084FC" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#C084FC" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3.5 12.8 9l5.5 1.8-5.5 1.8L11 18.1l-1.8-5.5L3.7 10.8 9.2 9z" fill="#C084FC" fill-opacity=".26"/><path d="M19 15v5M16.5 17.5h5"/></g></symbol><symbol id="ic-c-music" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#E879F9" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#E879F9" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#E879F9" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17.5V5.5l11-2v12"/><circle cx="6.5" cy="17.5" r="2.7" fill="#E879F9" fill-opacity=".26"/><circle cx="17.5" cy="15.5" r="2.7" fill="#E879F9" fill-opacity=".26"/></g></symbol><symbol id="ic-c-sport" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#84CC16" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#84CC16" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#84CC16" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="6.5" width="3" height="11" rx="1" fill="#84CC16" fill-opacity=".26"/><rect x="16" y="6.5" width="3" height="11" rx="1" fill="#84CC16" fill-opacity=".26"/><path d="M8 12h8M3.5 9.5v5M20.5 9.5v5"/></g></symbol><symbol id="ic-c-services" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#0D9488" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#0D9488" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#0D9488" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.6 6.2a4.2 4.2 0 0 0-5.5 5.4L3.5 17.2a1.9 1.9 0 0 0 2.7 2.7l5.6-5.6a4.2 4.2 0 0 0 5.4-5.5l-2.7 2.7-2.4-.6-.6-2.4z" fill="#0D9488" fill-opacity=".26"/></g></symbol><symbol id="ic-c-fees" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#EA580C" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#EA580C" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#EA580C" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.3" cy="7.3" r="2.6" fill="#EA580C" fill-opacity=".26"/><circle cx="16.7" cy="16.7" r="2.6" fill="#EA580C" fill-opacity=".26"/><path d="M18.5 5.5 5.5 18.5"/></g></symbol><symbol id="ic-c-taxes" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#4F46E5" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#4F46E5" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#4F46E5" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 9.5 12 4l8.5 5.5z" fill="#4F46E5" fill-opacity=".26"/><path d="M5.5 11v6.5M9.8 11v6.5M14.2 11v6.5M18.5 11v6.5M3.5 20h17"/></g></symbol><symbol id="ic-c-other" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#94A3B8" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#94A3B8" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#94A3B8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5V4.5h8l9 9-8 8z" fill="#94A3B8" fill-opacity=".26"/><circle cx="8" cy="9" r="1.3" fill="#94A3B8" stroke="none"/></g></symbol><symbol id="ic-c-refund" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#22C55E" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#22C55E" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#22C55E" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h9.5a6 6 0 0 1 0 12H11"/></g></symbol><symbol id="ic-c-transfer" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#3B82F6" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#3B82F6" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#3B82F6" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m7 4-4 4 4 4"/><path d="M3 8h13"/><path d="m17 20 4-4-4-4"/><path d="M21 16H8"/></g></symbol><symbol id="ic-c-loan" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#DC2626" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#DC2626" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#DC2626" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="19" height="11" rx="2.5" fill="#DC2626" fill-opacity=".26"/><circle cx="12" cy="12" r="2.6"/><path d="M6 10v.01M18 14v.01"/></g></symbol><symbol id="ic-c-salary" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#16A34A" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#16A34A" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#16A34A" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 7.5V6a2 2 0 0 0-2-2h-11a2 2 0 0 0 0 4h13a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V6" fill="#16A34A" fill-opacity=".26"/><path d="M16.5 13.5h.01" stroke-width="2.8"/></g></symbol><symbol id="ic-c-freelance" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#06B6D4" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#06B6D4" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#06B6D4" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4.2L16.8 4a2.2 2.2 0 0 1 3.2 3.2L8.2 19z" fill="#06B6D4" fill-opacity=".26"/><path d="m14.8 6 3.2 3.2"/></g></symbol><symbol id="ic-c-sale" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#EC4899" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#EC4899" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#EC4899" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 8h13l-1 12H6.5z" fill="#EC4899" fill-opacity=".26"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></g></symbol><symbol id="ic-c-otherin" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#84CC16" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#84CC16" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#84CC16" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5" fill="#84CC16" fill-opacity=".26"/><path d="M12 8v8M8 12h8"/></g></symbol><symbol id="ic-c-cashback" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#F59E0B" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#F59E0B" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#F59E0B" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5" fill="#F59E0B" fill-opacity=".26"/><path d="M15.5 9.2A4.4 4.4 0 1 0 16.4 13"/><path d="M15.7 6.2v3.3h-3.3"/></g></symbol><symbol id="ic-c-business" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#6366F1" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#6366F1" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#6366F1" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="10.5" height="17" rx="1.8" fill="#6366F1" fill-opacity=".26"/><path d="M15.5 9.5h3a1 1 0 0 1 1 1v10h-4"/><path d="M8.7 7.5h3.2M8.7 11h3.2M8.7 14.5h3.2"/></g></symbol><symbol id="ic-c-acct-wallet" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#10B981" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#10B981" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#10B981" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 7.5V6a2 2 0 0 0-2-2h-11a2 2 0 0 0 0 4h13a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V6" fill="#10B981" fill-opacity=".26"/><path d="M16.5 13.5h.01" stroke-width="2.8"/></g></symbol><symbol id="ic-c-acct-card" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#6366F1" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#6366F1" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#6366F1" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5" fill="#6366F1" fill-opacity=".26"/><path d="M2.5 10h19M6 15h4"/></g></symbol><symbol id="ic-c-custom0" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#6366F1" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#6366F1" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#6366F1" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5V4.5h8l9 9-8 8z" fill="#6366F1" fill-opacity=".26"/><circle cx="8" cy="9" r="1.3" fill="#6366F1" stroke="none"/></g></symbol><symbol id="ic-c-custom1" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#0EA5E9" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#0EA5E9" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#0EA5E9" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5V4.5h8l9 9-8 8z" fill="#0EA5E9" fill-opacity=".26"/><circle cx="8" cy="9" r="1.3" fill="#0EA5E9" stroke="none"/></g></symbol><symbol id="ic-c-custom2" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#14B8A6" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#14B8A6" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#14B8A6" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5V4.5h8l9 9-8 8z" fill="#14B8A6" fill-opacity=".26"/><circle cx="8" cy="9" r="1.3" fill="#14B8A6" stroke="none"/></g></symbol><symbol id="ic-c-custom3" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#F59E0B" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#F59E0B" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#F59E0B" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5V4.5h8l9 9-8 8z" fill="#F59E0B" fill-opacity=".26"/><circle cx="8" cy="9" r="1.3" fill="#F59E0B" stroke="none"/></g></symbol><symbol id="ic-c-custom4" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#EF4444" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#EF4444" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#EF4444" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5V4.5h8l9 9-8 8z" fill="#EF4444" fill-opacity=".26"/><circle cx="8" cy="9" r="1.3" fill="#EF4444" stroke="none"/></g></symbol><symbol id="ic-c-custom5" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#A855F7" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#A855F7" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#A855F7" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5V4.5h8l9 9-8 8z" fill="#A855F7" fill-opacity=".26"/><circle cx="8" cy="9" r="1.3" fill="#A855F7" stroke="none"/></g></symbol><symbol id="ic-c-custom6" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#EC4899" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#EC4899" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#EC4899" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5V4.5h8l9 9-8 8z" fill="#EC4899" fill-opacity=".26"/><circle cx="8" cy="9" r="1.3" fill="#EC4899" stroke="none"/></g></symbol><symbol id="ic-c-custom7" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="#84CC16" fill-opacity=".17" stroke="none"/><rect width="40" height="40" rx="13" fill="url(#cg-sheen)" stroke="none"/><rect x=".5" y=".5" width="39" height="39" rx="12.5" fill="none" stroke="#84CC16" stroke-opacity=".22" stroke-width="1"/><g transform="translate(8 8)" fill="none" stroke="#84CC16" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.5V4.5h8l9 9-8 8z" fill="#84CC16" fill-opacity=".26"/><circle cx="8" cy="9" r="1.3" fill="#84CC16" stroke="none"/></g></symbol><symbol id="ic-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></symbol><symbol id="ic-exchange" viewBox="0 0 24 24"><path d="M7 8h12l-3-3M17 16H5l3 3"/></symbol><symbol id="ic-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/></symbol><symbol id="ic-bank" viewBox="0 0 24 24"><path d="M3.5 9.5 12 4l8.5 5.5z"/><path d="M5.5 11v6.5M9.8 11v6.5M14.2 11v6.5M18.5 11v6.5M3.5 20h17"/></symbol><symbol id="ic-briefcase" viewBox="0 0 24 24"><rect x="3.5" y="7.5" width="17" height="12.5" rx="3"/><path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5M3.5 13.5h17"/></symbol><symbol id="ic-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 11l4.5 4.5 4.5-4.5M5 20h14"/></symbol><symbol id="ic-upload" viewBox="0 0 24 24"><path d="M12 16V5M7.5 9 12 4.5 16.5 9M5 20h14"/></symbol><symbol id="ic-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m8.2 12.3 2.6 2.6 5-5.4"/></symbol><symbol id="ic-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol><symbol id="ic-more" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="18.5" r="1.4" fill="currentColor"/></symbol><symbol id="ic-arrow-in" viewBox="0 0 24 24"><path d="M17 7 7 17M7 8.5V17h8.5"/></symbol><symbol id="ic-arrow-out" viewBox="0 0 24 24"><path d="M7 17 17 7M8.5 7H17v8.5"/></symbol><symbol id="ic-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h9.5a6 6 0 0 1 0 12H11"/></symbol><symbol id="ic-swap" viewBox="0 0 24 24"><path d="m7 4-4 4 4 4"/><path d="M3 8h13"/><path d="m17 20 4-4-4-4"/><path d="M21 16H8"/></symbol><symbol id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></symbol><symbol id="ic-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></symbol><symbol id="ic-backspace" viewBox="0 0 24 24"><path d="M20 5H9L3 12l6 7h11a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 20 5z"/><path d="m12.5 9.5 5 5M17.5 9.5l-5 5"/></symbol><symbol id="ic-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12M10 11v6M14 11v6"/></symbol><symbol id="ic-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   </defs>
 </svg>
 
@@ -509,86 +883,113 @@
 </div>
 
 <!-- ============ Modals ============ -->
-<div class="modal-overlay" id="txModalOverlay" onclick="if(event.target===this) cancelTxModal()">
-  <div class="modal">
-    <h3 id="txModalTitle">Add Transaction</h3>
+<div class="modal-overlay tx-overlay" id="txModalOverlay" onclick="if(event.target===this) cancelTxModal()">
+  <div class="tx-sheet" id="txSheet" role="dialog" aria-modal="true" aria-labelledby="txModalTitle">
+    <div class="tx-top">
+      <button type="button" class="glass-btn" aria-label="Close" onclick="cancelTxModal()"><svg class="icon"><use href="#ic-x"/></svg></button>
+      <div class="type-toggle tx-seg" role="group" aria-label="Transaction type">
+        <button type="button" class="type-btn" data-type="income" aria-label="Income" onclick="switchTxType('income')"><svg class="icon"><use href="#ic-arrow-in"/></svg><span>Income</span></button>
+        <button type="button" class="type-btn active" data-type="expense" aria-label="Expense" onclick="switchTxType('expense')"><svg class="icon"><use href="#ic-arrow-out"/></svg><span>Expense</span></button>
+        <button type="button" class="type-btn" data-type="transfer" aria-label="Transfer" onclick="switchTxType('transfer')"><svg class="icon"><use href="#ic-swap"/></svg><span>Transfer</span></button>
+        <button type="button" class="type-btn" data-type="refund" aria-label="Refund" onclick="switchTxType('refund')"><svg class="icon"><use href="#ic-undo"/></svg><span>Refund</span></button>
+      </div>
+      <button type="button" class="glass-btn" id="txMoreBtn" aria-label="More options" aria-haspopup="menu" onclick="txToggleMenu(event)"><svg class="icon"><use href="#ic-more"/></svg></button>
+    </div>
+    <div class="tx-menu" id="txMenu" role="menu" hidden>
+      <button type="button" role="menuitem" onclick="txMenuAction('currencies')"><svg class="icon"><use href="#ic-exchange"/></svg>This amount in other currencies</button>
+      <button type="button" role="menuitem" class="danger" id="txMenuDelete" onclick="txMenuAction('delete')"><svg class="icon"><use href="#ic-trash"/></svg>Delete transaction</button>
+    </div>
     <div id="txScanNotice" class="scan-notice" style="display:none;" role="status"></div>
-    <div class="form-row"><label>Name</label><input id="txName" type="text"></div>
-    <div class="form-row">
-      <label>Type</label>
-      <div class="type-toggle">
-        <button type="button" class="type-btn" data-type="income" onclick="switchTxType('income')">Income</button>
-        <button type="button" class="type-btn active" data-type="expense" onclick="switchTxType('expense')">Expense</button>
-        <button type="button" class="type-btn" data-type="transfer" onclick="switchTxType('transfer')">Transfer</button>
-        <button type="button" class="type-btn" data-type="refund" onclick="switchTxType('refund')">Refund</button>
-      </div>
+
+    <div class="tx-body">
+      <div class="tx-caption" id="txModalTitle">Add Transaction</div>
+      <div class="tx-amount" id="txAmountDisplay" role="status" aria-live="polite"><span class="tx-sym" id="txAmtSym">L</span><span id="txAmtText">0</span></div>
+      <div class="tx-sub"><span id="txExprResult"></span><span id="txAmountPreview"></span></div>
+      <label id="txAmountLabel" class="tx-amt-label">Amount</label>
+      <input id="txAmount" type="text" inputmode="decimal" readonly tabindex="-1" aria-hidden="true" style="display:none;" oninput="formatAmountInput(this); updateTxAmountPreview(); onTransferFromAmountChange();">
     </div>
-    <div class="form-row" id="txCategoryRow"><label>Category</label>
-      <div class="custom-select-wrap">
-        <button type="button" class="custom-select-btn" onclick="openCustomPicker('txCategory','Category')"><span id="txCategory_label">Choose…</span><span class="chevron-down">⌄</span></button>
-        <select id="txCategory" class="native-select-hidden" onchange="handleCategorySelectChange(this)"></select>
-      </div>
-    </div>
-    <div class="form-row" id="txAccountRow"><label>Account</label>
-      <div class="custom-select-wrap">
-        <button type="button" class="custom-select-btn" onclick="openCustomPicker('txAccountId','Account')"><span id="txAccountId_label">Choose…</span><span class="chevron-down">⌄</span></button>
+
+    <div class="tx-chips">
+      <div id="txAccountRow" class="tx-acct-wrap">
+        <button type="button" class="tx-chip tx-chip-acct" id="txAcctChip" aria-label="Account" onclick="openCustomPicker('txAccountId','Account')">
+          <svg class="icon tx-acct-ic"><use id="txAcctIcon" href="#ic-c-acct-wallet"/></svg>
+          <span class="tx-chip-txt"><b id="txAcctName">Account</b><small id="txAcctBal"></small></span>
+        </button>
         <select id="txAccountId" class="native-select-hidden"></select>
       </div>
+      <label class="tx-chip tx-chip-date" id="txDateChip" onclick="txOpenDate(event)"><span id="txDateText">Today</span><input id="txDate" type="date" aria-label="Date"></label>
+      <button type="button" class="tx-chip tx-chip-cur" id="txCurChip" aria-label="Currency" onclick="openCustomPicker('txCurrency','Currency')"><span id="txCurSym">L</span></button>
+      <select id="txCurrency" class="native-select-hidden" onchange="updateTxAmountPreview(); onTransferAccountChange();">
+        <option value="ALL" selected>Lek (ALL)</option>
+        <option value="EUR">Euro (EUR)</option>
+        <option value="USD">Dollar (USD)</option>
+        <option value="UAH">Hryvnia (UAH)</option>
+        <option value="CAD">Canadian Dollar (CAD)</option>
+        <option value="PLN">Polish Zloty (PLN)</option>
+      </select>
     </div>
-    <div class="form-row" id="txTransferFromRow" style="display:none;"><label>From account</label>
-      <div class="custom-select-wrap">
-        <button type="button" class="custom-select-btn" onclick="openCustomPicker('txTransferFromId','From account')"><span id="txTransferFromId_label">Choose…</span><span class="chevron-down">⌄</span></button>
-        <select id="txTransferFromId" class="native-select-hidden" onchange="onTransferAccountChange()"></select>
-      </div>
-    </div>
-    <div class="form-row" id="txTransferToRow" style="display:none;"><label>To account</label>
-      <div class="custom-select-wrap">
-        <button type="button" class="custom-select-btn" onclick="openCustomPicker('txTransferToId','To account')"><span id="txTransferToId_label">Choose…</span><span class="chevron-down">⌄</span></button>
-        <select id="txTransferToId" class="native-select-hidden" onchange="onTransferAccountChange()"></select>
-      </div>
-    </div>
-    <div class="form-row amount-currency-row">
-      <div><label id="txAmountLabel">Amount</label><input id="txAmount" type="text" inputmode="decimal" oninput="formatAmountInput(this); updateTxAmountPreview(); onTransferFromAmountChange();"></div>
-      <div><label>Currency</label>
+
+    <div class="tx-transfer-block">
+      <div class="form-row" id="txTransferFromRow" style="display:none;"><label>From account</label>
         <div class="custom-select-wrap">
-          <button type="button" class="custom-select-btn" onclick="openCustomPicker('txCurrency','Currency')"><span id="txCurrency_label">Lek (ALL)</span><span class="chevron-down">⌄</span></button>
-          <select id="txCurrency" class="native-select-hidden" onchange="updateTxAmountPreview(); onTransferAccountChange();">
-            <option value="ALL" selected>Lek (ALL)</option>
-            <option value="EUR">Euro (EUR)</option>
-            <option value="USD">Dollar (USD)</option>
-            <option value="UAH">Hryvnia (UAH)</option>
-            <option value="CAD">Canadian Dollar (CAD)</option>
-            <option value="PLN">Polish Zloty (PLN)</option>
-          </select>
+          <button type="button" class="custom-select-btn" onclick="openCustomPicker('txTransferFromId','From account')"><span id="txTransferFromId_label">Choose…</span><span class="chevron-down">⌄</span></button>
+          <select id="txTransferFromId" class="native-select-hidden" onchange="onTransferAccountChange()"></select>
         </div>
       </div>
-    </div>
-    <div class="form-row amount-currency-row" id="txTransferToAmountRow" style="display:none;">
-      <div><label>Amount received</label><input id="txTransferToAmount" type="text" inputmode="decimal" oninput="formatAmountInput(this); onTransferToAmountEdited();"></div>
-      <div><label>Currency</label>
+      <div class="form-row" id="txTransferToRow" style="display:none;"><label>To account</label>
         <div class="custom-select-wrap">
-          <button type="button" class="custom-select-btn" onclick="openCustomPicker('txTransferToCurrency','Currency')"><span id="txTransferToCurrency_label">Lek (ALL)</span><span class="chevron-down">⌄</span></button>
-          <select id="txTransferToCurrency" class="native-select-hidden" onchange="onTransferToAmountEdited()">
-            <option value="ALL">Lek (ALL)</option>
-            <option value="EUR">Euro (EUR)</option>
-            <option value="USD">Dollar (USD)</option>
-            <option value="UAH">Hryvnia (UAH)</option>
-            <option value="CAD">Canadian Dollar (CAD)</option>
-            <option value="PLN">Polish Zloty (PLN)</option>
-          </select>
+          <button type="button" class="custom-select-btn" onclick="openCustomPicker('txTransferToId','To account')"><span id="txTransferToId_label">Choose…</span><span class="chevron-down">⌄</span></button>
+          <select id="txTransferToId" class="native-select-hidden" onchange="onTransferAccountChange()"></select>
         </div>
       </div>
+      <div class="form-row amount-currency-row" id="txTransferToAmountRow" style="display:none;">
+        <div><label>Amount received</label><input id="txTransferToAmount" type="text" inputmode="decimal" oninput="formatAmountInput(this); onTransferToAmountEdited();"></div>
+        <div><label>Currency</label>
+          <div class="custom-select-wrap">
+            <button type="button" class="custom-select-btn" onclick="openCustomPicker('txTransferToCurrency','Currency')"><span id="txTransferToCurrency_label">Lek (ALL)</span><span class="chevron-down">⌄</span></button>
+            <select id="txTransferToCurrency" class="native-select-hidden" onchange="onTransferToAmountEdited()">
+              <option value="ALL">Lek (ALL)</option>
+              <option value="EUR">Euro (EUR)</option>
+              <option value="USD">Dollar (USD)</option>
+              <option value="UAH">Hryvnia (UAH)</option>
+              <option value="CAD">Canadian Dollar (CAD)</option>
+              <option value="PLN">Polish Zloty (PLN)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div id="txTransferConversionPreview" class="empty-note" style="text-align:left; padding:0; margin:0 4px; display:none;"></div>
     </div>
-    <div id="txTransferConversionPreview" class="empty-note" style="text-align:left; padding:0; margin:-8px 0 8px; display:none;"></div>
-    <div style="display:flex; justify-content:space-between; align-items:center; margin:-8px 0 8px;">
-      <span id="txAmountPreview" class="empty-note" style="padding:0;"></span>
-      <button type="button" class="header-btn" onclick="showTxCurrencyCalc()">💱 All currencies</button>
+
+    <input id="txName" class="tx-note" type="text" placeholder="Note" maxlength="120" autocomplete="off" enterkeyhint="done" aria-label="Note">
+
+    <div id="txCategoryRow" class="tx-cats">
+      <div class="tx-cat-scroll" id="txCatScroll" role="listbox" aria-label="Category">
+        <button type="button" class="tx-cat-util" aria-label="All categories" onclick="txOpenCatSheet(false)"><svg class="icon"><use href="#ic-grid"/></svg></button>
+        <button type="button" class="tx-cat-util" aria-label="Search categories" onclick="txOpenCatSheet(true)"><svg class="icon"><use href="#ic-search"/></svg></button>
+        <span id="txCatTiles" class="tx-cat-tiles"></span>
+      </div>
+      <div class="tx-cat-label" id="txCatLabel">Category</div>
+      <select id="txCategory" class="native-select-hidden" onchange="handleCategorySelectChange(this)"></select>
     </div>
-    <div class="form-row"><label>Date</label><input id="txDate" type="date"></div>
-    <div class="modal-actions">
-      <button class="modal-cancel" onclick="cancelTxModal()">Cancel</button>
-      <button class="modal-save" onclick="saveTransaction()">Save</button>
+
+    <div class="tx-keypad" id="txKeypad">
+      <button type="button" class="tx-key" data-k="1">1</button><button type="button" class="tx-key" data-k="2">2</button><button type="button" class="tx-key" data-k="3">3</button><button type="button" class="tx-key tx-op" data-k="+" aria-label="plus">+</button>
+      <button type="button" class="tx-key" data-k="4">4</button><button type="button" class="tx-key" data-k="5">5</button><button type="button" class="tx-key" data-k="6">6</button><button type="button" class="tx-key tx-op" data-k="-" aria-label="minus">−</button>
+      <button type="button" class="tx-key" data-k="7">7</button><button type="button" class="tx-key" data-k="8">8</button><button type="button" class="tx-key" data-k="9">9</button><button type="button" class="tx-key tx-op" data-k="*" aria-label="times">×</button>
+      <button type="button" class="tx-key tx-soft" data-k="." aria-label="decimal point">.</button><button type="button" class="tx-key" data-k="0">0</button><button type="button" class="tx-key tx-soft" data-k="bs" id="txBackspace" aria-label="Delete"><svg class="icon"><use href="#ic-backspace"/></svg></button><button type="button" class="tx-key tx-op" data-k="/" aria-label="divide">÷</button>
     </div>
+    <button type="button" class="tx-save" id="txSaveBtn" onclick="txSaveClick()">Save</button>
+  </div>
+</div>
+
+<div class="modal-overlay sheet-overlay" id="txCatOverlay" onclick="if(event.target===this) txCloseCatSheet()">
+  <div class="sheet tx-cat-sheet" role="dialog" aria-modal="true" aria-labelledby="txCatSheetTitle">
+    <div class="sheet-grab" aria-hidden="true"></div>
+    <div class="tx-cs-head"><h3 id="txCatSheetTitle">Category</h3><button type="button" class="glass-btn small" aria-label="Close" onclick="txCloseCatSheet()"><svg class="icon"><use href="#ic-x"/></svg></button></div>
+    <label class="tx-search"><svg class="icon"><use href="#ic-search"/></svg><input id="txCatSearch" type="search" placeholder="Search categories" oninput="txFilterCats()" autocomplete="off" aria-label="Search categories"></label>
+    <div id="txCatGrid" class="tx-cat-grid"></div>
+    <div class="tx-newcat"><input id="txNewCatName" type="text" placeholder="New category name" maxlength="30" aria-label="New category name" autocomplete="off"><button type="button" onclick="txAddCategory()">Add</button></div>
   </div>
 </div>
 
@@ -831,7 +1232,7 @@
     <div class="empty-note" style="text-align:left; margin-bottom:10px;">The sum of every account you have — nothing else counts toward this total.</div>
     <div id="netWorthBreakdownBody"></div>
     <div class="modal-actions">
-      <button class="header-btn" onclick="recalculateEverything()">🔄 Recalculate</button>
+      <button class="header-btn" onclick="recalculateEverything()"><svg class="icon"><use href="#ic-refresh"/></svg> Recalculate</button>
       <button class="modal-cancel" onclick="closeModal('netWorthBreakdownModalOverlay')">Close</button>
     </div>
   </div>
@@ -862,7 +1263,7 @@
 <div class="modal-overlay" id="manageCategoriesModalOverlay" onclick="if(event.target===this) closeManageCategories()">
   <div class="modal" style="max-height:80vh; overflow-y:auto;">
     <h3>Manage Categories</h3>
-    <div class="empty-note" style="text-align:left; margin-bottom:10px;">Tap ✏️ to rename a category — existing transactions and any budget for it move to the new name automatically.</div>
+    <div class="empty-note" style="text-align:left; margin-bottom:10px;">Tap the pencil to rename a category — existing transactions and any budget for it move to the new name automatically.</div>
     <div id="manageCategoriesBody"></div>
     <div class="modal-actions">
       <button class="modal-save" onclick="closeManageCategories()">Done</button>
@@ -935,7 +1336,7 @@
   });
 })();
 
-const CATEGORY_ICON = {
+const CATEGORY_ICON = new Proxy({
   'Education': 'ic-wallet',
   'Travel': 'ic-car',
   'Home': 'ic-home',
@@ -974,7 +1375,7 @@ const CATEGORY_ICON = {
   'Business': 'ic-wallet',
   'Transfer': 'ic-refresh',
   'Loan': 'ic-wallet'
-};
+}, { get: function(t, k){ return (k in t) ? t[k] : (window.scCatIconFallback ? window.scCatIconFallback(k) : undefined); } });
 
 const EXPENSE_CATEGORIES = [
   "Education","Travel","Home","Health","Living Expenses","Family care","Kitsterovna",
@@ -2557,13 +2958,13 @@ function donutSVG(data, centerTotal, centerSub){
     const estWidth = len * fontSize * 0.62;
     const totalLenAttr = estWidth > maxUnits ? ` textLength="${maxUnits}" lengthAdjust="spacing"` : '';
     const totalY = centerSub ? 96 : 108;
-    centerSvg = `<text x="100" y="${totalY}" text-anchor="middle" font-family="Sora, sans-serif" font-weight="700" font-size="${fontSize}" fill="#F3F5FC"${totalLenAttr}>${centerTotal}</text>`;
+    centerSvg = `<text x="100" y="${totalY}" text-anchor="middle" style="font-family:var(--font-display);fill:var(--white)" font-weight="700" font-size="${fontSize}"${totalLenAttr}>${centerTotal}</text>`;
     if(centerSub){
       const subLen = centerSub.length;
       const subFontSize = subLen > 14 ? 9 : 11;
       const subEst = subLen * subFontSize * 0.55;
       const subLenAttr = subEst > maxUnits ? ` textLength="${maxUnits}" lengthAdjust="spacing"` : '';
-      centerSvg += `<text x="100" y="120" text-anchor="middle" font-family="Inter, sans-serif" font-size="${subFontSize}" fill="#8993B5"${subLenAttr}>${centerSub}</text>`;
+      centerSvg += `<text x="100" y="120" text-anchor="middle" style="font-family:var(--font);fill:var(--muted)" font-size="${subFontSize}"${subLenAttr}>${centerSub}</text>`;
     }
   }
 
@@ -2731,7 +3132,7 @@ function expenseCategorySummaryHTML(LP){
 
   const rows = top.map(function(d,i){
     return `<div class="cat-row">
-      <span class="cat-swatch" style="background:${colorForCategory(d[0])}"></span>
+      <span class="cat-tile"><svg class="icon"><use href="#${CATEGORY_ICON[d[0]]}"/></svg></span>
       <span class="cat-name">${d[0]}</span>
       <span class="cat-amt">${fmt(Math.abs(d[1]))}</span>
     </div>`;
@@ -2782,7 +3183,7 @@ function expenseDetailScreenHTML(){
     const pct = total ? Math.round((Math.abs(d[1])/Math.abs(total))*100) : 0;
     const amt = fmt(Math.abs(d[1]));
     return `<div class="cat-row clickable-row" onclick="viewCategoryTransactions('${d[0]}')">
-      <span class="cat-swatch" style="background:${colorForCategory(d[0])}"></span>
+      <span class="cat-tile"><svg class="icon"><use href="#${CATEGORY_ICON[d[0]]}"/></svg></span>
       <span class="cat-name">${d[0]}</span>
       <span class="cat-pct">${pct}%</span>
       <span class="cat-amt">${amt}</span>
@@ -2821,7 +3222,7 @@ function expenseDetailScreenHTML(){
     </div>
 
     <div class="filter-row detail-filters" style="align-items:center;">
-      <button class="header-btn" onclick="openExcludeCategoriesModal()">🚫 Exclude categories</button>
+      <button class="header-btn" onclick="openExcludeCategoriesModal()"><svg class="icon"><use href="#ic-ban"/></svg> Exclude categories</button>
     </div>
     ${breakdownExcludedCategories.length ? `<div class="filter-row detail-filters" style="flex-wrap:wrap; gap:6px;">
       ${breakdownExcludedCategories.map(function(c){
@@ -2912,6 +3313,7 @@ function refreshAllCustomSelectLabels(){
   document.querySelectorAll('.custom-select-wrap select').forEach(function(sel){
     if(sel.id) refreshCustomSelectLabel(sel.id);
   });
+  if(window.txFormSync) window.txFormSync();
 }
 
 window.openManageCategories = function(){
@@ -2925,7 +3327,7 @@ function manageCategoriesListHTML(){
   function row(c){
     return `<div class="cat-row">
       <span class="cat-name">${escapeHtml(c)}</span>
-      <button class="header-btn" onclick="promptRenameCategory('${escapeHtml(c).replace(/'/g,"\\'")}')">✏️</button>
+      <button class="header-btn" onclick="promptRenameCategory('${escapeHtml(c).replace(/'/g,"\\'")}')"><svg class="icon"><use href="#ic-edit"/></svg></button>
     </div>`;
   }
   return `
@@ -3225,7 +3627,7 @@ function accountsDetailScreenHTML(){
       : 'Live from Monobank';
     return `<div class="manual-acct-group">
       <div class="manual-acct-header">
-        <div class="manual-acct-name">🏦 ${escapeHtml(monoAccountLabel(a))}</div>
+        <div class="manual-acct-name"><svg class="icon"><use href="#ic-bank"/></svg> ${escapeHtml(monoAccountLabel(a))}</div>
         <div class="cat-amt${isNeg ? ' neg' : ''}">${balance !== null ? (isNeg ? '-' : '') + fmtOriginal(balance, currency) : '—'}</div>
       </div>
       <div class="mono-acct-status synced" style="padding-left:20px; position:relative;">
@@ -3249,7 +3651,7 @@ function accountsDetailScreenHTML(){
     }).join('');
     return `<div class="manual-acct-group">
       <div class="manual-acct-header">
-        <div class="manual-acct-name">💼 ${escapeHtml(acc.name)}</div>
+        <div class="manual-acct-name"><svg class="icon"><use href="#ic-briefcase"/></svg> ${escapeHtml(acc.name)}</div>
         <div class="manual-acct-total">≈ ${fmtShort(groupTotal)}</div>
       </div>
       ${balanceRows}
@@ -3436,7 +3838,7 @@ function budgetDetailScreenHTML(){
     const over = everythingElseActual > everythingElseBudget;
     return `<div class="budget-cat-row">
       <div class="budget-cat-head">
-        <span class="tx-icon"><svg class="icon"><use href="#ic-wallet"/></svg></span>
+        <span class="tx-icon"><svg class="icon"><use href="#ic-c-other"/></svg></span>
         <span class="budget-cat-name">Everything else</span>
         <span class="budget-cat-amt">${fmtShort(everythingElseActual)} / ${fmtShort(everythingElseBudget)}</span>
       </div>
@@ -3602,7 +4004,7 @@ function trendSVG(height){
     <svg width="100%" height="${height}" viewBox="0 0 480 ${height}" preserveAspectRatio="none">
       <defs><linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5B8CFF" stop-opacity="0.35"/><stop offset="100%" stop-color="#5B8CFF" stop-opacity="0"/></linearGradient></defs>
       <path d="${areaPath}" fill="url(#areaFill)"/>
-      <path d="${path}" fill="none" stroke="#9DB8FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="${path}" fill="none" style="stroke:var(--blue-light)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
 }
 
@@ -3621,7 +4023,7 @@ function dateRangeBlockHTML(){
   return `
     <div class="chart-card clickable-card" style="grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between;" onclick="openRangeModal()">
       <div style="display:flex; align-items:center; gap:10px;">
-        <span style="font-size:20px;">📅</span>
+        <span class="dashboard-cal"><svg class="icon"><use href="#ic-calendar"/></svg></span>
         <div>
           <div class="chart-title" style="margin:0;">${rangeLabel()}</div>
           ${syncedLabel ? `<div style="font-size:calc(11px * var(--font-scale, 1)); color:var(--muted-dim); margin-top:2px;">Synced ${syncedLabel}</div>` : ''}
@@ -3820,18 +4222,19 @@ function settingsScreenHTML(){
   return `
     <h2 style="font-family:'Sora',sans-serif; font-size:20px; margin:0 0 18px;">Settings</h2>
     <div class="settings-row" onclick="openMonoModal()">
-      <span>🏦 Bank</span><span class="chevron">›</span>
+      <span><svg class="icon"><use href="#ic-bank"/></svg> Bank</span><span class="chevron">›</span>
     </div>
     <div class="settings-row" onclick="exportCSV()">
-      <span>⬇️ Export</span><span class="chevron">›</span>
+      <span><svg class="icon"><use href="#ic-download"/></svg> Export</span><span class="chevron">›</span>
     </div>
     <div class="settings-row" onclick="document.getElementById('importFile').click()">
-      <span>⬆️ Import</span><span class="chevron">›</span>
+      <span><svg class="icon"><use href="#ic-upload"/></svg> Import</span><span class="chevron">›</span>
     </div>
     <div class="settings-row" onclick="openRatesDetail()">
-      <span>💱 Exchange rates</span><span class="chevron">›</span>
+      <span><svg class="icon"><use href="#ic-exchange"/></svg> Exchange rates</span><span class="chevron">›</span>
     </div>
 
+    ${window.novaAppearanceHTML ? window.novaAppearanceHTML() : ''}
     <div class="side-label" style="margin:20px 0 8px;">Text Size</div>
     <div class="modal-actions" style="justify-content:flex-start; margin-top:0; gap:10px; align-items:center;">
       <button class="header-btn" onclick="adjustFontScale(-0.1)">A-</button>
@@ -3864,7 +4267,7 @@ function settingsScreenHTML(){
 
     <div class="side-label" style="margin:20px 0 8px;">Manage Categories</div>
     <div class="empty-note" style="text-align:left; margin-bottom:8px;">Rename any category — every past and future transaction, plus any budget set for it, automatically moves to the new name.</div>
-    <button class="header-btn" onclick="openManageCategories()">✏️ Edit Categories</button>
+    <button class="header-btn" onclick="openManageCategories()"><svg class="icon"><use href="#ic-edit"/></svg> Edit Categories</button>
 
     <div class="side-label" style="margin:20px 0 8px;">Auto Categorization Rules</div>
     <div class="empty-note" style="text-align:left; margin-bottom:8px;">If a synced transaction's name contains this text, it's assigned this category automatically — checked before any built-in matching, so your own rules always win.</div>
@@ -3957,7 +4360,7 @@ function cloudConnectedHTML(){
   }[cloudSyncStatus] || 'Connected';
   return `
     <div class="setup-box" style="margin-bottom:12px;">
-      <p style="margin:0 0 6px;"><b>✅ Synced across your devices</b></p>
+      <p style="margin:0 0 6px;"><b><svg class="icon"><use href="#ic-check-circle"/></svg> Synced across your devices</b></p>
       <p style="margin:0; font-size:11px;">${escapeHtml(statusText)}${cloudLastPulledAt ? ' · last update ' + timeAgo(new Date(cloudLastPulledAt).getTime()) : ''}</p>
       ${cloudSyncStatus === 'error' && cloudSyncErrorDetail ? `<p style="margin:8px 0 0; font-size:10.5px; color:var(--rose); white-space:pre-wrap; word-break:break-word;">${escapeHtml(cloudSyncErrorDetail)}</p>` : ''}
     </div>
@@ -4060,7 +4463,7 @@ function ratesModalContentHTML(){
     </div>
 
     <div class="panel-card" style="margin-top:14px;">
-      <div class="panel-title"><h3>ETH</h3><button class="header-btn" onclick="editEthRate()">✏️ Edit price</button></div>
+      <div class="panel-title"><h3>ETH</h3><button class="header-btn" onclick="editEthRate()"><svg class="icon"><use href="#ic-edit"/></svg> Edit price</button></div>
       <div class="empty-note" style="text-align:left; margin-bottom:4px;">Crypto prices move too fast for a reliable automatic feed here — set this manually from your exchange or a price site whenever you want it current.</div>
       <div class="cat-row"><span class="cat-name">1 ETH ≈</span><span class="cat-amt">${fmtOriginal(ethPriceEur, 'EUR')}</span></div>
     </div>
@@ -4076,7 +4479,7 @@ function financeOverviewDetailHTML(){
     <div class="detail-header">
       <button class="back-btn" onclick="closeOverviewDetail()">‹</button>
       <div class="detail-title">Overview</div>
-      <button id="recalcBtn" class="header-btn" onclick="recalculateEverything()">🔄</button>
+      <button id="recalcBtn" class="header-btn" onclick="recalculateEverything()"><svg class="icon"><use href="#ic-refresh"/></svg></button>
     </div>
     <div id="recalcStatus" class="empty-note" style="text-align:right; padding:0; margin:-8px 0 8px;"></div>
 
@@ -5069,7 +5472,7 @@ window.applyMonoDisplayFromDate = function(){
     // The two filters are independent, but their EFFECTS still combine —
     // if the main dashboard range doesn't overlap with this date at all,
     // you'd correctly see nothing, even though neither filter is broken.
-    msg += ` Heads up: your main dashboard date range is currently set to "${rangeLabel()}" (from ${customRangeFrom}${customRangeTo ? ' to ' + customRangeTo : ''}) — if that doesn't overlap with ${dateStr} onward, you won't see these there even though this filter is working correctly. Check the 📅 block at the top of Finance if numbers don't match what you expect.`;
+    msg += ` Heads up: your main dashboard date range is currently set to "${rangeLabel()}" (from ${customRangeFrom}${customRangeTo ? ' to ' + customRangeTo : ''}) — if that doesn't overlap with ${dateStr} onward, you won't see these there even though this filter is working correctly. Check the date-range block at the top of Finance if numbers don't match what you expect.`;
   }
   statusEl.textContent = msg;
   statusEl.classList.remove('error');
@@ -6966,7 +7369,7 @@ function scOpenReceipt(res){
 window.switchTxType = function(t){
   var sel = scEl('txCategory'), prev = sel ? sel.value : '', prevType = currentTxType;
   setTxType(t);
-  if(t === 'transfer' || !sel) return;
+  if(t === 'transfer' || !sel){ if(typeof refreshAllCustomSelectLabels === 'function') refreshAllCustomSelectLabels(); return; }
   var primary = t === 'income' ? allIncomeCategories() : allExpenseCategories();
   var keep = prevType !== 'transfer' && prev && prev !== '__add_new__' && prev !== 'Transfer' && prev !== 'Loan' && primary.indexOf(prev) !== -1;
   var def = t === 'income' ? 'Other income' : 'Other expense';
@@ -7263,6 +7666,316 @@ window.NovaScan = {
   hooks: scHooks, run: scRun, state: function(){ return { imp: scImp, voice: scVoice, job: scJob }; },
   t: { parseMoney: scParseMoney, findDates: scFindDates, parseReceipt: scParseReceipt, parseTable: scParseTable, parseStatementLines: scParseStatementLines,
        parseScreenshotLines: scParseScreenshotLines, parseVoice: scParseVoice, ocrToLines: scOcrToLines, parseDelimited: scParseDelimited, preprocess: scPreprocessPixels, prepareImage: scPrepareImage, xlsxToRows: scXlsxToRows, pdfToLines: scPdfToLines }
+};
+
+/* ===================================================================
+   Nova — new add/edit form: calculator keypad, chips, category carousel + sheet
+   (all data still lives in the original #txAmount / #txCategory / #txAccountId / #txCurrency / #txDate / #txName fields)
+   =================================================================== */
+var txEl = function(id){ return document.getElementById(id); };
+var kp = { expr: '' };
+var kpLong = false, kpTimer = null;
+
+/* ---------- expression engine ---------- */
+function txEval(e){
+  if(!e) return NaN;
+  var parts = e.split(/([+\-*\/])/).filter(function(x){ return x !== ''; }), nums = [], ops = [];
+  parts.forEach(function(p){ if(/^[+\-*\/]$/.test(p)) ops.push(p); else nums.push(parseFloat(p)); });
+  while(ops.length >= nums.length) ops.pop();
+  if(!nums.length || nums.some(isNaN)) return NaN;
+  var n2 = [nums[0]], o2 = [], i;
+  for(i = 0; i < ops.length; i++){
+    if(ops[i] === '*') n2[n2.length - 1] *= nums[i + 1];
+    else if(ops[i] === '/'){ if(nums[i + 1] === 0) return NaN; n2[n2.length - 1] /= nums[i + 1]; }
+    else { o2.push(ops[i]); n2.push(nums[i + 1]); }
+  }
+  var r = n2[0];
+  for(i = 0; i < o2.length; i++) r = o2[i] === '+' ? r + n2[i + 1] : r - n2[i + 1];
+  return Math.round(r * 100) / 100;
+}
+function txFmtNum(s){
+  var m = s.match(/^(\d*)(\.?)(\d*)$/); if(!m) return s;
+  var int = m[1] === '' ? '0' : m[1].replace(/^0+(?=\d)/, '');
+  return int.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + m[2] + m[3];
+}
+function txDisplayExpr(e){
+  if(!e) return '';
+  var sym = { '+': ' + ', '-': ' − ', '*': ' × ', '/': ' ÷ ' };
+  return e.split(/([+\-*\/])/).filter(function(x){ return x !== ''; }).map(function(p){ return sym[p] || txFmtNum(p); }).join('');
+}
+function txPlain(v){ return String(Math.round(v * 100) / 100); }
+function txLastNum(e){ var m = e.match(/[\d.]*$/); return m ? m[0] : ''; }
+
+// shrink the big number until it fits on one line (works for any font / width)
+function txFitAmount(){
+  var el = txEl('txAmountDisplay'); if(!el) return;
+  el.style.transition = 'none'; el.style.fontSize = ''; el.style.maxWidth = 'none'; el.style.overflow = 'visible';   // measure the real target size, not a mid-transition one
+  void el.offsetWidth;
+  var avail = Math.max(120, el.parentElement.clientWidth - 24);
+  var size = parseFloat(getComputedStyle(el).fontSize) || 60, guard = 0;
+  while(el.getBoundingClientRect().width > avail && size > 20 && guard++ < 40){ size *= 0.94; el.style.fontSize = size + 'px'; }
+  el.style.maxWidth = ''; el.style.overflow = '';
+  void el.offsetWidth; el.style.transition = '';
+}
+
+/* ---------- keypad ---------- */
+function txPress(k){
+  var e = kp.expr, last = txLastNum(e);
+  if(/^\d$/.test(k)){
+    var dec = last.indexOf('.');
+    if(dec !== -1 && last.length - dec - 1 >= 2) return;
+    if(dec === -1 && last.replace(/^0+/, '').length >= 10 && last !== '0') return;
+    if(last === '0') e = e.slice(0, -1) + k; else e += k;
+  } else if(k === '.'){
+    if(last.indexOf('.') !== -1) return;
+    e += last === '' ? '0.' : '.';
+  } else if('+-*/'.indexOf(k) !== -1){
+    if(e === '') return;
+    if(/[+\-*\/]$/.test(e)) e = e.slice(0, -1) + k;
+    else if(/\.$/.test(e)) e = e.slice(0, -1) + k;
+    else e += k;
+  }
+  if(e.length > 28) return;
+  kp.expr = e; txRenderAmount(true);
+}
+function txBackspace(){ kp.expr = kp.expr.slice(0, -1); txRenderAmount(true); }
+function txRenderAmount(writeBack){
+  var cur = txEl('txCurrency') ? txEl('txCurrency').value : '';
+  var sym = (typeof CURRENCY_SYMBOLS !== 'undefined' && CURRENCY_SYMBOLS[cur]) || cur || '';
+  var text = txDisplayExpr(kp.expr);
+  var disp = txEl('txAmountDisplay'), symEl = txEl('txAmtSym'), txt = txEl('txAmtText');
+  symEl.textContent = sym; txt.textContent = text || '0'; txt.className = text ? '' : 'tx-empty';
+  txFitAmount();
+  var v = txEval(kp.expr), hasOp = /[+\-*\/]/.test(kp.expr.replace(/^-/, ''));
+  txEl('txExprResult').textContent = (hasOp && !isNaN(v)) ? '= ' + v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '';
+  if(writeBack){
+    var inp = txEl('txAmount');
+    inp.value = (isNaN(v) || v === 0) ? '' : v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    if(typeof updateTxAmountPreview === 'function') updateTxAmountPreview();
+    if(typeof onTransferFromAmountChange === 'function') onTransferFromAmountChange();
+  }
+}
+// If something else (edit, scan, voice) filled #txAmount, adopt it
+function txSyncAmount(){
+  var field = parseAmountInput(txEl('txAmount').value); field = isNaN(field) ? 0 : field;
+  var cur = txEval(kp.expr); cur = isNaN(cur) ? 0 : cur;
+  if(Math.abs(field - cur) > 0.004) kp.expr = field ? txPlain(field) : '';
+  txRenderAmount(false);
+}
+window.txSaveClick = function(){
+  var v = txEval(kp.expr);
+  if(!(v > 0)){ var d = txEl('txAmountDisplay'); d.classList.remove('shake'); void d.offsetWidth; d.classList.add('shake'); return; }
+  txEl('txAmount').value = v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  if(!txEl('txDate').value) txEl('txDate').value = localDateStr(new Date());
+  saveTransaction();
+  kp.expr = '';
+};
+
+/* ---------- chips ---------- */
+function txAcctBalance(id){
+  try{
+    if(!id) return '';
+    if(id.indexOf('mono:') === 0){
+      var a = monoAccounts.find(function(x){ return x.id === id.slice(5); }); if(!a) return '';
+      var b = monoAccountNetBalance(a); if(b == null || isNaN(b)) return '';
+      return (b < 0 ? '−' : '') + fmtOriginal(b, MONO_CURRENCY_MAP[a.currencyCode] || 'UAH');
+    }
+    var acc = manualAccounts.find(function(x){ return x.id === id; });
+    if(!acc || !acc.balances || !acc.balances.length) return '';
+    var b0 = acc.balances[0], bal = manualAccountCurrentBalance(acc.id, b0.currency, b0.amount);
+    return (bal < 0 ? '−' : '') + fmtOriginal(bal, b0.currency) + (acc.balances.length > 1 ? '  +' + (acc.balances.length - 1) : '');
+  }catch(e){ return ''; }
+}
+function txDateText(v){
+  if(!v) return 'Pick date';
+  var d = new Date(); if(v === localDateStr(d)) return 'Today';
+  d = new Date(); d.setDate(d.getDate() - 1); if(v === localDateStr(d)) return 'Yesterday';
+  d = new Date(); d.setDate(d.getDate() + 1); if(v === localDateStr(d)) return 'Tomorrow';
+  return typeof niceDate === 'function' ? niceDate(v) : v;
+}
+function txSyncChips(){
+  var sel = txEl('txAccountId'), opt = sel && sel.options[sel.selectedIndex];
+  txEl('txAcctName').textContent = (opt && opt.value) ? opt.text : 'No account';
+  txEl('txAcctBal').textContent = txAcctBalance(sel ? sel.value : '');
+  txEl('txAcctIcon').setAttribute('href', (sel && sel.value.indexOf('mono:') === 0) ? '#ic-c-acct-card' : '#ic-c-acct-wallet');
+  txEl('txDateText').textContent = txDateText(txEl('txDate').value);
+  var cur = txEl('txCurrency').value;
+  txEl('txCurSym').textContent = (typeof CURRENCY_SYMBOLS !== 'undefined' && CURRENCY_SYMBOLS[cur]) || cur;
+  txEl('txCurChip').setAttribute('aria-label', 'Currency: ' + cur);
+  txEl('txSheet').classList.toggle('tx-is-transfer', currentTxType === 'transfer');
+  txEl('txMenuDelete').style.display = (typeof editingTxId !== 'undefined' && editingTxId) ? '' : 'none';
+}
+window.txOpenDate = function(ev){ var i = txEl('txDate'); if(i && i.showPicker && ev.target !== i){ try{ i.showPicker(); }catch(e){} } };
+
+/* ---------- category carousel ---------- */
+var txCatSig = '';
+function txCatLists(){
+  var sel = txEl('txCategory'), primary = [], groups = [];
+  Array.prototype.forEach.call(sel.children, function(ch){
+    if(ch.tagName === 'OPTION'){ if(ch.value !== '__add_new__') primary.push(ch.value); }
+    else if(ch.tagName === 'OPTGROUP') groups.push({ label: /expense/i.test(ch.label) ? 'Expense categories' : 'Income categories', items: Array.prototype.map.call(ch.children, function(o){ return o.value; }) });
+  });
+  return { primary: primary, groups: groups };
+}
+function txIconSvg(name, cls){ return '<svg class="icon' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#' + (CATEGORY_ICON[name] || 'ic-c-other') + '"/></svg>'; }
+function txRenderCats(){
+  var sel = txEl('txCategory'); if(!sel) return;
+  var lists = txCatLists();
+  var tiles = lists.primary.filter(function(c){ return c !== 'Transfer' && c !== 'Refund'; });
+  var generic = ['Other expense', 'Other income'].map(function(n){ return (typeof categoryRenames === 'object' && categoryRenames && categoryRenames[n]) || n; });
+  tiles.sort(function(a, b){ return (generic.indexOf(a) > -1 ? 0 : 1) - (generic.indexOf(b) > -1 ? 0 : 1); });   // generic "Other …" first, like "Uncategorized"
+  var sig = currentTxType + '|' + tiles.join('|');
+  var host = txEl('txCatTiles');
+  if(sig !== txCatSig){
+    txCatSig = sig; host.innerHTML = '';
+    tiles.forEach(function(name){
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'tx-cat'; b.setAttribute('role', 'option'); b.setAttribute('data-cat', name); b.setAttribute('aria-label', name); b.title = name;
+      b.innerHTML = txIconSvg(name);
+      host.appendChild(b);
+    });
+  }
+  txMarkCat(false);
+}
+function txMarkCat(smooth){
+  var sel = txEl('txCategory'), val = sel.value, chosen = null;
+  Array.prototype.forEach.call(txEl('txCatTiles').children, function(b){
+    var on = b.getAttribute('data-cat') === val; b.setAttribute('aria-selected', on ? 'true' : 'false'); if(on) chosen = b;
+  });
+  txEl('txCatLabel').textContent = (val && val !== '__add_new__') ? val : 'Choose a category';
+  if(chosen){
+    var sc = txEl('txCatScroll'), left = chosen.offsetLeft - (sc.clientWidth - chosen.offsetWidth) / 2;
+    if(sc.clientWidth) sc.scrollTo({ left: Math.max(0, left), behavior: smooth ? 'smooth' : 'auto' });
+  }
+}
+document.addEventListener('click', function(ev){
+  var t = ev.target.closest && ev.target.closest('.tx-cat');
+  if(t && txEl('txCatScroll').contains(t)){
+    var sel = txEl('txCategory'); sel.value = t.getAttribute('data-cat');
+    sel.dispatchEvent(new Event('change')); txMarkCat(true);
+  }
+});
+
+/* ---------- full category sheet (grid + search + new) ---------- */
+function txBuildGrid(){
+  var lists = txCatLists(), val = txEl('txCategory').value, html = '';
+  function cell(n){ return '<button type="button" class="tx-cg" role="option" data-cat="' + scEsc(n) + '" aria-selected="' + (n === val) + '">' + txIconSvg(n) + '<span>' + scEsc(n) + '</span></button>'; }
+  html += lists.primary.filter(function(c){ return c !== 'Transfer'; }).map(cell).join('');
+  lists.groups.forEach(function(g){ if(g.items.length) html += '<h4>' + scEsc(g.label) + '</h4>' + g.items.filter(function(c){ return c !== 'Transfer'; }).map(cell).join(''); });
+  txEl('txCatGrid').innerHTML = html + '<div class="tx-empty-note" id="txCatNone" style="display:none;">No matching category</div>';
+}
+window.txFilterCats = function(){
+  var q = txEl('txCatSearch').value.trim().toLowerCase(), shown = 0;
+  Array.prototype.forEach.call(txEl('txCatGrid').querySelectorAll('.tx-cg'), function(b){
+    var on = !q || b.getAttribute('data-cat').toLowerCase().indexOf(q) !== -1; b.style.display = on ? '' : 'none'; if(on) shown++;
+  });
+  Array.prototype.forEach.call(txEl('txCatGrid').querySelectorAll('h4'), function(h){ h.style.display = q ? 'none' : ''; });
+  txEl('txCatNone').style.display = shown ? 'none' : '';
+};
+window.txOpenCatSheet = function(focusSearch){
+  txBuildGrid(); txEl('txCatSearch').value = ''; txEl('txNewCatName').value = '';
+  openModal('txCatOverlay');
+  if(focusSearch) setTimeout(function(){ txEl('txCatSearch').focus(); }, 60);
+};
+window.txCloseCatSheet = function(){ closeModal('txCatOverlay'); };
+txEl('txCatGrid').addEventListener('click', function(ev){
+  var b = ev.target.closest('.tx-cg'); if(!b) return;
+  var sel = txEl('txCategory'); sel.value = b.getAttribute('data-cat'); sel.dispatchEvent(new Event('change'));
+  txCloseCatSheet(); txFormSync();
+});
+window.txAddCategory = function(){
+  var name = txEl('txNewCatName').value.trim(); if(!name) return;
+  var type = currentTxType === 'income' ? 'income' : 'expense';
+  var added = addCustomCategory(name, type); if(!added) return;
+  populateCategorySelect(type);
+  txEl('txCategory').value = added; txEl('txNewCatName').value = '';
+  txCloseCatSheet(); txCatSig = ''; txFormSync();
+};
+txEl('txNewCatName').addEventListener('keydown', function(ev){ if(ev.key === 'Enter'){ ev.preventDefault(); txAddCategory(); } });
+
+/* ---------- more menu ---------- */
+window.txToggleMenu = function(ev){ if(ev) ev.stopPropagation(); var m = txEl('txMenu'); m.hidden = !m.hidden; txEl('txMoreBtn').setAttribute('aria-expanded', m.hidden ? 'false' : 'true'); };
+window.txMenuAction = function(a){
+  txEl('txMenu').hidden = true;
+  if(a === 'currencies'){ txEl('txAmount').value = (txEval(kp.expr) || 0) ? String(txEval(kp.expr)) : txEl('txAmount').value; showTxCurrencyCalc(); }
+  else if(a === 'delete'){ var id = editingTxId; if(!id) return; cancelTxModal(); deleteTx(id); }
+};
+document.addEventListener('click', function(ev){ var m = txEl('txMenu'); if(m && !m.hidden && !m.contains(ev.target)) m.hidden = true; });
+
+/* ---------- sync + wiring ---------- */
+window.txFormSync = function(){
+  var ov = txEl('txModalOverlay'); if(!ov || !ov.classList.contains('open')) return;
+  txSyncChips(); txSyncAmount(); txRenderCats();
+};
+['txAccountId', 'txCurrency', 'txCategory', 'txDate'].forEach(function(id){
+  var el = txEl(id); if(el) el.addEventListener('change', function(){ if(id === 'txCategory') txMarkCat(true); txFormSync(); });
+});
+txEl('txName').addEventListener('keydown', function(ev){ if(ev.key === 'Enter'){ ev.preventDefault(); this.blur(); } });
+txEl('txKeypad').addEventListener('click', function(ev){
+  var b = ev.target.closest('.tx-key'); if(!b) return;
+  var k = b.getAttribute('data-k');
+  if(k === 'bs'){ if(kpLong){ kpLong = false; return; } txBackspace(); } else txPress(k);
+});
+(function(){
+  var bs = txEl('txBackspace');
+  function stop(){ clearTimeout(kpTimer); }
+  bs.addEventListener('pointerdown', function(){ kpLong = false; kpTimer = setTimeout(function(){ kpLong = true; kp.expr = ''; txRenderAmount(true); }, 550); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function(t){ bs.addEventListener(t, stop); });
+})();
+// Physical keyboard (macOS / iPad): type the amount directly
+document.addEventListener('keydown', function(ev){
+  var ov = txEl('txModalOverlay'); if(!ov || !ov.classList.contains('open')) return;
+  if(document.querySelectorAll('.modal-overlay.open').length > 1){ if(ev.key === 'Escape' && txEl('txCatOverlay').classList.contains('open')) txCloseCatSheet(); return; }
+  var t = ev.target, tag = t && t.tagName;
+  if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') { if(ev.key === 'Escape') { t.blur(); } return; }
+  if(ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  var k = ev.key, handled = true;
+  if(/^\d$/.test(k)) txPress(k);
+  else if(k === '.' || k === ',') txPress('.');
+  else if(k === '+' || k === '-' || k === '*' || k === '/') txPress(k);
+  else if(k === 'x' || k === 'X') txPress('*');
+  else if(k === 'Backspace') txBackspace();
+  else if(k === 'Enter' || k === '=') txSaveClick();
+  else if(k === 'Escape'){ var m = txEl('txMenu'); if(!m.hidden) m.hidden = true; else cancelTxModal(); }
+  else handled = false;
+  if(handled) ev.preventDefault();
+});
+
+/* ===================================================================
+   Nova — appearance (theme + glass strength), category icon/colour maps, Settings block
+   =================================================================== */
+var NOVA_THEME_KEY = 'nova-theme', NOVA_GLASS_KEY = 'nova-glass';
+function novaThemeMode(){ try{ var m = localStorage.getItem(NOVA_THEME_KEY); return (m === 'light' || m === 'dark') ? m : 'auto'; }catch(e){ return 'auto'; } }
+function novaGlassStrength(){ try{ var g = parseFloat(localStorage.getItem(NOVA_GLASS_KEY)); return isNaN(g) ? 0.55 : Math.max(0, Math.min(1, g)); }catch(e){ return 0.55; } }
+function novaApplyAppearance(){
+  var root = document.documentElement;
+  root.setAttribute('data-theme', novaThemeMode());
+  root.style.setProperty('--glass-strength', String(novaGlassStrength()));
+}
+window.setThemeMode = function(m){ try{ localStorage.setItem(NOVA_THEME_KEY, m); }catch(e){} novaApplyAppearance(); if(typeof renderView === 'function' && currentView === 'settings') renderView('settings'); };
+window.setGlassStrength = function(v){ try{ localStorage.setItem(NOVA_GLASS_KEY, String(v)); }catch(e){} novaApplyAppearance(); var o = document.getElementById('glassPct'); if(o) o.textContent = Math.round(v * 100) + '%'; };
+window.novaAppearanceHTML = function(){
+  var m = novaThemeMode(), g = novaGlassStrength();
+  function b(v, label){ return '<button type="button" class="type-btn' + (m === v ? ' active' : '') + '" onclick="setThemeMode(\'' + v + '\')">' + label + '</button>'; }
+  return '<div class="side-label" style="margin:20px 0 8px;">Appearance</div>' +
+    '<div class="type-toggle">' + b('auto', 'Auto') + b('light', 'Light') + b('dark', 'Dark') + '</div>' +
+    '<div class="glass-slider"><div class="glass-slider-head"><span>Glass</span><span id="glassPct">' + Math.round(g * 100) + '%</span></div>' +
+    '<input type="range" min="0" max="100" value="' + Math.round(g * 100) + '" aria-label="Glass strength" oninput="setGlassStrength(this.value/100)">' +
+    '<div class="glass-slider-scale"><span>Solid</span><span>Clear</span></div></div>' +
+    '<div class="empty-note" style="text-align:left; margin-bottom:4px;">Auto follows your device. The Glass slider works like iOS 27\'s translucency control; surfaces turn solid automatically if Reduce Transparency is on.</div>';
+};
+novaApplyAppearance();
+
+/* category icons (colourful tiles) + matching chart colours */
+var NOVA_CAT_ICON = {"Education": "ic-c-education", "Travel": "ic-c-travel", "Home": "ic-c-home", "Health": "ic-c-health", "Living Expenses": "ic-c-living", "Family care": "ic-c-family", "Kitsterovna": "ic-c-star", "Transport": "ic-c-transport", "Scooter": "ic-c-scooter", "Gifts": "ic-c-gift", "Charity": "ic-c-charity", "Groceries": "ic-c-groceries", "Eating out": "ic-c-eating", "Entertainment": "ic-c-entertainment", "Electronics": "ic-c-electronics", "Digital / Subscriptions": "ic-c-digital", "Clothing": "ic-c-clothing", "Active Leisure": "ic-c-leisure", "Entrepreneurship": "ic-c-entrepreneur", "Investments": "ic-c-investments", "Flowers": "ic-c-flowers", "Smoking": "ic-c-smoking", "Self-care": "ic-c-selfcare", "Music & Video": "ic-c-music", "Sport": "ic-c-sport", "Services": "ic-c-services", "Fees": "ic-c-fees", "Taxes": "ic-c-taxes", "Other expense": "ic-c-other", "Refund": "ic-c-refund", "Transfer": "ic-c-transfer", "Loan": "ic-c-loan", "Salary": "ic-c-salary", "Freelance": "ic-c-freelance", "Sale": "ic-c-sale", "Other income": "ic-c-otherin", "Cashback": "ic-c-cashback", "Business": "ic-c-business"};
+var NOVA_CAT_HUE = {"Education": "#6366F1", "Travel": "#0EA5E9", "Home": "#14B8A6", "Health": "#F43F5E", "Living Expenses": "#3B82F6", "Family care": "#FB7185", "Kitsterovna": "#8B5CF6", "Transport": "#2563EB", "Scooter": "#06B6D4", "Gifts": "#D946EF", "Charity": "#E11D48", "Groceries": "#F59E0B", "Eating out": "#EF4444", "Entertainment": "#A855F7", "Electronics": "#0891B2", "Digital / Subscriptions": "#7C3AED", "Clothing": "#F97316", "Active Leisure": "#22C55E", "Entrepreneurship": "#EAB308", "Investments": "#10B981", "Flowers": "#F472B6", "Smoking": "#78716C", "Self-care": "#C084FC", "Music & Video": "#E879F9", "Sport": "#84CC16", "Services": "#0D9488", "Fees": "#EA580C", "Taxes": "#4F46E5", "Other expense": "#94A3B8", "Refund": "#22C55E", "Transfer": "#3B82F6", "Loan": "#DC2626", "Salary": "#16A34A", "Freelance": "#06B6D4", "Sale": "#EC4899", "Other income": "#84CC16", "Cashback": "#F59E0B", "Business": "#6366F1"};
+Object.keys(NOVA_CAT_ICON).forEach(function(k){ CATEGORY_ICON[k] = NOVA_CAT_ICON[k]; });
+Object.keys(NOVA_CAT_HUE).forEach(function(k){ CATEGORY_COLOR[k] = NOVA_CAT_HUE[k]; });
+window.scCatIconFallback = function(name){
+  if(typeof name !== 'string') return undefined;
+  try{ if(typeof categoryRenames === 'object'){ for(var orig in categoryRenames){ if(categoryRenames[orig] === name && NOVA_CAT_ICON[orig]) return NOVA_CAT_ICON[orig]; } } }catch(e){}
+  var h = 0; for(var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return 'ic-c-custom' + (h % 8);
 };
 
 })();
