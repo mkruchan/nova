@@ -386,7 +386,7 @@
 .scan-prog{ text-align:center; }
 .scan-spinner{ width:34px; height:34px; border-radius:50%; border:3px solid var(--border-2); border-top-color:var(--blue); margin:2px auto 14px; animation:scSpin .8s linear infinite; }
 @keyframes scSpin{ to{ transform:rotate(360deg); } }
-.scan-prog-text{ color:var(--muted); font-size:calc(14px * var(--font-scale, 1)); line-height:1.5; margin:-6px 0 14px; min-height:20px; }
+.scan-prog-text{ white-space:pre-line; color:var(--muted); font-size:calc(14px * var(--font-scale, 1)); line-height:1.5; margin:-6px 0 14px; min-height:20px; }
 .scan-bar{ height:6px; border-radius:4px; background:var(--panel-2); overflow:hidden; }
 .scan-bar > div{ height:100%; width:3%; background:var(--blue); border-radius:4px; transition:width .25s ease; }
 .scan-bar > div.indet{ width:35% !important; animation:scIndet 1.1s ease-in-out infinite; }
@@ -449,6 +449,19 @@
 .scan-toast.show{ opacity:1; transform:translate(-50%, 0); }
 @media (prefers-reduced-motion: reduce){ .scan-sub, .add-opt-chev, .sheet, .scan-spinner, .voice-mic.on, .scan-toast, .scan-bar > div{ transition:none !important; animation:none !important; } }
 
+#voiceKbd{ display:inline-block; margin:-2px 0 8px; padding:4px 2px; font-size:calc(14px * var(--font-scale, 1)); }
+#voiceKbd.attn{ font-weight:700; animation:scAttn 1.4s ease-in-out 3; }
+@keyframes scAttn{ 50%{ transform:scale(1.04); } }
+.diag-modal{ max-width:520px; max-height:90vh; display:flex; flex-direction:column; }
+.diag-list{ overflow-y:auto; flex:1; min-height:120px; border-radius:18px; background:var(--panel-2); padding:4px 12px; }
+.diag-row{ display:flex; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); align-items:flex-start; }
+.diag-row:last-child{ border-bottom:none; }
+.diag-ic{ width:20px; flex-shrink:0; font-weight:800; text-align:center; }
+.diag-row.ok .diag-ic{ color:var(--green); } .diag-row.bad .diag-ic{ color:var(--rose); } .diag-row.warn .diag-ic{ color:var(--warn); } .diag-row.run .diag-ic{ color:var(--muted); }
+.diag-row b{ display:block; font-size:calc(14px * var(--font-scale, 1)); font-weight:650; }
+.diag-row small{ display:block; color:var(--muted); font-size:calc(12.5px * var(--font-scale, 1)); line-height:1.4; word-break:break-word; }
+.diag-head{ font-size:calc(11px * var(--font-scale, 1)); text-transform:uppercase; letter-spacing:.08em; color:var(--muted-dim); font-weight:700; padding:10px 0 2px; }
+
 /* =====================================================================
    Nova Glass — design system (iOS 27 / macOS 27 Liquid Glass, emulated in CSS)
    Real Liquid Glass lensing isn't available to web content; this recreates the look with layered blur,
@@ -468,7 +481,7 @@
   --border-2: light-dark(rgba(50,54,80,0.17), rgba(255,255,255,0.14));
   --white: light-dark(#0D0F16, #F5F6FB);            /* primary text (name kept for the existing code) */
   --muted: light-dark(#51566A, #AEB3CB);
-  --muted-dim: light-dark(#666B7E, #8F96B3);
+  --muted-dim: light-dark(#5A5F72, #959CB8);
   --blue: #0A84FF;
   --blue-light: light-dark(#0062CC, #82BCFF);
   --blue-dim: light-dark(rgba(10,132,255,0.14), rgba(10,132,255,0.30));
@@ -479,25 +492,25 @@
   --solid-fg: light-dark(#FFFFFF, #0D0F16);
 
   /* glass */
-  --glass-strength: 0.55;                              /* 0 = solid … 1 = clearest — set from Settings, like iOS 27's slider */
+  --glass-strength: 1;                                 /* 0 = solid … 1 = clearest (default: clearest) — set from Settings, like iOS 27's slider */
   --glass-tint: light-dark(#FFFFFF, #1B1E2B);
-  --glass-opacity: calc(1 - var(--glass-strength) * 0.5);
+  --glass-opacity: calc(1 - var(--glass-strength) * 0.62);
   --glass-bg: color-mix(in srgb, var(--glass-tint) calc(var(--glass-opacity) * 100%), transparent);
   --glass-bg-strong: color-mix(in srgb, var(--glass-tint) calc((var(--glass-opacity) + 1) * 50%), transparent);
-  --glass-blur: calc(12px + var(--glass-strength) * 22px);
+  --glass-blur: calc(10px + var(--glass-strength) * 8px);    /* ≤ 18px: large radii alias in some (software) renderers */
   --glass-sheen: light-dark(rgba(255,255,255,0.65), rgba(255,255,255,0.10));
-  --glass-hi: light-dark(rgba(255,255,255,0.95), rgba(255,255,255,0.15));
+  --glass-hi: light-dark(rgba(255,255,255,1), rgba(255,255,255,0.22));
   --glass-lo: light-dark(rgba(20,24,50,0.04), rgba(0,0,0,0.25));
-  --glass-edge: light-dark(rgba(255,255,255,0.8), rgba(255,255,255,0.07));
+  --glass-edge: light-dark(rgba(255,255,255,0.85), rgba(255,255,255,0.13));
   --hairline: light-dark(rgba(30,34,66,0.09), rgba(255,255,255,0.05));
   --shadow: light-dark(rgba(40,50,100,0.22), rgba(0,0,0,0.6));
   --scrim: light-dark(rgba(24,28,52,0.30), rgba(0,0,0,0.55));
   --seg-active: light-dark(#FFFFFF, rgba(255,255,255,0.17));
   --cat-sheen: light-dark(rgba(255,255,255,0.6), rgba(255,255,255,0.13));
-  --blob-1: light-dark(rgba(125,160,255,0.45), rgba(52,86,214,0.34));
-  --blob-2: light-dark(rgba(255,166,196,0.42), rgba(168,66,170,0.24));
-  --blob-3: light-dark(rgba(120,226,196,0.38), rgba(24,150,150,0.22));
-  --blob-4: light-dark(rgba(255,214,150,0.40), rgba(210,120,50,0.15));
+  --blob-1: light-dark(rgba(110,150,255,0.62), rgba(52,86,214,0.46));
+  --blob-2: light-dark(rgba(255,150,190,0.58), rgba(168,66,170,0.34));
+  --blob-3: light-dark(rgba(100,226,190,0.55), rgba(24,150,150,0.32));
+  --blob-4: light-dark(rgba(255,205,130,0.55), rgba(210,120,50,0.24));
   --r-card: 26px; --r-ctl: 16px;
 }
 :root[data-theme="light"]{ color-scheme: light; }
@@ -521,10 +534,10 @@ button{ -webkit-tap-highlight-color:transparent; }
 /* ---------- glass material ---------- */
 .chart-card, .stat-card, .panel-card, .ask-nova, .manual-acct-group, .setup-box, .modal, .sheet, .sidebar, .tabbar, .tx-sheet, .glass{
   background: linear-gradient(180deg, var(--glass-sheen), transparent 50%), var(--glass-bg);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
-  backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(2) brightness(1.04);
+  backdrop-filter: blur(var(--glass-blur)) saturate(2) brightness(1.04);
   border:1px solid var(--glass-edge);
-  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), 0 0 0 0.5px var(--hairline), 0 16px 36px -18px var(--shadow);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 0 0 1px color-mix(in srgb, var(--glass-hi) 28%, transparent), inset 0 -1px 0 var(--glass-lo), 0 0 0 0.5px var(--hairline), 0 16px 36px -18px var(--shadow);
 }
 .chart-card, .stat-card, .panel-card, .ask-nova{ border-radius:var(--r-card); }
 .manual-acct-group{ border-radius:20px; box-shadow: inset 0 1px 0 var(--glass-hi), 0 0 0 0.5px var(--hairline); }
@@ -687,6 +700,17 @@ button{ -webkit-tap-highlight-color:transparent; }
 .cat-tile{ width:30px; height:30px; flex-shrink:0; display:inline-flex; } .cat-tile svg.icon{ width:30px; height:30px; }
 @media (max-width:760px){ .cat-tile, .cat-tile svg.icon{ width:26px; height:26px; } }
 
+/* two-item tab bar: compact, centred pill instead of full width */
+@media (max-width: 760px){ .tabbar{ left:50%; right:auto; transform:translateX(-50%); width:min(280px, calc(100% - 28px)); } }
+
+/* the tab bar sits over scrolling content, so it is denser than the cards: text passing underneath must not compete with the labels */
+.tabbar{ background: linear-gradient(180deg, var(--glass-sheen), transparent 55%), color-mix(in srgb, var(--glass-tint) calc((0.82 + (1 - var(--glass-strength)) * 0.12) * 100%), transparent);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 1.1)) saturate(2) brightness(1.04); backdrop-filter: blur(calc(var(--glass-blur) * 1.1)) saturate(2) brightness(1.04); }
+
+/* accessibility overrides must come AFTER the tab bar rule above: Reduce Transparency / Increase Contrast = solid bar, no filter */
+@media (prefers-reduced-transparency: reduce){ .tabbar{ -webkit-backdrop-filter:none; backdrop-filter:none; background:var(--panel); } }
+@media (prefers-contrast: more){ .tabbar{ -webkit-backdrop-filter:none; backdrop-filter:none; background:var(--panel); } }
+
 /* ===================== New add / edit transaction form ===================== */
 .glass-btn{ width:44px; height:44px; border-radius:50%; border:1px solid var(--glass-edge); background:linear-gradient(180deg, var(--glass-sheen), transparent 60%), var(--glass-bg); -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(1.8); backdrop-filter:blur(var(--glass-blur)) saturate(1.8); box-shadow: inset 0 1px 0 var(--glass-hi), 0 0 0 .5px var(--hairline), 0 8px 18px -10px var(--shadow); color:var(--white); display:flex; align-items:center; justify-content:center; flex-shrink:0; padding:0; transition:transform .15s ease; }
 .glass-btn:active{ transform:scale(.93); }
@@ -755,14 +779,14 @@ svg.icon.tx-acct-ic{ width:42px; height:42px; flex-shrink:0; }
 .tx-note:focus{ border-color:var(--blue); }
 
 .tx-cats{ flex-shrink:0; background:var(--panel-2); border-radius:26px; padding:10px 0 8px; overflow:hidden; }
-.tx-cat-scroll{ display:flex; gap:9px; overflow-x:auto; padding:14px 14px 10px; scrollbar-width:none; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; align-items:center; }
+.tx-cat-scroll{ position:relative; display:flex; gap:9px; overflow-x:auto; padding:14px 14px 10px; scrollbar-width:none; -webkit-overflow-scrolling:touch; scroll-snap-type:x mandatory; align-items:center; }
 .tx-cat-scroll::-webkit-scrollbar{ display:none; }
 .tx-cat-tiles{ display:contents; }
 .tx-cat-util, .tx-cat{ flex:0 0 auto; width:54px; height:54px; border-radius:18px; padding:0; border:none; scroll-snap-align:center; display:flex; align-items:center; justify-content:center; transition:transform .2s cubic-bezier(.3,1.4,.5,1), box-shadow .2s ease; background:none; }
 .tx-cat-util{ border:1.5px dashed var(--border-2); color:var(--muted); background:transparent; }
 .tx-cat-util svg.icon{ width:22px; height:22px; }
 .tx-cat svg.icon{ width:54px; height:54px; fill:none; stroke:none; }
-.tx-cat[aria-selected="true"]{ transform:scale(1.2); box-shadow:0 0 0 2.5px var(--white), 0 10px 20px -8px var(--shadow); margin:0 7px; }
+.tx-cat[aria-selected="true"]{ transform:scale(1.2); box-shadow:0 0 0 2.5px var(--white), 0 10px 20px -8px var(--shadow); z-index:1; }
 .tx-cat-label{ text-align:center; font-size:calc(15px * var(--font-scale,1)); font-weight:600; color:var(--muted); padding:6px 14px 0; min-height:24px; letter-spacing:-0.005em; }
 
 .tx-keypad{ display:grid; grid-template-columns:repeat(3, 1fr) 0.62fr; gap:8px; flex-shrink:0; }
@@ -819,6 +843,12 @@ svg.icon.tx-acct-ic{ width:42px; height:42px; flex-shrink:0; }
   .tx-chip{ height:52px; } .tx-chip-cur{ flex-basis:52px; } .tx-note{ height:48px; } .tx-save{ height:52px; }
   .tx-cat-scroll{ padding:10px 14px 6px; }
 }
+
+.tx-cat-scroll::after{ content:''; flex:0 0 calc(50% - 40px); }
+
+/* lets the FIRST category tile reach the centre (the two utility chips sit to its left, like the reference) */
+.tx-cat-scroll::before{ content:''; flex:0 0 max(0px, calc(50% - 167px)); }
+.tx-cat-util{ scroll-snap-align:none; }
 </style>
 </head>
 <body>
@@ -859,12 +889,9 @@ svg.icon.tx-acct-ic{ width:42px; height:42px; flex-shrink:0; }
 
   <div class="sidebar">
     <div class="brand"><div class="brand-mark">N</div><div class="brand-name">Nova</div></div>
-    <div class="side-label">Life Modules</div>
+    <div class="side-label">Menu</div>
     <button class="side-item active" data-view="finance"><span class="si-left"><svg class="icon"><use href="#ic-wallet"/></svg>Finance</span></button>
-    <button class="side-item" data-view="diet"><span class="si-left"><svg class="icon"><use href="#ic-utensils"/></svg>Diet</span><span class="tag">Soon</span></button>
     <button class="side-item" data-view="settings"><span class="si-left"><svg class="icon"><use href="#ic-settings"/></svg>Settings</span></button>
-    <button class="side-item" data-view="sport"><span class="si-left"><svg class="icon"><use href="#ic-dumbbell"/></svg>Sport</span><span class="tag">Soon</span></button>
-    <button class="side-item" data-view="tasks"><span class="si-left"><svg class="icon"><use href="#ic-check-square"/></svg>Tasks</span><span class="tag">Soon</span></button>
     </div>
 
   <div class="main-col">
@@ -874,10 +901,7 @@ svg.icon.tx-acct-ic{ width:42px; height:42px; flex-shrink:0; }
 
     <div class="tabbar">
       <button class="tab active" data-view="finance"><span class="ic"><svg class="icon"><use href="#ic-wallet"/></svg></span>Finance</button>
-      <button class="tab" data-view="diet"><span class="ic"><svg class="icon"><use href="#ic-utensils"/></svg></span>Diet</button>
       <button class="tab" data-view="settings"><span class="ic"><svg class="icon"><use href="#ic-settings"/></svg></span>Settings</button>
-      <button class="tab" data-view="sport"><span class="ic"><svg class="icon"><use href="#ic-dumbbell"/></svg></span>Sport</button>
-      <button class="tab" data-view="tasks"><span class="ic"><svg class="icon"><use href="#ic-check-square"/></svg></span>Tasks</button>
     </div>
   </div>
 </div>
@@ -1193,6 +1217,7 @@ svg.icon.tx-acct-ic{ width:42px; height:42px; flex-shrink:0; }
       </div>
     </div>
     <div class="voice-msg" id="voiceMsg" role="status" aria-live="polite"></div>
+    <button type="button" class="imp-link" id="voiceKbd" onclick="scVoiceKbd()">Use keyboard dictation instead</button>
     <textarea id="voiceText" class="voice-text" rows="3" placeholder="What did you spend or earn?" aria-label="What you said" oninput="scVoiceUpdate()"></textarea>
     <div class="voice-preview" id="voicePreview" aria-live="polite"></div>
     <div class="modal-actions">
@@ -1203,6 +1228,19 @@ svg.icon.tx-acct-ic{ width:42px; height:42px; flex-shrink:0; }
 </div>
 
 <div class="scan-toast" id="scanToast" role="status" aria-live="polite"></div>
+
+<div class="modal-overlay" id="diagOverlay" onclick="if(event.target===this) scDiagClose()">
+  <div class="modal diag-modal" role="dialog" aria-modal="true" aria-labelledby="diagTitle">
+    <h3 id="diagTitle">Scan &amp; voice check</h3>
+    <div class="empty-note" style="text-align:left; padding:0 0 10px;">Shows what this device supports. If something fails, the red line says why.</div>
+    <div id="diagList" class="diag-list" role="status" aria-live="polite"></div>
+    <div class="modal-actions" style="flex-wrap:wrap;">
+      <button class="modal-cancel" onclick="scDiagCopy()" id="diagCopy">Copy report</button>
+      <button class="modal-cancel" onclick="scDiagEngine()" id="diagEngineBtn">Test text recognition</button>
+      <button class="modal-save" onclick="scDiagClose()">Done</button>
+    </div>
+  </div>
+</div>
 
 <input type="file" id="importFile" accept=".csv" style="display:none;" onchange="handleImportFile(event)">
 
@@ -4233,6 +4271,9 @@ function settingsScreenHTML(){
     <div class="settings-row" onclick="openRatesDetail()">
       <span><svg class="icon"><use href="#ic-exchange"/></svg> Exchange rates</span><span class="chevron">›</span>
     </div>
+    <div class="settings-row" onclick="openDiagnostics()">
+      <span><svg class="icon"><use href="#ic-scan"/></svg> Scan &amp; voice check</span><span class="chevron">›</span>
+    </div>
 
     ${window.novaAppearanceHTML ? window.novaAppearanceHTML() : ''}
     <div class="side-label" style="margin:20px 0 8px;">Text Size</div>
@@ -5913,8 +5954,14 @@ var SC_LIBS = {
   tesseract:   'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',
   pdfjs:       'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js',
   pdfjsWorker: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js',
-  xlsx:        'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+  xlsx:        'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  // fallbacks used when jsDelivr is blocked / slow on someone's network
+  tesseractAlt: 'https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js',
+  pdfjsAlt:     'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js',
+  pdfjsWorkerAlt: 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js',
+  xlsxAlt:      'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js'
 };
+var SC_ALT_OCR = { workerPath: 'https://unpkg.com/tesseract.js@5.1.1/dist/worker.min.js', corePath: 'https://unpkg.com/tesseract.js-core@5.1.1', langPath: 'https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main', gzip: false };
 
 function scPad(n){ n = String(n); return n.length < 2 ? '0' + n : n; }
 function scIso(y, m, d){ return y + '-' + scPad(m) + '-' + scPad(d); }
@@ -5975,7 +6022,7 @@ var SC_CUR_RULES = [
   ['CAD', /c\$|ca\$|\bcad\b/i],
   ['EUR', /€|\beur\b|\beuros?\b|євро|евро/i],
   ['USD', /\$|\busd\b|\bdollars?\b|долар|доллар/i],
-  ['UAH', /₴|\buah\b|грн|гривн|гривень|\bhrn\b/i],
+  ['UAH', /₴|\buah\b|грн|гривн|гривень|гривен|\bhrn\b/i],
   ['PLN', /zł|\bpln\b|злот|\bzloty\b/i],
   ['ALL', /\blek[ëe]?\b|\blekë\b/i]
 ];
@@ -6193,7 +6240,7 @@ function scFindMoney(line, opts){
 }
 
 /* ---------- Receipt parsing ---------- */
-var SC_TOTAL_KW = /(grand\s*total|total\s*due|amount\s*due|balance\s*due|total\s*(amount|paid|sum|price|to\s*pay|eur|usd|all|uah|lek)|to\s*pay|\btotal\b|totali|totale|gjithsej|shuma\s*totale|shuma\s*e\s*pag|всього|разом|до\s*сплати|итого|к\s*оплате|сума\s*до|\bсума\b)/i;
+var SC_TOTAL_KW = /(grand\s*total|total\s*due|amount\s*due|balance\s*due|total\s*(amount|paid|sum|price|to\s*pay|eur|usd|all|uah|lek)|to\s*pay|\btotal\b|\btota\b|\btotl\b|\bt0tal\b|\btotai\b|\btal\b|totali|totale|gjithsej|shuma\s*totale|shuma\s*e\s*pag|всього|разом|до\s*сплати|итого|к\s*оплате|сума\s*до|\bсума\b)/i;
 var SC_TOTAL_FINAL = /(to\s*pay|amount\s*due|total\s*due|balance\s*due|grand\s*total|до\s*сплати|к\s*оплате|paguar\s*gjithsej|shuma\s*e\s*pag)/i;
 var SC_TOTAL_EXCL = /(sub\s*-?\s*total|subtotal|tax|vat|tvsh|tva\b|пдв|ндс|discount|zbritje|знижк|скидк|saving|change|kusur|решт|здач|сдач|cash|готівк|наличн|\bcard|картк|kart[eë]|tender|\bitems?\b|artikuj|\bqty\b|к-?сть|кількість|point|bonus|бонус|rounding|заокр|paguar\s*cash|te\s*kthyer|kthim)/i;
 var SC_TENDER = /(cash|change|tender|card|visa|mastercard|maestro|kusur|paguar|готівк|решт|здач|сдач|картк|наличн|kartë|karte|tel\b|phone|nipt|nuis|vat\s*no|iban|account|ref|auth|terminal|subtotal|tax|vat|tvsh|пдв|ндс|discount|знижк)/i;
@@ -6913,6 +6960,8 @@ function scParseVoice(text, opts){
   var now = opts.now || scToday(), today = scTodayIso(now);
   var res = { type: 'expense', amount: null, currency: null, date: null, name: '', category: null, ok: false, notes: [], transcript: String(text || '').trim() };
   var work = ' ' + res.transcript.toLowerCase().replace(/[“”"]/g, '').replace(/\s+/g, ' ').replace(/[?!]+/g, ' ').replace(/\.(?=\s|$)/g, '').trim() + ' ';
+  work = work.replace(/(\d+(?:[.,]\d+)?)\s*(?:thousand|тисяч[іиа]?|тысяч[иа]?|mijë|mije)(?![\p{L}])/giu, function(_, n){ return String(Math.round(parseFloat(n.replace(',', '.')) * 1000)); })
+             .replace(/(\d+(?:[.,]\d+)?)k\b/g, function(_, n){ return String(Math.round(parseFloat(n.replace(',', '.')) * 1000)); });
   work = scWordsToDigits(work.trim()).replace(/^/, ' ').replace(/$/, ' ');
 
   // ---------- date ----------
@@ -6957,10 +7006,10 @@ function scParseVoice(text, opts){
   if(pick){
     var amount = pick.value;
     var tail = work.slice(pick.end);
-    var cents = tail.match(/^\s*(euros?|eur|dollars?|usd|bucks?|lek|leke|lekë|hryvnias?|uah|zlotys?|pln|євро|евро|гривень|гривні|гривня|грн|долар\S*|доллар\S*)?\s*(?:and\s+|і\s+|и\s+|dhe\s+)?(\d{1,2})\s*(cents?|центів|цент\S*|копійок|копійки|копеек|cent[eë]?)\b/);
+    var cents = tail.match(/^\s*(euros?|eur|dollars?|usd|bucks?|lek|leke|lekë|hryvnias?|uah|zlotys?|pln|євро|евро|гривень|гривен|гривні|гривны|гривня|гривна|грн|долар\S*|доллар\S*)?\s*(?:and\s+|і\s+|и\s+|dhe\s+)?(\d{1,2})\s*(cents?|центів|цент\S*|копійок|копійки|копеек|cent[eë]?)\b/);
     if(cents && pick.value === Math.floor(pick.value)){ amount = pick.value + (+cents[2]) / 100; tail = tail.replace(cents[0], ' '); work = work.slice(0, pick.end) + ' ' + tail; }
     else {
-      var bare = tail.match(/^\s*(euros?|eur|dollars?|usd|bucks?|lek|leke|lekë|hryvnias?|uah|zlotys?|pln|євро|евро|гривень|гривні|гривня|грн|долар\S*)\s+(?:and\s+)?(\d{2})(?![\d:.%])/);
+      var bare = tail.match(/^\s*(euros?|eur|dollars?|usd|bucks?|lek|leke|lekë|hryvnias?|uah|zlotys?|pln|євро|евро|гривень|гривен|гривні|гривны|гривня|гривна|грн|долар\S*)\s+(?:and\s+)?(\d{2})(?![\d:.%])/);
       if(bare && pick.value === Math.floor(pick.value)){ amount = pick.value + (+bare[2]) / 100; work = work.slice(0, pick.end) + ' ' + bare[1] + ' ' + tail.slice(bare[0].length); }
     }
     res.amount = Math.round(amount * 100) / 100;
@@ -7009,19 +7058,31 @@ function scParseVoice(text, opts){
    Everything environment-specific goes through scHooks so the pipeline can be exercised outside a browser.
    =================================================================== */
 var scLibPromises = {};
-function scLoadScript(url){
+function scHost(u){ try{ return new URL(u).hostname; }catch(e){ return String(u).slice(0, 40); } }
+function scLoadScriptOnce(url){
   if(scLibPromises[url]) return scLibPromises[url];
   var p = new Promise(function(resolve, reject){
     var s = document.createElement('script'), done = false;
-    var timer = setTimeout(function(){ if(!done){ done = true; reject(scUserError('Downloading the scanning engine timed out. Check your connection and try again.')); } }, 40000);
+    var timer = setTimeout(function(){ if(!done){ done = true; if(s.parentNode) s.parentNode.removeChild(s); reject(scUserError('Downloading from ' + scHost(url) + ' timed out.')); } }, 25000);
     s.src = url; s.async = true;
     s.onload = function(){ if(!done){ done = true; clearTimeout(timer); resolve(); } };
-    s.onerror = function(){ if(!done){ done = true; clearTimeout(timer); reject(scUserError('Couldn\'t download the scanning engine. Scanning needs an internet connection the first time — check yours and try again.')); } };
+    s.onerror = function(){ if(!done){ done = true; clearTimeout(timer); if(s.parentNode) s.parentNode.removeChild(s); reject(scUserError('Couldn\'t reach ' + scHost(url) + '.')); } };
     document.head.appendChild(s);
   });
   p.catch(function(){ delete scLibPromises[url]; });
   scLibPromises[url] = p;
   return p;
+}
+// Try each source in turn; resolves with the index that worked. Fails with ONE clear message naming every host that failed.
+function scLoadScript(urls){
+  urls = [].concat(urls);
+  var failed = [];
+  return urls.reduce(function(chain, url, i){
+    return chain.then(function(ok){ if(ok !== null) return ok; return scLoadScriptOnce(url).then(function(){ return i; }, function(e){ failed.push(scHost(url)); return null; }); });
+  }, Promise.resolve(null)).then(function(ok){
+    if(ok === null) throw scUserError('Couldn\'t download the scanning engine from ' + failed.join(' or ') + '. Scanning needs internet the first time — check your connection, VPN or content blocker, then try again.');
+    return ok;
+  });
 }
 function scUserError(msg){ var e = new Error(msg); e.userMessage = msg; return e; }
 
@@ -7043,9 +7104,34 @@ var scHooks = {
   },
   getWorker: function(langs){
     if(scEng.worker && scEng.langs === langs) return Promise.resolve(scEng.worker);
-    return scKillWorker().then(function(){ return scHooks.loadScript(SC_LIBS.tesseract); }).then(function(){
-      if(typeof Tesseract === 'undefined') throw scUserError('The text-recognition engine didn\'t load. Please try again.');
-      return Tesseract.createWorker(langs, 1, { logger: function(m){ if(scEng.logger) scEng.logger(m); } });
+    var fromAlt = false;
+    return scKillWorker().then(function(){ return scHooks.loadScript([SC_LIBS.tesseract, SC_LIBS.tesseractAlt]); }).then(function(idx){
+      fromAlt = idx === 1;
+      if(typeof Tesseract === 'undefined') throw scUserError('The text-recognition engine didn\'t start. Please try again.');
+      var logger = function(m){ if(scEng.logger) scEng.logger(m); };
+      // The engine can hang silently when a download is blocked, so give up after 30s with NO progress and try the other source.
+      var attempt = function(alt){
+        return new Promise(function(resolve, reject){
+          var finished = false, timer = null;
+          function arm(){ clearTimeout(timer); timer = setTimeout(function(){ if(!finished){ finished = true; reject(new Error('no progress for 30s from the ' + (alt ? 'backup' : 'main') + ' source')); } }, 30000); }
+          arm();
+          var opts = { logger: function(m){ arm(); logger(m); } };
+          if(alt) for(var k in SC_ALT_OCR) opts[k] = SC_ALT_OCR[k];
+          Tesseract.createWorker(langs, 1, opts).then(function(w){
+            if(finished){ try{ w.terminate(); }catch(e){} return; }
+            finished = true; clearTimeout(timer); resolve(w);
+          }, function(e){ if(!finished){ finished = true; clearTimeout(timer); reject(e); } });
+        });
+      };
+      return attempt(fromAlt).catch(function(e1){
+        if(scJob && scJob.cancelled) throw e1;
+        if(scJob && scJob.progress) scJob.progress('Primary source failed — trying a backup…', 20);
+        return attempt(!fromAlt).catch(function(e2){
+          var d = (e2 && (e2.message || e2)) || (e1 && (e1.message || e1)) || 'unknown';
+          var err = scUserError('The text-recognition engine couldn\'t start (' + String(d).slice(0, 140) + '). Check your connection and try again.');
+          err.detail = String(d).slice(0, 300); throw err;
+        });
+      });
     }).then(function(w){ scEng.worker = w; scEng.langs = langs; return w; });
   },
   now: function(){ return new Date(); }
@@ -7082,17 +7168,113 @@ function scPreprocessPixels(data, w, h, bgData){
   }
   return { invert: invert, mean: Math.round(mean) };
 }
-function scTargetSize(w, h){
-  var s = 1, short = Math.min(w, h), maxPx = 6e6;
+
+/* ---------- receipt photos: find the paper, crop it and flatten its perspective (like a document-scanner app) ---------- */
+function scOtsu(hist, total){
+  var sum = 0, i; for(i = 0; i < 256; i++) sum += i * hist[i];
+  var sumB = 0, wB = 0, best = 0, thr = 128;
+  for(i = 0; i < 256; i++){
+    wB += hist[i]; if(!wB) continue; var wF = total - wB; if(!wF) break;
+    sumB += i * hist[i]; var mB = sumB / wB, mF = (sum - sumB) / wF, between = wB * wF * (mB - mF) * (mB - mF);
+    if(between > best){ best = between; thr = i; }
+  }
+  return thr;
+}
+// Returns { quad:[TL,TR,BR,BL] in ORIGINAL-image pixels, frac, rect } or null when no clear sheet of paper is visible
+function scFindPaper(img){
+  var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+  if(!iw || !ih) return null;
+  var sc = Math.min(1, 420 / Math.max(iw, ih)), w = Math.max(24, Math.round(iw * sc)), h = Math.max(24, Math.round(ih * sc));
+  var cv = scHooks.makeCanvas(w, h), ctx = cv.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+  var d = ctx.getImageData(0, 0, w, h).data, n = w * h, lum = new Uint8Array(n), hist = new Uint32Array(256), i;
+  for(i = 0; i < n; i++){ var v = (299 * d[i * 4] + 587 * d[i * 4 + 1] + 114 * d[i * 4 + 2]) / 1000 | 0; lum[i] = v; hist[v]++; }
+  var thr = scOtsu(hist, n), mask = new Uint8Array(n), bright = 0;
+  for(i = 0; i < n; i++){ if(lum[i] > thr){ mask[i] = 1; bright++; } }
+  if(bright < n * 0.05 || bright > n * 0.95) return null;
+  // largest connected bright region (4-connectivity, iterative flood fill)
+  var seen = new Uint8Array(n), stack = new Int32Array(n), bestStart = -1, bestSize = 0, size, sp, k;
+  for(i = 0; i < n; i++){
+    if(!mask[i] || seen[i]) continue;
+    sp = 0; stack[sp++] = i; seen[i] = 1; size = 0;
+    while(sp){ k = stack[--sp]; size++; var x = k % w;
+      if(x > 0 && mask[k - 1] && !seen[k - 1]){ seen[k - 1] = 1; stack[sp++] = k - 1; }
+      if(x < w - 1 && mask[k + 1] && !seen[k + 1]){ seen[k + 1] = 1; stack[sp++] = k + 1; }
+      if(k >= w && mask[k - w] && !seen[k - w]){ seen[k - w] = 1; stack[sp++] = k - w; }
+      if(k < n - w && mask[k + w] && !seen[k + w]){ seen[k + w] = 1; stack[sp++] = k + w; }
+    }
+    if(size > bestSize){ bestSize = size; bestStart = i; }
+  }
+  var frac = bestSize / n;
+  if(frac < 0.06 || frac > 0.78) return null;
+  // collect the extreme corners of that region
+  var comp = new Uint8Array(n); sp = 0; stack[sp++] = bestStart; comp[bestStart] = 1;
+  var tl = null, br = null, tr = null, bl = null, minS = 1e9, maxS = -1e9, maxD = -1e9, minD = 1e9, minX = w, maxX = 0, minY = h, maxY = 0;
+  while(sp){ k = stack[--sp]; var px = k % w, py = (k / w) | 0, ss = px + py, dd = px - py;
+    if(ss < minS){ minS = ss; tl = [px, py]; } if(ss > maxS){ maxS = ss; br = [px, py]; }
+    if(dd > maxD){ maxD = dd; tr = [px, py]; } if(dd < minD){ minD = dd; bl = [px, py]; }
+    if(px < minX) minX = px; if(px > maxX) maxX = px; if(py < minY) minY = py; if(py > maxY) maxY = py;
+    if(px > 0 && mask[k - 1] && !comp[k - 1]){ comp[k - 1] = 1; stack[sp++] = k - 1; }
+    if(px < w - 1 && mask[k + 1] && !comp[k + 1]){ comp[k + 1] = 1; stack[sp++] = k + 1; }
+    if(k >= w && mask[k - w] && !comp[k - w]){ comp[k - w] = 1; stack[sp++] = k - w; }
+    if(k < n - w && mask[k + w] && !comp[k + w]){ comp[k + w] = 1; stack[sp++] = k + w; }
+  }
+  // the sheet must have visible margin on every side; if it touches the frame edges the photo is already a close-up
+  if(minX <= w * 0.015 || minY <= h * 0.015 || maxX >= w * 0.985 - 1 || maxY >= h * 0.985 - 1) return null;
+  var quad = [tl, tr, br, bl];
+  var qa = Math.abs((quad[0][0] * quad[1][1] - quad[1][0] * quad[0][1]) + (quad[1][0] * quad[2][1] - quad[2][0] * quad[1][1]) + (quad[2][0] * quad[3][1] - quad[3][0] * quad[2][1]) + (quad[3][0] * quad[0][1] - quad[0][0] * quad[3][1])) / 2;
+  if(!qa || bestSize / qa < 0.72) return null;                 // not a clean rectangle (e.g. a wall of bright clutter)
+  // grow slightly (vignetting darkens the corners) and scale back to original pixels
+  var cx = (tl[0] + tr[0] + br[0] + bl[0]) / 4, cy = (tl[1] + tr[1] + br[1] + bl[1]) / 4, g = 1.045, inv = 1 / sc;
+  var out = quad.map(function(pt){ return [(cx + (pt[0] - cx) * g) * inv, (cy + (pt[1] - cy) * g) * inv]; });
+  out = out.map(function(pt){ return [Math.max(0, Math.min(iw, pt[0])), Math.max(0, Math.min(ih, pt[1]))]; });
+  return { quad: out, frac: frac, fill: bestSize / qa };
+}
+function scDist(a, b){ return Math.sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1])); }
+// Crop the sheet out of the original photo (at ≤ ~1400px wide) and map its quadrilateral onto an upright rectangle
+function scWarpPaper(img, paper){
+  var q = paper.quad, wFull = Math.max(scDist(q[0], q[1]), scDist(q[3], q[2])), hFull = Math.max(scDist(q[0], q[3]), scDist(q[1], q[2]));
+  if(wFull < 40 || hFull < 40) return null;
+  var cs = Math.min(1, 1400 / wFull);
+  var bx0 = Math.max(0, Math.floor(Math.min(q[0][0], q[1][0], q[2][0], q[3][0]) - 6)), by0 = Math.max(0, Math.floor(Math.min(q[0][1], q[1][1], q[2][1], q[3][1]) - 6));
+  var bx1 = Math.ceil(Math.max(q[0][0], q[1][0], q[2][0], q[3][0]) + 6), by1 = Math.ceil(Math.max(q[0][1], q[1][1], q[2][1], q[3][1]) + 6);
+  var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height; bx1 = Math.min(iw, bx1); by1 = Math.min(ih, by1);
+  var cw = Math.max(8, Math.round((bx1 - bx0) * cs)), ch = Math.max(8, Math.round((by1 - by0) * cs));
+  var crop = scHooks.makeCanvas(cw, ch), cctx = crop.getContext('2d');
+  cctx.imageSmoothingEnabled = true; if('imageSmoothingQuality' in cctx) cctx.imageSmoothingQuality = 'high';
+  cctx.drawImage(img, bx0, by0, bx1 - bx0, by1 - by0, 0, 0, cw, ch);
+  var sd = cctx.getImageData(0, 0, cw, ch).data;
+  var Q = q.map(function(pt){ return [(pt[0] - bx0) * cs, (pt[1] - by0) * cs]; });
+  var outW = wFull * cs, outH = hFull * cs, up = 1;
+  if(outW < 900) up = Math.min(2, 900 / outW);
+  outW = Math.max(8, Math.round(outW * up)); outH = Math.max(8, Math.round(outH * up));
+  var out = scHooks.makeCanvas(outW, outH), octx = out.getContext('2d'), od = octx.createImageData(outW, outH), o = od.data, x, y;
+  for(y = 0; y < outH; y++){
+    var v = outH > 1 ? y / (outH - 1) : 0;
+    var lx = Q[0][0] + (Q[3][0] - Q[0][0]) * v, ly = Q[0][1] + (Q[3][1] - Q[0][1]) * v, rx = Q[1][0] + (Q[2][0] - Q[1][0]) * v, ry = Q[1][1] + (Q[2][1] - Q[1][1]) * v;
+    for(x = 0; x < outW; x++){
+      var u = outW > 1 ? x / (outW - 1) : 0, sx = lx + (rx - lx) * u, sy = ly + (ry - ly) * u;
+      if(sx < 0) sx = 0; else if(sx > cw - 1.001) sx = cw - 1.001; if(sy < 0) sy = 0; else if(sy > ch - 1.001) sy = ch - 1.001;
+      var x0 = sx | 0, y0 = sy | 0, fx = sx - x0, fy = sy - y0, i00 = (y0 * cw + x0) * 4, i10 = i00 + 4, i01 = i00 + cw * 4, i11 = i01 + 4, oi = (y * outW + x) * 4;
+      for(var c = 0; c < 3; c++) o[oi + c] = (sd[i00 + c] * (1 - fx) + sd[i10 + c] * fx) * (1 - fy) + (sd[i01 + c] * (1 - fx) + sd[i11 + c] * fx) * fy;
+      o[oi + 3] = 255;
+    }
+  }
+  octx.putImageData(od, 0, 0);
+  return out;
+}
+
+function scTargetSize(w, h, opt){
+  opt = opt || {};
+  var s = 1, short = Math.min(w, h), maxPx = opt.maxPx || 6e6, maxShort = opt.maxShort || 2000;
   if(w * h > maxPx) s = Math.sqrt(maxPx / (w * h));
-  if(short * s > 2000) s = 2000 / short;
+  if(short * s > maxShort) s = maxShort / short;
   if(short * s < 700) s = Math.min(2, 700 / short);          // tiny screenshots: upscale a little so letters are big enough
   return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)) };
 }
-function scPrepareImage(img){
+function scPrepareImage(img, preScaled, opt){
   var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
   if(!iw || !ih) throw scUserError('That image appears to be empty.');
-  var t = scTargetSize(iw, ih);
+  var t = preScaled ? { w: iw, h: ih } : scTargetSize(iw, ih, opt);
   var orig = scHooks.makeCanvas(t.w, t.h), octx = orig.getContext('2d');
   octx.imageSmoothingEnabled = true; if('imageSmoothingQuality' in octx) octx.imageSmoothingQuality = 'high';
   octx.drawImage(img, 0, 0, t.w, t.h);
@@ -7145,7 +7327,12 @@ async function scOcr(canvas, psm, jobId, label){
   var worker = await scHooks.getWorker('eng+ukr');
   if(!scAlive(jobId)) throw scCancelled();
   await worker.setParameters({ tessedit_pageseg_mode: String(psm) });
-  var res = await worker.recognize(canvas);
+  var limitMs = (scEng.firstRead === false) ? 90000 : 150000, timer = null;
+  var res = await Promise.race([
+    worker.recognize(canvas),
+    new Promise(function(_, rej){ timer = setTimeout(function(){ rej(scUserError('Reading took too long on this device (over ' + Math.round(limitMs / 1000) + ' s). Try a closer, sharper, well-lit photo of just the receipt, or enter it manually.')); }, limitMs); })
+  ]).catch(function(e){ clearTimeout(timer); if(e && e.userMessage) scKillWorker(); throw e; });
+  clearTimeout(timer); scEng.firstRead = false;
   if(!scAlive(jobId)) throw scCancelled();
   return res.data;
 }
@@ -7155,18 +7342,26 @@ function scReceiptScore(r){ return (r.method === 'keyword' ? 3 : (r.method === '
 /* ---------- per-source pipelines (pure results; the UI decides what to show) ---------- */
 async function scPipeReceipt(file, jobId){
   var img = await scHooks.loadImage(file); if(!scAlive(jobId)) throw scCancelled();
-  var prep = scPrepareImage(img);
-  var now = scHooks.now();
+  var now = scHooks.now(), paper = null, flat = null, prep, usedPaper = false;
+  if(scJob.progress) scJob.progress('Finding the receipt in the photo…', 5);
+  try{ paper = scFindPaper(img); if(paper) flat = scWarpPaper(img, paper); }catch(e){ paper = null; flat = null; }
+  if(!scAlive(jobId)) throw scCancelled();
+  if(flat){ prep = scPrepareImage(flat, true); usedPaper = true; } else prep = scPrepareImage(img, false, { maxShort: 1500, maxPx: 2.6e6 });   // no clear paper: smaller whole-frame read (fast, and less table texture)
+  scJob.dbg = { paper: !!paper, flat: !!flat, size: prep.w + 'x' + prep.h, t0: Date.now() };
   var data = await scOcr(prep.proc, 6, jobId, 'Reading the receipt…');
   var res = scParseReceipt(scOcrToLines(data), { now: now }), conf = data.confidence;
-  if(res.method !== 'keyword'){
+  scJob.dbg.first = { ms: Date.now() - scJob.dbg.t0, method: res.method, total: res.total, conf: conf, lines: scOcrToLines(data).length };
+  // A second reading is slow, so only do it when the first found nothing usable. A cropped receipt is re-read as a crop (never the whole frame).
+  var needSecond = res.method !== 'keyword';
+  if(needSecond){
     if(scJob.progress) scJob.progress('Trying a second reading…', 60);
-    var data2 = await scOcr(prep.proc, 4, jobId, 'Trying a second reading…');
+    var prep2 = prep, psm2 = 4;                                   // same (cropped) image, different page-segmentation mode — never the whole cluttered frame
+    var data2 = await scOcr(prep2.proc, psm2, jobId, 'Trying a second reading…');
     var res2 = scParseReceipt(scOcrToLines(data2), { now: now });
     if(scReceiptScore(res2) > scReceiptScore(res)){ res = res2; conf = data2.confidence; }
   }
   if(conf != null && conf < 80) res.notes.push('The photo was hard to read (' + Math.round(conf) + '% confidence) — double-check everything below.');
-  res.ocrConfidence = conf;
+  res.ocrConfidence = conf; res.usedPaper = usedPaper;
   return res;
 }
 async function scPipeImageRows(file, jobId, mode){
@@ -7197,7 +7392,7 @@ async function scPipeStatement(file, jobId){
   var common = { now: now, defaultCurrency: DEFAULT_INPUT_CURRENCY };
   if(/\.(xlsx|xls|xlsm)$/.test(name) || /spreadsheet|ms-excel/.test(type)){
     if(scJob.progress) scJob.progress('Opening the spreadsheet…', 20);
-    await scHooks.loadScript(SC_LIBS.xlsx); if(!scAlive(jobId)) throw scCancelled();
+    await scHooks.loadScript([SC_LIBS.xlsx, SC_LIBS.xlsxAlt]); if(!scAlive(jobId)) throw scCancelled();
     if(typeof XLSX === 'undefined') throw scUserError('The spreadsheet reader didn\'t load. Please try again.');
     var rows = scXlsxToRows(XLSX, await scHooks.readBuffer(file));
     var out = scParseTable(rows, common);
@@ -7206,10 +7401,10 @@ async function scPipeStatement(file, jobId){
   }
   if(/\.pdf$/.test(name) || type === 'application/pdf'){
     if(scJob.progress) scJob.progress('Opening the PDF…', 15);
-    await scHooks.loadScript(SC_LIBS.pdfjs); if(!scAlive(jobId)) throw scCancelled();
+    var pdfIdx = await scHooks.loadScript([SC_LIBS.pdfjs, SC_LIBS.pdfjsAlt]); if(!scAlive(jobId)) throw scCancelled();
     var lib = window.pdfjsLib || window['pdfjs-dist/build/pdf'];
     if(!lib) throw scUserError('The PDF reader didn\'t load. Please try again.');
-    try{ lib.GlobalWorkerOptions.workerSrc = SC_LIBS.pdfjsWorker; }catch(e){}
+    try{ lib.GlobalWorkerOptions.workerSrc = (pdfIdx === 1 ? SC_LIBS.pdfjsWorkerAlt : SC_LIBS.pdfjsWorker); }catch(e){}
     var pdf;
     try{ pdf = await scPdfToLines(lib, await scHooks.readBuffer(file), function(p, n){ if(scJob.progress) scJob.progress('Reading PDF page ' + p + ' of ' + n + '…', 20 + 70 * p / n); }); }
     catch(e){
@@ -7307,8 +7502,9 @@ function scFail(id, e){
   scJob.progress = null; scKillWorker();
   if(id !== scJob.seq || scJob.cancelled) return;
   var msg = (e && e.userMessage) || 'Something went wrong while reading that file. You can try again, or add the transaction manually.';
+  var detail = e && (e.detail || (!e.userMessage && (e.message || String(e))));
   if(!(e && e.userMessage) && typeof console !== 'undefined') console.error('Nova scan error:', e);
-  scShowError('Couldn\'t read that', msg, true);
+  scShowError('Couldn\'t read that', msg + (detail ? '\n\nDetails: ' + String(detail).slice(0, 180) : ''), true);
 }
 
 /* ---------- running a scan ---------- */
@@ -7561,8 +7757,10 @@ window.scImportCommit = function(){
 
 /* ---------- voice ---------- */
 var SC_VOICE_LANGS = { 'en-US': 'English', 'uk-UA': 'Українська', 'ru-RU': 'Русский', 'sq-AL': 'Shqip' };
-var scVoice = { rec: null, on: false, lang: 'en-US' };
+var scVoice = { rec: null, on: false, lang: 'en-US', failed: false };
 function scSpeechCtor(){ return window.SpeechRecognition || window.webkitSpeechRecognition || null; }
+function scIsStandalone(){ try{ return !!(navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)); }catch(e){ return false; } }
+function scIsIOS(){ var ua = navigator.userAgent || ''; return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
 function scVoiceMsg(t){ var m = scEl('voiceMsg'); if(m) m.textContent = t || ''; }
 function scVoiceBtn(){
   var b = scEl('voiceMic'); if(!b) return;
@@ -7570,15 +7768,35 @@ function scVoiceBtn(){
   b.setAttribute('aria-pressed', scVoice.on ? 'true' : 'false');
   b.setAttribute('aria-label', scVoice.on ? 'Stop listening' : 'Start listening');
 }
+// Opening the keyboard has to happen inside a tap, which is why this is a button as well as an automatic fallback.
+window.scVoiceKbd = function(){
+  var t = scEl('voiceText'); if(!t) return;
+  scVoiceStop(); t.focus(); try{ t.setSelectionRange(t.value.length, t.value.length); }catch(e){}
+  scVoiceMsg('Tap the microphone key on your keyboard and say it, e.g. “spent 12 euros on lunch”.');
+};
+function scVoiceErrText(code){
+  var lang = SC_VOICE_LANGS[scVoice.lang] || scVoice.lang;
+  if(code === 'not-allowed' || code === 'service-not-allowed'){
+    if(scIsIOS() && scIsStandalone()) return 'iPhone Home Screen apps can\'t use the browser\'s speech recognition. Tap “Use keyboard dictation”, then the microphone key on your keyboard.';
+    if(scIsIOS()) return 'Speech recognition is blocked. Allow Microphone for this site in Settings → Apps → Safari, and make sure Dictation is on (Settings → General → Keyboard). Or use keyboard dictation.';
+    return 'Speech recognition is blocked. Allow the microphone for this site in your browser, and turn on Dictation (macOS: System Settings → Keyboard → Dictation). Or use keyboard dictation.';
+  }
+  if(code === 'language-not-supported') return 'This device can\'t recognise ' + lang + ' speech. Pick another language, or use keyboard dictation.';
+  if(code === 'no-speech') return 'I didn\'t hear anything. Tap the microphone and try again.';
+  if(code === 'network') return 'Speech recognition needs an internet connection.';
+  if(code === 'audio-capture') return 'No microphone was found.';
+  return 'Speech recognition stopped (' + (code || 'unknown') + '). Tap the microphone to retry, or use keyboard dictation.';
+}
 window.scOpenVoice = function(){
   try{ scVoice.lang = localStorage.getItem('nova-voice-lang') || 'en-US'; }catch(e){}
   if(!SC_VOICE_LANGS[scVoice.lang]) scVoice.lang = 'en-US';
+  scVoice.failed = false; scEl('voiceKbd').classList.remove('attn');
   scEl('voiceLang').value = scVoice.lang;
   scEl('voiceText').value = '';
-  scVoiceMsg(scSpeechCtor() ? 'Listening… say e.g. “spent 12 euros on lunch yesterday”.' : 'Speech recognition isn\'t available in this browser/app. Tap the box and use your keyboard\'s microphone key to dictate, or just type.');
   scVoiceUpdate();
   openModal('voiceOverlay');
-  if(scSpeechCtor()) scVoiceStart();
+  if(scSpeechCtor()){ scVoiceMsg('Listening… say e.g. “spent 12 euros on lunch yesterday”.'); scVoiceStart(); }
+  else { scVoiceKbd(); scVoiceMsg('This browser has no built-in speech recognition. Tap the microphone key on your keyboard and say it, or just type.'); }
 };
 function scVoiceStop(){
   var rec = scVoice.rec; scVoice.rec = null; scVoice.on = false;
@@ -7586,13 +7804,13 @@ function scVoiceStop(){
   scVoiceBtn();
 }
 function scVoiceStart(){
-  var Ctor = scSpeechCtor(); if(!Ctor) return;
+  var Ctor = scSpeechCtor(); if(!Ctor){ scVoiceKbd(); return; }
   scVoiceStop();
   var rec;
-  try{ rec = new Ctor(); }catch(e){ scVoiceMsg('Speech recognition couldn\'t start here. Use your keyboard\'s microphone key to dictate into the box.'); return; }
+  try{ rec = new Ctor(); }catch(e){ scVoice.failed = true; scVoiceMsg(scVoiceErrText('service-not-allowed')); scEl('voiceKbd').classList.add('attn'); return; }
   rec.lang = scVoice.lang; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
   scVoice.rec = rec;
-  rec.onstart = function(){ scVoice.on = true; scVoiceBtn(); scVoiceMsg('Listening…'); };
+  rec.onstart = function(){ scVoice.on = true; scVoice.failed = false; scVoiceBtn(); scVoiceMsg('Listening…'); };
   rec.onresult = function(ev){
     var t = '';
     for(var i = 0; i < ev.results.length; i++) t += ev.results[i][0].transcript + ' ';
@@ -7602,20 +7820,17 @@ function scVoiceStart(){
   rec.onerror = function(ev){
     var code = ev && ev.error;
     if(code === 'aborted') return;
-    scVoice.on = false; scVoiceBtn();
-    if(code === 'not-allowed' || code === 'service-not-allowed') scVoiceMsg('Microphone/speech access is blocked here (iPhone home-screen apps often block it). Use your keyboard\'s microphone key to dictate into the box, or type.');
-    else if(code === 'no-speech') scVoiceMsg('I didn\'t hear anything. Tap the microphone and try again.');
-    else if(code === 'network') scVoiceMsg('Speech recognition needs an internet connection.');
-    else if(code === 'audio-capture') scVoiceMsg('No microphone was found.');
-    else scVoiceMsg('Speech recognition stopped (' + (code || 'unknown') + '). Tap the microphone to retry, or type.');
+    scVoice.on = false; scVoice.failed = true; scVoiceBtn();
+    scVoiceMsg(scVoiceErrText(code));
+    if(code !== 'no-speech') scEl('voiceKbd').classList.add('attn');
   };
   rec.onend = function(){
     if(scVoice.rec === rec) scVoice.rec = null;
     scVoice.on = false; scVoiceBtn();
-    var hasText = (scEl('voiceText').value || '').trim();
-    if(hasText) scVoiceMsg('Check the text below — you can edit it — then continue.');
+    if(!scVoice.failed && (scEl('voiceText').value || '').trim()) scVoiceMsg('Check the text below — you can edit it — then continue.');
+    else if(!scVoice.failed && !(scEl('voiceText').value || '').trim()){ scVoiceMsg('I didn\'t catch anything. Tap the microphone to try again, or use keyboard dictation.'); scEl('voiceKbd').classList.add('attn'); }
   };
-  try{ rec.start(); }catch(e){ scVoiceMsg('Couldn\'t start listening. Tap the microphone to retry.'); }
+  try{ rec.start(); }catch(e){ scVoice.failed = true; scVoiceMsg('Couldn\'t start listening. Tap the microphone to retry, or use keyboard dictation.'); scEl('voiceKbd').classList.add('attn'); }
 }
 window.scVoiceToggle = function(){ if(scVoice.on) scVoiceStop(); else scVoiceStart(); };
 window.scVoiceLangChange = function(){
@@ -7650,6 +7865,90 @@ window.scVoiceContinue = function(){
 };
 window.scVoiceClose = function(){ scVoiceStop(); closeModal('voiceOverlay'); };
 
+/* ---------- Scan & voice check (Settings) ---------- */
+var scDiag = { rows: [], busy: false };
+function scDiagAdd(state, label, detail, head){ scDiag.rows.push({ state: state, label: label, detail: detail || '', head: head || '' }); scDiagRender(); return scDiag.rows.length - 1; }
+function scDiagSet(i, state, detail){ var r = scDiag.rows[i]; if(!r) return; r.state = state; if(detail != null) r.detail = detail; scDiagRender(); }
+function scDiagRender(){
+  var el = scEl('diagList'); if(!el) return;
+  var sym = { ok: '✓', bad: '✕', warn: '!', run: '…' }, html = '';
+  scDiag.rows.forEach(function(r){
+    if(r.head) html += '<div class="diag-head">' + scEsc(r.head) + '</div>';
+    html += '<div class="diag-row ' + r.state + '"><span class="diag-ic">' + sym[r.state] + '</span><div><b>' + scEsc(r.label) + '</b>' + (r.detail ? '<small>' + scEsc(r.detail) + '</small>' : '') + '</div></div>';
+  });
+  el.innerHTML = html;
+}
+function scFetchMs(url){
+  var t0 = Date.now(), ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, timer = setTimeout(function(){ if(ctl) ctl.abort(); }, 9000);
+  return fetch(url, { cache: 'no-store', signal: ctl ? ctl.signal : undefined }).then(function(r){ clearTimeout(timer); return { ok: r.ok, status: r.status, ms: Date.now() - t0 }; }, function(e){ clearTimeout(timer); return { ok: false, status: 0, ms: Date.now() - t0, err: (e && e.name === 'AbortError') ? 'timed out' : 'blocked or offline' }; });
+}
+window.openDiagnostics = function(){ openModal('diagOverlay'); scDiagRun(); };
+window.scDiagClose = function(){ closeModal('diagOverlay'); };
+async function scDiagRun(){
+  if(scDiag.busy) return; scDiag.busy = true; scDiag.rows = [];
+  var ua = navigator.userAgent || '';
+  scDiagAdd(navigator.onLine === false ? 'bad' : 'ok', 'Online', navigator.onLine === false ? 'The browser says you are offline.' : 'Connected', 'This device');
+  scDiagAdd('ok', 'Running as', (scIsStandalone() ? 'Home Screen / installed app' : 'Browser tab') + ' · ' + (scIsIOS() ? 'iOS/iPadOS' : (/Mac/.test(ua) ? 'macOS' : 'other')));
+  var wasm = typeof WebAssembly === 'object', simd = false;
+  try{ simd = wasm && WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11])); }catch(e){}
+  scDiagAdd('head', '', '', 'Scanning'); scDiag.rows.pop();
+  scDiagAdd(wasm ? 'ok' : 'bad', 'WebAssembly', wasm ? (simd ? 'Supported (fast mode)' : 'Supported (compatibility mode — slower)') : 'Not available — scanning cannot run on this browser', 'Scanning');
+  var workerOk = false; try{ var bl = new Blob(['self.onmessage=function(e){self.postMessage(1)}'], { type: 'text/javascript' }); var wu = URL.createObjectURL(bl); var wk = new Worker(wu); workerOk = await new Promise(function(res){ var tm = setTimeout(function(){ res(false); }, 3000); wk.onmessage = function(){ clearTimeout(tm); res(true); }; wk.onerror = function(){ clearTimeout(tm); res(false); }; wk.postMessage(1); }); wk.terminate(); URL.revokeObjectURL(wu); }catch(e){ workerOk = false; }
+  scDiagAdd(workerOk ? 'ok' : 'bad', 'Background workers', workerOk ? 'Working' : 'Blocked — the text-recognition engine needs them');
+  var canvasOk = false; try{ var cv = document.createElement('canvas'); cv.width = 3000; cv.height = 3000; var cx = cv.getContext('2d'); cx.fillRect(0, 0, 10, 10); canvasOk = cx.getImageData(0, 0, 2, 2).data.length === 16; }catch(e){}
+  scDiagAdd(canvasOk ? 'ok' : 'warn', 'Large image processing', canvasOk ? '3000 × 3000 canvas OK' : 'Large images may fail — try smaller photos');
+  var srcs = [['jsDelivr (main source)', 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/package.json'], ['unpkg (backup)', 'https://unpkg.com/tesseract.js@5.1.1/package.json'], ['GitHub (backup language data)', 'https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/README.md']];
+  var idx = srcs.map(function(s, i){ return scDiagAdd('run', s[0], 'checking…', i === 0 ? 'Downloads (needed the first time you scan)' : ''); });
+  var results = await Promise.all(srcs.map(function(s){ return scFetchMs(s[1]); }));
+  var anyEngine = results[0].ok || results[1].ok;
+  results.forEach(function(r, i){ scDiagSet(idx[i], r.ok ? 'ok' : (i === 0 ? 'warn' : 'warn'), r.ok ? 'Reachable (' + r.ms + ' ms)' : 'Not reachable (' + (r.err || ('HTTP ' + r.status)) + ')'); });
+  if(!anyEngine) scDiagAdd('bad', 'No download source reachable', 'Scanning cannot start. Try another network, turn off VPN/content blockers, or use manual entry.');
+  var Ctor = scSpeechCtor();
+  scDiagAdd(Ctor ? 'ok' : 'warn', 'Speech recognition', Ctor ? 'Available in this browser' : 'Not available here — voice input will use keyboard dictation', 'Voice');
+  if(scIsIOS() && scIsStandalone()) scDiagAdd('warn', 'iPhone Home Screen app', 'Home Screen apps usually can\'t use speech recognition. Voice input switches to keyboard dictation (the microphone key on your keyboard), which works.');
+  var perm = 'unknown'; try{ if(navigator.permissions && navigator.permissions.query){ perm = (await navigator.permissions.query({ name: 'microphone' })).state; } }catch(e){ perm = 'not reported by this browser'; }
+  scDiagAdd(perm === 'denied' ? 'bad' : 'ok', 'Microphone permission', perm === 'denied' ? 'Denied for this site — allow it in browser/site settings' : perm);
+  scDiagAdd('ok', 'Haptics', (typeof navigator.vibrate === 'function') ? 'Vibration API available' : 'No Vibration API (normal on iPhone) — the app uses the iOS switch method');
+  scDiag.busy = false;
+}
+window.scDiagEngine = async function(){
+  var btn = scEl('diagEngineBtn'); if(scDiag.busy) return; scDiag.busy = true; btn.disabled = true;
+  var i = scDiagAdd('run', 'Text-recognition test', 'starting…', 'Live test');
+  var t0 = Date.now();
+  try{
+    scEng.logger = function(m){ if(!m) return; var st = String(m.status || ''); if(/loading tesseract core/.test(st)) scDiagSet(i, 'run', 'downloading engine…'); else if(/loading language/.test(st)) scDiagSet(i, 'run', 'downloading language data…'); else if(/recogniz/.test(st)) scDiagSet(i, 'run', 'reading…'); };
+    var cv = document.createElement('canvas'); cv.width = 760; cv.height = 330; var cx = cv.getContext('2d');
+    cx.fillStyle = '#fff'; cx.fillRect(0, 0, 760, 330); cx.fillStyle = '#111'; cx.font = 'bold 52px monospace'; cx.fillText('TEST CAFE', 40, 90); cx.fillText('TOTAL 12.50 EUR', 40, 180); cx.fillText('04/09/2026', 40, 270);
+    var w = await scHooks.getWorker('eng+ukr');
+    await w.setParameters({ tessedit_pageseg_mode: '6' });
+    var res = await w.recognize(cv);
+    var parsed = scParseReceipt(scOcrToLines(res.data), { now: scHooks.now() }), secs = ((Date.now() - t0) / 1000).toFixed(1);
+    var okTotal = parsed.total === 12.5;
+    scDiagSet(i, okTotal ? 'ok' : 'warn', (okTotal ? 'Works: read total 12.50 EUR' : 'Engine ran but misread the test (' + (parsed.total == null ? 'no total' : parsed.total) + ')') + ' in ' + secs + 's');
+  }catch(e){
+    scDiagSet(i, 'bad', 'Failed: ' + ((e && (e.userMessage || e.message)) || String(e)).slice(0, 220));
+  }finally{
+    scEng.logger = null; await scKillWorker(); scDiag.busy = false; btn.disabled = false;
+  }
+};
+window.scDiagCopy = function(){
+  var lines = ['Nova scan & voice check · ' + new Date().toISOString(), navigator.userAgent];
+  scDiag.rows.forEach(function(r){ lines.push((r.head ? '\n[' + r.head + ']\n' : '') + ({ ok: 'OK  ', bad: 'FAIL', warn: 'WARN', run: '... ' })[r.state] + ' ' + r.label + (r.detail ? ' — ' + r.detail : '')); });
+  var text = lines.join('\n');
+  var done = function(){ scToast('Report copied'); };
+  var legacy = function(){
+    try{
+      var ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+      var okc = document.execCommand && document.execCommand('copy'); document.body.removeChild(ta);
+      if(okc){ done(); return; }
+    }catch(e){}
+    scToast('Couldn\'t copy automatically');
+  };
+  try{ if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(done, legacy); return; } }catch(e){}
+  legacy();
+};
+
 /* ---------- wiring ---------- */
 function scWire(){
   var list = scEl('importList');
@@ -7665,7 +7964,7 @@ scWire();
 window.NovaScan = {
   hooks: scHooks, run: scRun, state: function(){ return { imp: scImp, voice: scVoice, job: scJob }; },
   t: { parseMoney: scParseMoney, findDates: scFindDates, parseReceipt: scParseReceipt, parseTable: scParseTable, parseStatementLines: scParseStatementLines,
-       parseScreenshotLines: scParseScreenshotLines, parseVoice: scParseVoice, ocrToLines: scOcrToLines, parseDelimited: scParseDelimited, preprocess: scPreprocessPixels, prepareImage: scPrepareImage, xlsxToRows: scXlsxToRows, pdfToLines: scPdfToLines }
+       parseScreenshotLines: scParseScreenshotLines, parseVoice: scParseVoice, ocrToLines: scOcrToLines, parseDelimited: scParseDelimited, preprocess: scPreprocessPixels, prepareImage: scPrepareImage, findPaper: scFindPaper, warpPaper: scWarpPaper, xlsxToRows: scXlsxToRows, pdfToLines: scPdfToLines }
 };
 
 /* ===================================================================
@@ -7705,6 +8004,25 @@ function txDisplayExpr(e){
 }
 function txPlain(v){ return String(Math.round(v * 100) / 100); }
 function txLastNum(e){ var m = e.match(/[\d.]*$/); return m ? m[0] : ''; }
+
+/* ---------- haptics ---------- */
+function novaHapticsOn(){ try{ return localStorage.getItem('nova-haptics') !== '0'; }catch(e){ return true; } }
+var novaHapticLabel = null;
+// Android/desktop Chrome: Vibration API. iOS Safari has none, but toggling an <input switch> plays the system selection tick (iOS 17.4+).
+window.novaHaptic = function(ms){
+  if(!novaHapticsOn()) return;
+  try{ if(typeof navigator.vibrate === 'function'){ navigator.vibrate(ms || 8); return; } }catch(e){}
+  try{
+    if(!novaHapticLabel){
+      novaHapticLabel = document.createElement('label');
+      novaHapticLabel.setAttribute('aria-hidden', 'true');
+      novaHapticLabel.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none;';
+      var i = document.createElement('input'); i.type = 'checkbox'; i.setAttribute('switch', ''); i.tabIndex = -1;
+      novaHapticLabel.appendChild(i); document.body.appendChild(novaHapticLabel);
+    }
+    novaHapticLabel.click();
+  }catch(e){}
+};
 
 // shrink the big number until it fits on one line (works for any font / width)
 function txFitAmount(){
@@ -7835,24 +8153,47 @@ function txRenderCats(){
       host.appendChild(b);
     });
   }
-  txMarkCat(false);
+  txMarkCat(txFromScroll ? 'none' : 'auto');
 }
-function txMarkCat(smooth){
-  var sel = txEl('txCategory'), val = sel.value, chosen = null;
-  Array.prototype.forEach.call(txEl('txCatTiles').children, function(b){
-    var on = b.getAttribute('data-cat') === val; b.setAttribute('aria-selected', on ? 'true' : 'false'); if(on) chosen = b;
-  });
-  txEl('txCatLabel').textContent = (val && val !== '__add_new__') ? val : 'Choose a category';
-  if(chosen){
-    var sc = txEl('txCatScroll'), left = chosen.offsetLeft - (sc.clientWidth - chosen.offsetWidth) / 2;
-    if(sc.clientWidth) sc.scrollTo({ left: Math.max(0, left), behavior: smooth ? 'smooth' : 'auto' });
+// The row is a snap picker: the tile that settles in the centre becomes the selected category, with a haptic tick per change.
+var txProgUntil = 0, txFromScroll = false, txLastCenter = null, txRaf = 0;
+function txTileEls(){ return Array.prototype.slice.call(txEl('txCatTiles').children); }
+function txCenterTile(){
+  var sc = txEl('txCatScroll'), mid = sc.scrollLeft + sc.clientWidth / 2, best = null, bd = 1e9;
+  txTileEls().forEach(function(b){ var d = Math.abs(b.offsetLeft + b.offsetWidth / 2 - mid); if(d < bd){ bd = d; best = b; } });
+  return best;
+}
+function txCatCheck(){
+  if(Date.now() < txProgUntil) return;            // ignore scrolls we started ourselves
+  var t = txCenterTile(); if(!t) return;
+  var name = t.getAttribute('data-cat'); if(name === txLastCenter) return;
+  txLastCenter = name;
+  var sel = txEl('txCategory');
+  if(sel.value !== name){
+    txFromScroll = true; sel.value = name; sel.dispatchEvent(new Event('change')); txFromScroll = false;
+    window.novaHaptic(8);
   }
 }
+function txMarkCat(mode){   // mode: 'none' | 'auto' (jump) | 'smooth'
+  var sel = txEl('txCategory'), val = sel.value, chosen = null;
+  txTileEls().forEach(function(b){ var on = b.getAttribute('data-cat') === val; b.setAttribute('aria-selected', on ? 'true' : 'false'); if(on) chosen = b; });
+  txEl('txCatLabel').textContent = (val && val !== '__add_new__') ? val : 'Choose a category';
+  if(chosen){
+    txLastCenter = val;
+    if(mode !== 'none'){
+      var sc = txEl('txCatScroll'), left = chosen.offsetLeft - (sc.clientWidth - chosen.offsetWidth) / 2;
+      if(sc.clientWidth){ txProgUntil = Date.now() + (mode === 'smooth' ? 650 : 160); sc.scrollTo({ left: Math.max(0, left), behavior: mode === 'smooth' ? 'smooth' : 'auto' }); }
+    }
+  }
+}
+txEl('txCatScroll').addEventListener('scroll', function(){ cancelAnimationFrame(txRaf); txRaf = requestAnimationFrame(txCatCheck); }, { passive: true });
+txEl('txCatScroll').addEventListener('touchmove', txCatCheck, { passive: true });
 document.addEventListener('click', function(ev){
   var t = ev.target.closest && ev.target.closest('.tx-cat');
   if(t && txEl('txCatScroll').contains(t)){
-    var sel = txEl('txCategory'); sel.value = t.getAttribute('data-cat');
-    sel.dispatchEvent(new Event('change')); txMarkCat(true);
+    var sel = txEl('txCategory'), name = t.getAttribute('data-cat');
+    if(sel.value !== name){ window.novaHaptic(10); sel.value = name; sel.dispatchEvent(new Event('change')); }
+    else txMarkCat('smooth');
   }
 });
 
@@ -7908,7 +8249,7 @@ window.txFormSync = function(){
   txSyncChips(); txSyncAmount(); txRenderCats();
 };
 ['txAccountId', 'txCurrency', 'txCategory', 'txDate'].forEach(function(id){
-  var el = txEl(id); if(el) el.addEventListener('change', function(){ if(id === 'txCategory') txMarkCat(true); txFormSync(); });
+  var el = txEl(id); if(el) el.addEventListener('change', function(){ if(id === 'txCategory') txMarkCat(txFromScroll ? 'none' : 'smooth'); txFormSync(); });
 });
 txEl('txName').addEventListener('keydown', function(ev){ if(ev.key === 'Enter'){ ev.preventDefault(); this.blur(); } });
 txEl('txKeypad').addEventListener('click', function(ev){
@@ -7946,7 +8287,7 @@ document.addEventListener('keydown', function(ev){
    =================================================================== */
 var NOVA_THEME_KEY = 'nova-theme', NOVA_GLASS_KEY = 'nova-glass';
 function novaThemeMode(){ try{ var m = localStorage.getItem(NOVA_THEME_KEY); return (m === 'light' || m === 'dark') ? m : 'auto'; }catch(e){ return 'auto'; } }
-function novaGlassStrength(){ try{ var g = parseFloat(localStorage.getItem(NOVA_GLASS_KEY)); return isNaN(g) ? 0.55 : Math.max(0, Math.min(1, g)); }catch(e){ return 0.55; } }
+function novaGlassStrength(){ try{ var g = parseFloat(localStorage.getItem(NOVA_GLASS_KEY)); return isNaN(g) ? 1 : Math.max(0, Math.min(1, g)); }catch(e){ return 1; } }
 function novaApplyAppearance(){
   var root = document.documentElement;
   root.setAttribute('data-theme', novaThemeMode());
@@ -7954,14 +8295,16 @@ function novaApplyAppearance(){
 }
 window.setThemeMode = function(m){ try{ localStorage.setItem(NOVA_THEME_KEY, m); }catch(e){} novaApplyAppearance(); if(typeof renderView === 'function' && currentView === 'settings') renderView('settings'); };
 window.setGlassStrength = function(v){ try{ localStorage.setItem(NOVA_GLASS_KEY, String(v)); }catch(e){} novaApplyAppearance(); var o = document.getElementById('glassPct'); if(o) o.textContent = Math.round(v * 100) + '%'; };
+window.setHaptics = function(on){ try{ localStorage.setItem('nova-haptics', on ? '1' : '0'); }catch(e){} if(on && window.novaHaptic) window.novaHaptic(12); if(typeof renderView === 'function' && currentView === 'settings') renderView('settings'); };
 window.novaAppearanceHTML = function(){
   var m = novaThemeMode(), g = novaGlassStrength();
   function b(v, label){ return '<button type="button" class="type-btn' + (m === v ? ' active' : '') + '" onclick="setThemeMode(\'' + v + '\')">' + label + '</button>'; }
   return '<div class="side-label" style="margin:20px 0 8px;">Appearance</div>' +
     '<div class="type-toggle">' + b('auto', 'Auto') + b('light', 'Light') + b('dark', 'Dark') + '</div>' +
-    '<div class="glass-slider"><div class="glass-slider-head"><span>Glass</span><span id="glassPct">' + Math.round(g * 100) + '%</span></div>' +
+    '<div class="glass-slider"><div class="glass-slider-head"><span>Glass (100% = clearest)</span><span id="glassPct">' + Math.round(g * 100) + '%</span></div>' +
     '<input type="range" min="0" max="100" value="' + Math.round(g * 100) + '" aria-label="Glass strength" oninput="setGlassStrength(this.value/100)">' +
     '<div class="glass-slider-scale"><span>Solid</span><span>Clear</span></div></div>' +
+    '<div class="side-label" style="margin:18px 0 8px;">Haptics</div><div class="type-toggle"><button type="button" class="type-btn' + (novaHapticsOn() ? ' active' : '') + '" onclick="setHaptics(true)">On</button><button type="button" class="type-btn' + (novaHapticsOn() ? '' : ' active') + '" onclick="setHaptics(false)">Off</button></div>' +
     '<div class="empty-note" style="text-align:left; margin-bottom:4px;">Auto follows your device. The Glass slider works like iOS 27\'s translucency control; surfaces turn solid automatically if Reduce Transparency is on.</div>';
 };
 novaApplyAppearance();
@@ -7977,6 +8320,20 @@ window.scCatIconFallback = function(name){
   var h = 0; for(var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return 'ic-c-custom' + (h % 8);
 };
+
+/* everyday words (UA / RU / SQ) so voice and scanned descriptions land in the right category */
+(function(){
+  var extra = {
+    'кава':'Eating out','каву':'Eating out','кави':'Eating out','кавою':'Eating out','кав\'ярн':'Eating out','кафе':'Eating out','ресторан':'Eating out','піц':'Eating out','пицц':'Eating out','обід':'Eating out','обед':'Eating out','вечеря':'Eating out','ужин':'Eating out','кофе':'Eating out','kafe':'Eating out','kafja':'Eating out','drekë':'Eating out','darkë':'Eating out',
+    'продукти':'Groceries','продукты':'Groceries','ushqim':'Groceries','supermarket':'Groceries','сільпо':'Groceries','атб':'Groceries',
+    'таксі':'Transport','такси':'Transport','бензин':'Transport','benzin':'Transport','taksi':'Transport','автобус':'Transport','метро':'Transport','проїзд':'Transport','проезд':'Transport','autobus':'Transport',
+    'аптека':'Health','ліки':'Health','лекарств':'Health','farmaci':'Health','barnatore':'Health',
+    'кіно':'Entertainment','кино':'Entertainment','kinema':'Entertainment','cinema':'Entertainment',
+    'оренда':'Living Expenses','аренда':'Living Expenses','qira':'Living Expenses','комуналк':'Living Expenses',
+    'зарплат':'Salary','rrogë':'Salary','rrogën':'Salary','rroga':'Salary'
+  };
+  Object.keys(extra).forEach(function(k){ if(!(k in CATEGORY_ALIASES)) CATEGORY_ALIASES[k] = extra[k]; });
+})();
 
 })();
 /* NOVA-SCAN-END */
