@@ -717,6 +717,17 @@ html.lens-on .tabbar{ background: linear-gradient(180deg, var(--glass-sheen), tr
 @media (prefers-reduced-transparency: reduce){ html.lens-on .lens{ -webkit-backdrop-filter:none; backdrop-filter:none; } html.lens-on .tabbar{ background:var(--panel); } }
 @media (prefers-contrast: more){ html.lens-on .lens{ -webkit-backdrop-filter:none; backdrop-filter:none; } html.lens-on .tabbar{ background:var(--panel); } }
 
+/* =====================  phone sizing pass: bar, FAB (matches iOS proportions)  ===================== */
+:root{ --bar-h: 52px; --bar-b: max(10px, calc(env(safe-area-inset-bottom) - 14px)); }
+@media (max-width: 760px){
+  .tabbar{ bottom: var(--bar-b); width: min(232px, calc(100% - 48px)); height: var(--bar-h); padding: 4px; border-radius: 26px; gap: 0; align-items: stretch; }
+  .tab{ padding: 3px 4px 2px; gap: 1px; border-radius: 22px; font-size: calc(10px * var(--font-scale, 1)); line-height: 1.15; justify-content: center; }
+  .tab .ic svg.icon{ width: 21px; height: 21px; }
+  .fab-add{ width: 52px; height: 52px; right: 18px; bottom: calc(var(--bar-b) + var(--bar-h) + 14px); }
+  .fab-add svg{ width: 24px; height: 24px; }
+  .main{ padding-bottom: calc(var(--bar-b) + var(--bar-h) + 84px); }
+}
+
 /* ===================== New add / edit transaction form ===================== */
 .glass-btn{ width:44px; height:44px; border-radius:50%; border:1px solid var(--glass-edge); background:linear-gradient(180deg, var(--glass-sheen), transparent 60%), var(--glass-bg); -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(1.8); backdrop-filter:blur(var(--glass-blur)) saturate(1.8); box-shadow: inset 0 1px 0 var(--glass-hi), 0 0 0 .5px var(--hairline), 0 8px 18px -10px var(--shadow); color:var(--white); display:flex; align-items:center; justify-content:center; flex-shrink:0; padding:0; transition:transform .15s ease; }
 .glass-btn:active{ transform:scale(.93); }
@@ -815,7 +826,7 @@ svg.icon.tx-acct-ic{ width:42px; height:42px; flex-shrink:0; }
 .tx-cat-grid h4{ grid-column:1/-1; margin:6px 4px 0; font-size:calc(12px * var(--font-scale,1)); text-transform:uppercase; letter-spacing:.08em; color:var(--muted-dim); }
 .tx-cg{ display:flex; flex-direction:column; align-items:center; gap:6px; background:none; border:none; color:var(--white); padding:4px 2px; border-radius:16px; font-size:calc(12px * var(--font-scale,1)); font-weight:550; text-align:center; line-height:1.2; }
 .tx-cg svg.icon{ width:52px; height:52px; fill:none; stroke:none; }
-.tx-cg{ min-width:0; } .tx-cg span{ max-width:100%; overflow:hidden; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.tx-cg{ min-width:0; font-size:calc(11.5px * var(--font-scale,1)); letter-spacing:-0.01em; } .tx-cg span{ max-width:100%; overflow:hidden; overflow-wrap:break-word; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 .tx-cg[aria-selected="true"] svg.icon{ filter:drop-shadow(0 0 0 transparent); outline:2.5px solid var(--white); outline-offset:2px; border-radius:17px; }
 .tx-cg:active{ background:var(--blue-dim); }
 .tx-newcat{ display:flex; gap:8px; margin-top:12px; }
@@ -855,6 +866,62 @@ svg.icon.tx-acct-ic{ width:42px; height:42px; flex-shrink:0; }
 /* lets the FIRST category tile reach the centre (the two utility chips sit to its left, like the reference) */
 .tx-cat-scroll::before{ content:''; flex:0 0 max(0px, calc(50% - 167px)); }
 .tx-cat-util{ scroll-snap-align:none; }
+
+/* =====================  phone sizing pass: add / edit form (proportions taken from the reference screenshot)  ===================== */
+:root{ --cat: 42px; }
+.tx-sheet{ gap: 8px; padding: 12px 12px calc(10px + env(safe-area-inset-bottom)); border-radius: 34px 34px 0 0; }
+.glass-btn{ width: 42px; height: 42px; }
+.glass-btn svg.icon{ width: 19px; height: 19px; }
+.tx-seg{ padding: 3px; }
+.tx-seg .type-btn{ height: 36px; min-width: 36px; padding: 0 8px; gap: 5px; }
+.tx-seg .type-btn svg.icon{ width: 18px; height: 18px; }
+.tx-seg .type-btn span{ font-size: calc(14.5px * var(--font-scale, 1)); }
+.tx-body{ min-height: 0; padding: 0 6px; gap: 2px; }
+.tx-caption{ font-size: calc(12px * var(--font-scale, 1)); }
+.tx-amount{ font-size: clamp(36px, 7.4dvh, 62px); line-height: 1.15; }
+.tx-sub{ min-height: 18px; font-size: calc(13px * var(--font-scale, 1)); }
+.tx-chips{ gap: 7px; }
+.tx-chip{ height: 46px; padding: 0 14px; font-size: calc(15px * var(--font-scale, 1)); }
+.tx-chip-acct{ padding: 0 14px 0 6px; gap: 8px; }
+svg.icon.tx-acct-ic{ width: 34px; height: 34px; }
+.tx-chip-txt small{ font-size: calc(12px * var(--font-scale, 1)); }
+.tx-chip-cur{ flex-basis: 46px; font-size: calc(17px * var(--font-scale, 1)); }
+.tx-note{ height: 46px; border-radius: 18px; font-size: 16px; padding: 0 16px; }
+.tx-cats{ border-radius: 22px; padding: 2px 0 4px; }
+.tx-cat-scroll{ gap: 9px; padding: 10px 14px 6px; }
+.tx-cat-util, .tx-cat, .tx-cat svg.icon{ width: var(--cat); height: var(--cat); }
+.tx-cat-util{ border-radius: 14px; } .tx-cat-util svg.icon{ width: 19px; height: 19px; }
+.tx-cat[aria-selected="true"]{ transform: scale(1.16); box-shadow: 0 0 0 2px var(--white), 0 8px 16px -8px var(--shadow); }
+.tx-cat-label{ font-size: calc(14px * var(--font-scale, 1)); padding: 4px 14px 0; min-height: 20px; }
+.tx-cat-scroll::before{ flex: 0 0 max(0px, calc(50% - 137px)); }
+.tx-cat-scroll::after{ flex: 0 0 calc(50% - 30px); }
+.tx-keypad{ gap: 6px; }
+.tx-key{ height: clamp(40px, 5.6dvh, 48px); border-radius: 16px; font-size: calc(23px * var(--font-scale, 1)); }
+.tx-key.tx-op, .tx-key.tx-soft{ font-size: calc(22px * var(--font-scale, 1)); }
+.tx-key svg.icon{ width: 22px; height: 22px; }
+.tx-save{ height: 50px; font-size: calc(17px * var(--font-scale, 1)); }
+.tx-is-transfer .tx-key{ height: clamp(38px, 5.2dvh, 44px); }
+.tx-is-transfer .tx-amount{ font-size: clamp(30px, 5.6dvh, 46px); }
+
+/* sheets, modals and menus sit OVER page content: denser than cards so text underneath never ghosts through */
+:root{ --glass-bg-sheet: color-mix(in srgb, var(--glass-tint) calc((0.95 + (1 - var(--glass-strength)) * 0.05) * 100%), transparent); }
+.tx-sheet, .modal, .sheet, .tx-menu{ background: linear-gradient(180deg, var(--glass-sheen), transparent 38%), var(--glass-bg-sheet); }
+@media (prefers-reduced-transparency: reduce){ .tx-sheet, .modal, .sheet, .tx-menu{ background: var(--panel); } }
+@media (prefers-contrast: more){ .tx-sheet, .modal, .sheet, .tx-menu{ background: var(--panel); } }
+
+/* short phones (iPhone SE etc.): Transfer has extra rows, so drop the decorative ones and tighten the rest */
+@media (max-height: 700px){
+  .tx-is-transfer .tx-caption, .tx-is-transfer .tx-amt-label{ display: none; }
+  .tx-is-transfer .tx-chip{ height: 42px; } .tx-is-transfer .tx-chip-cur{ flex-basis: 42px; }
+  .tx-is-transfer .tx-note{ height: 42px; }
+  .tx-is-transfer .tx-key{ height: 36px; border-radius: 14px; }
+  .tx-is-transfer .tx-save{ height: 48px; }
+  .tx-is-transfer .tx-transfer-block .custom-select-btn, .tx-is-transfer .tx-transfer-block .form-row input{ padding-top: 9px; padding-bottom: 9px; }
+  .tx-is-transfer .tx-sheet, .tx-is-transfer.tx-sheet{ gap: 6px; }
+}
+/* safety net on any very small screen: the sheet scrolls and Save stays pinned to the bottom instead of falling off */
+.tx-sheet{ overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.tx-save{ position: sticky; bottom: 0; z-index: 2; }
 </style>
 </head>
 <body>
@@ -8015,20 +8082,20 @@ function txLastNum(e){ var m = e.match(/[\d.]*$/); return m ? m[0] : ''; }
 /* ---------- haptics ---------- */
 function novaHapticsOn(){ try{ return localStorage.getItem('nova-haptics') !== '0'; }catch(e){ return true; } }
 var novaHapticLabel = null;
-// Android/desktop Chrome: Vibration API. iOS Safari has none, but toggling an <input switch> plays the system selection tick (iOS 17.4+).
+// iOS Safari has no Vibration API. The one route to the system haptic engine is toggling an <input type=checkbox switch> (iOS 17.4+),
+// and WebKit only plays it while handling a real touch/click. The control is created at start-up (not on first use) and stays out of layout.
+function novaHapticInit(){
+  if(novaHapticLabel || !document.head) return;
+  var l = document.createElement('label'); l.setAttribute('aria-hidden', 'true'); l.style.display = 'none'; l.id = 'novaHapticLabel';
+  var i = document.createElement('input'); i.type = 'checkbox'; i.setAttribute('switch', ''); i.tabIndex = -1;
+  l.appendChild(i); document.head.appendChild(l); novaHapticLabel = l;
+}
+novaHapticInit();
 window.novaHaptic = function(ms){
-  if(!novaHapticsOn()) return;
-  try{ if(typeof navigator.vibrate === 'function'){ navigator.vibrate(ms || 8); return; } }catch(e){}
-  try{
-    if(!novaHapticLabel){
-      novaHapticLabel = document.createElement('label');
-      novaHapticLabel.setAttribute('aria-hidden', 'true');
-      novaHapticLabel.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none;';
-      var i = document.createElement('input'); i.type = 'checkbox'; i.setAttribute('switch', ''); i.tabIndex = -1;
-      novaHapticLabel.appendChild(i); document.body.appendChild(novaHapticLabel);
-    }
-    novaHapticLabel.click();
-  }catch(e){}
+  if(!novaHapticsOn()) return false;
+  try{ if(typeof navigator.vibrate === 'function'){ navigator.vibrate(ms || 8); return true; } }catch(e){}
+  try{ novaHapticInit(); if(novaHapticLabel){ novaHapticLabel.click(); return true; } }catch(e){}
+  return false;
 };
 
 // shrink the big number until it fits on one line (works for any font / width)
@@ -8195,6 +8262,9 @@ function txMarkCat(mode){   // mode: 'none' | 'auto' (jump) | 'smooth'
 }
 txEl('txCatScroll').addEventListener('scroll', function(){ cancelAnimationFrame(txRaf); txRaf = requestAnimationFrame(txCatCheck); }, { passive: true });
 txEl('txCatScroll').addEventListener('touchmove', txCatCheck, { passive: true });
+var txSelAtTouchStart = null, txTickedInDrag = false;
+txEl('txCatScroll').addEventListener('touchstart', function(){ txSelAtTouchStart = txEl('txCategory').value; txTickedInDrag = false; }, { passive: true });
+txEl('txCatScroll').addEventListener('touchend', function(){ if(txSelAtTouchStart !== null && txEl('txCategory').value !== txSelAtTouchStart) window.novaHaptic(8); txSelAtTouchStart = null; }, { passive: true });
 document.addEventListener('click', function(ev){
   var t = ev.target.closest && ev.target.closest('.tx-cat');
   if(t && txEl('txCatScroll').contains(t)){
@@ -8312,6 +8382,8 @@ window.novaAppearanceHTML = function(){
     '<input type="range" min="0" max="100" value="' + Math.round(g * 100) + '" aria-label="Glass strength" oninput="setGlassStrength(this.value/100)">' +
     '<div class="glass-slider-scale"><span>Solid</span><span>Clear</span></div></div>' +
     '<div class="side-label" style="margin:18px 0 8px;">Haptics</div><div class="type-toggle"><button type="button" class="type-btn' + (novaHapticsOn() ? ' active' : '') + '" onclick="setHaptics(true)">On</button><button type="button" class="type-btn' + (novaHapticsOn() ? '' : ' active') + '" onclick="setHaptics(false)">Off</button></div>' +
+    '<button type="button" class="header-btn" style="margin-top:10px;" onclick="novaHaptic(12)">Test haptic</button>' +
+    '<div class="empty-note" style="text-align:left; margin:6px 0 0;">Tap it: you should feel one tick. Taps always work; ticks while sliding depend on iOS allowing them.</div>' +
     '<div class="empty-note" style="text-align:left; margin-bottom:4px;">Auto follows your device. The Glass slider works like iOS 27\'s translucency control; surfaces turn solid automatically if Reduce Transparency is on.</div>';
 };
 novaApplyAppearance();
