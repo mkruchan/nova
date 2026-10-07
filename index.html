@@ -728,6 +728,17 @@ html.lens-on .tabbar{ background: linear-gradient(180deg, var(--glass-sheen), tr
   .main{ padding-bottom: calc(var(--bar-b) + var(--bar-h) + 84px); }
 }
 
+/* =====================  scrollbars: Macs with a mouse show permanent 15px classic scrollbars that eat width and look broken over glass  ===================== */
+html{ scrollbar-width: none; }
+html::-webkit-scrollbar{ display: none; width: 0; height: 0; }                 /* the app scrolls inside its own panes, never the page */
+*::-webkit-scrollbar{ width: 8px; height: 8px; background: transparent; }
+*::-webkit-scrollbar-track{ background: transparent; }
+*::-webkit-scrollbar-thumb{ background: rgba(120,124,150,0.42); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover{ background: rgba(120,124,150,0.65); background-clip: padding-box; }
+*::-webkit-scrollbar-corner{ background: transparent; }
+@supports not selector(::-webkit-scrollbar){ *{ scrollbar-width: thin; scrollbar-color: rgba(120,124,150,0.5) transparent; } }
+.tx-sheet::-webkit-scrollbar, .tx-cat-scroll::-webkit-scrollbar, .tx-keypad::-webkit-scrollbar{ display: none; }
+
 /* ===================== New add / edit transaction form ===================== */
 .glass-btn{ width:44px; height:44px; border-radius:50%; border:1px solid var(--glass-edge); background:linear-gradient(180deg, var(--glass-sheen), transparent 60%), var(--glass-bg); -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(1.8); backdrop-filter:blur(var(--glass-blur)) saturate(1.8); box-shadow: inset 0 1px 0 var(--glass-hi), 0 0 0 .5px var(--hairline), 0 8px 18px -10px var(--shadow); color:var(--white); display:flex; align-items:center; justify-content:center; flex-shrink:0; padding:0; transition:transform .15s ease; }
 .glass-btn:active{ transform:scale(.93); }
@@ -922,6 +933,11 @@ svg.icon.tx-acct-ic{ width: 34px; height: 34px; }
 /* safety net on any very small screen: the sheet scrolls and Save stays pinned to the bottom instead of falling off */
 .tx-sheet{ overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .tx-save{ position: sticky; bottom: 0; z-index: 2; }
+
+/* sheet: sized by itself (not by how the overlay happens to flex it), fully dense so nothing ghosts through, no scrollbar chrome */
+.tx-overlay{ justify-content: center; }
+.tx-sheet{ box-sizing: border-box; flex: 0 0 auto; width: min(100%, 520px); min-width: 0; scrollbar-width: none; }
+:root{ --glass-bg-sheet: color-mix(in srgb, var(--glass-tint) calc((0.985 + (1 - var(--glass-strength)) * 0.015) * 100%), transparent); }
 </style>
 </head>
 <body>
@@ -7961,6 +7977,18 @@ async function scDiagRun(){
   if(scDiag.busy) return; scDiag.busy = true; scDiag.rows = [];
   var ua = navigator.userAgent || '';
   scDiagAdd(navigator.onLine === false ? 'bad' : 'ok', 'Online', navigator.onLine === false ? 'The browser says you are offline.' : 'Connected', 'This device');
+  (function(){   // layout report: viewport, scrollbars and the CSS features the design depends on
+    var de = document.documentElement, probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;left:-200px;top:0;width:100px;height:100px;overflow:scroll;visibility:hidden;'; document.body.appendChild(probe);
+    var classic = probe.offsetWidth - probe.clientWidth; document.body.removeChild(probe);
+    var pageSb = window.innerWidth - de.clientWidth;
+    scDiagAdd('ok', 'Window', window.innerWidth + ' × ' + window.innerHeight + ' @' + (window.devicePixelRatio || 1) + 'x · page area ' + de.clientWidth + ' wide', 'Layout');
+    scDiagAdd(pageSb > 0 ? 'warn' : 'ok', 'Page scrollbar', pageSb > 0 ? pageSb + ' px is taken by a page scrollbar' : 'none (good)');
+    scDiagAdd('ok', 'Scrollbar style', classic > 0 ? 'Classic ' + classic + ' px scrollbars (mouse) — app uses slim 8 px ones' : 'Overlay scrollbars (trackpad)');
+    var feats = [['light-dark()', 'color', 'light-dark(#000,#fff)'], ['color-mix()', 'color', 'color-mix(in srgb, red 50%, blue)'], ['backdrop-filter', 'backdrop-filter', 'blur(4px)'], ['dvh units', 'height', '100dvh'], ['scroll snap', 'scroll-snap-type', 'x mandatory'], ['inset', 'inset', '0']], miss = [];
+    feats.forEach(function(f){ var okf = false; try{ okf = CSS.supports(f[1], f[2]) || CSS.supports('-webkit-' + f[1], f[2]); }catch(e){} if(!okf) miss.push(f[0]); });
+    scDiagAdd(miss.length ? 'bad' : 'ok', 'Design features', miss.length ? 'Not supported here: ' + miss.join(', ') : 'All supported');
+  })();
   scDiagAdd('ok', 'Running as', (scIsStandalone() ? 'Home Screen / installed app' : 'Browser tab') + ' · ' + (scIsIOS() ? 'iOS/iPadOS' : (/Mac/.test(ua) ? 'macOS' : 'other')));
   var wasm = typeof WebAssembly === 'object', simd = false;
   try{ simd = wasm && WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11])); }catch(e){}
