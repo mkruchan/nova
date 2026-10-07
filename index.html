@@ -711,6 +711,12 @@ button{ -webkit-tap-highlight-color:transparent; }
 @media (prefers-reduced-transparency: reduce){ .tabbar{ -webkit-backdrop-filter:none; backdrop-filter:none; background:var(--panel); } }
 @media (prefers-contrast: more){ .tabbar{ -webkit-backdrop-filter:none; backdrop-filter:none; background:var(--panel); } }
 
+/* ---------- edge refraction (Chromium): blur is lighter so the rim bend is visible; tab bar tint is a bit lighter too ---------- */
+html.lens-on .lens{ -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.7)) saturate(2) brightness(1.04) var(--lens, blur(0px)); backdrop-filter: blur(calc(var(--glass-blur) * 0.7)) saturate(2) brightness(1.04) var(--lens, blur(0px)); }
+html.lens-on .tabbar{ background: linear-gradient(180deg, var(--glass-sheen), transparent 55%), color-mix(in srgb, var(--glass-tint) calc((0.66 + (1 - var(--glass-strength)) * 0.28) * 100%), transparent); }
+@media (prefers-reduced-transparency: reduce){ html.lens-on .lens{ -webkit-backdrop-filter:none; backdrop-filter:none; } html.lens-on .tabbar{ background:var(--panel); } }
+@media (prefers-contrast: more){ html.lens-on .lens{ -webkit-backdrop-filter:none; backdrop-filter:none; } html.lens-on .tabbar{ background:var(--panel); } }
+
 /* ===================== New add / edit transaction form ===================== */
 .glass-btn{ width:44px; height:44px; border-radius:50%; border:1px solid var(--glass-edge); background:linear-gradient(180deg, var(--glass-sheen), transparent 60%), var(--glass-bg); -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(1.8); backdrop-filter:blur(var(--glass-blur)) saturate(1.8); box-shadow: inset 0 1px 0 var(--glass-hi), 0 0 0 .5px var(--hairline), 0 8px 18px -10px var(--shadow); color:var(--white); display:flex; align-items:center; justify-content:center; flex-shrink:0; padding:0; transition:transform .15s ease; }
 .glass-btn:active{ transform:scale(.93); }
@@ -7908,6 +7914,7 @@ async function scDiagRun(){
   if(scIsIOS() && scIsStandalone()) scDiagAdd('warn', 'iPhone Home Screen app', 'Home Screen apps usually can\'t use speech recognition. Voice input switches to keyboard dictation (the microphone key on your keyboard), which works.');
   var perm = 'unknown'; try{ if(navigator.permissions && navigator.permissions.query){ perm = (await navigator.permissions.query({ name: 'microphone' })).state; } }catch(e){ perm = 'not reported by this browser'; }
   scDiagAdd(perm === 'denied' ? 'bad' : 'ok', 'Microphone permission', perm === 'denied' ? 'Denied for this site — allow it in browser/site settings' : perm);
+  scDiagAdd(window.novaLensOn ? 'ok' : 'warn', 'Glass refraction', window.novaLensOn ? 'Active (rim bending on bars, buttons and sheets)' : 'Not supported by this browser — glass uses blur only (normal on Safari)');
   scDiagAdd('ok', 'Haptics', (typeof navigator.vibrate === 'function') ? 'Vibration API available' : 'No Vibration API (normal on iPhone) — the app uses the iOS switch method');
   scDiag.busy = false;
 }
@@ -8334,6 +8341,81 @@ window.scCatIconFallback = function(name){
   };
   Object.keys(extra).forEach(function(k){ if(!(k in CATEGORY_ALIASES)) CATEGORY_ALIASES[k] = extra[k]; });
 })();
+
+/* ===================================================================
+   Nova — edge refraction ("lens") for glass surfaces.
+   A displacement map shaped like each element (bends the page behind it near the rim, leaves the centre clear)
+   applied through backdrop-filter. Only engines that support url() inside backdrop-filter (Chromium) get it;
+   everything else keeps the plain blur glass. The OS accessibility settings switch it off in CSS.
+   =================================================================== */
+var novaLens = (function(){
+  var ua = navigator.userAgent || '';
+  var chromium = /Chrome\//.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);        // iOS "Chrome" is WebKit underneath → excluded
+  var ok = false;
+  try{ ok = chromium && window.CSS && CSS.supports && CSS.supports('backdrop-filter', 'blur(1px) url(#x)'); }catch(e){}
+  window.novaLensOn = !!ok;
+  if(!ok) return { on: false };
+  document.documentElement.classList.add('lens-on');
+  var NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg'), defs = document.createElementNS(NS, 'defs');
+  svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('focusable', 'false');
+  svg.style.cssText = 'position:absolute;width:0;height:0;pointer-events:none;'; svg.id = 'novaLensDefs'; svg.appendChild(defs); document.body.appendChild(svg);
+  var cache = {}, seq = 0, SEL = '.tabbar, .glass-btn, .tx-seg, .tx-menu, .scan-toast, .back-btn, .tx-sheet';
+  function px(v, ref){ v = String(v).trim(); return /%$/.test(v) ? parseFloat(v) / 100 * ref : (parseFloat(v) || 0); }
+  function radii(el, w, h){
+    var cs = getComputedStyle(el), m = Math.min(w, h) / 2, ref = Math.min(w, h);
+    return [cs.borderTopLeftRadius, cs.borderTopRightRadius, cs.borderBottomRightRadius, cs.borderBottomLeftRadius].map(function(v){ return Math.min(Math.max(px(v, ref), 0), m); });
+  }
+  function buildMap(w, h, r){
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var ctx = c.getContext('2d'), img = ctx.createImageData(w, h), d = img.data, band = Math.max(6, Math.min(12, Math.min(w, h) / 6))   /* a narrow rim: UI content sits ~14px in from the edge and must stay clear */, cx = w / 2, cy = h / 2;
+    function sdf(x, y){
+      var rr = x < cx ? (y < cy ? r[0] : r[3]) : (y < cy ? r[1] : r[2]);
+      var qx = Math.abs(x - cx) - (cx - rr), qy = Math.abs(y - cy) - (cy - rr), ox = Math.max(qx, 0), oy = Math.max(qy, 0);
+      return Math.sqrt(ox * ox + oy * oy) + Math.min(Math.max(qx, qy), 0) - rr;
+    }
+    for(var y = 0, i = 0; y < h; y++){
+      for(var x = 0; x < w; x++, i += 4){
+        var sd = sdf(x + .5, y + .5), s = Math.max(0, Math.min(1, 1 + sd / band)); s *= s;            // 1 at the rim → 0 deeper inside
+        var gx = sdf(x + 1.5, y + .5) - sdf(x - .5, y + .5), gy = sdf(x + .5, y + 1.5) - sdf(x + .5, y - .5), n = Math.sqrt(gx * gx + gy * gy) + 1e-6;
+        d[i] = 128 - 127 * s * gx / n; d[i + 1] = 128 - 127 * s * gy / n; d[i + 2] = 128; d[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return { url: c.toDataURL('image/png'), band: band };
+  }
+  function filterFor(w, h, r){
+    var key = [w, h].concat(r.map(Math.round)).join('x');
+    if(cache[key]) return cache[key];
+    var id = 'nova-lens-' + (++seq), map = buildMap(w, h, r);
+    var f = document.createElementNS(NS, 'filter');
+    f.setAttribute('id', id); f.setAttribute('x', '0'); f.setAttribute('y', '0'); f.setAttribute('width', '100%'); f.setAttribute('height', '100%'); f.setAttribute('color-interpolation-filters', 'sRGB');
+    var fi = document.createElementNS(NS, 'feImage');
+    fi.setAttribute('href', map.url); fi.setAttribute('x', '0'); fi.setAttribute('y', '0'); fi.setAttribute('width', String(w)); fi.setAttribute('height', String(h)); fi.setAttribute('preserveAspectRatio', 'none'); fi.setAttribute('result', 'map');
+    var dm = document.createElementNS(NS, 'feDisplacementMap');
+    dm.setAttribute('in', 'SourceGraphic'); dm.setAttribute('in2', 'map'); dm.setAttribute('scale', String(Math.round(Math.max(12, Math.min(26, map.band * 2.1))))); dm.setAttribute('xChannelSelector', 'R'); dm.setAttribute('yChannelSelector', 'G');
+    f.appendChild(fi); f.appendChild(dm); defs.appendChild(f);
+    cache[key] = id; return id;
+  }
+  function purge(){
+    var used = {}; Array.prototype.forEach.call(document.querySelectorAll('.lens'), function(el){ var m = /nova-lens-\d+/.exec(el.style.getPropertyValue('--lens') || ''); if(m) used[m[0]] = 1; });
+    Object.keys(cache).forEach(function(k){ if(!used[cache[k]]){ var f = document.getElementById(cache[k]); if(f && f.parentNode) f.parentNode.removeChild(f); delete cache[k]; } });
+  }
+  function apply(el){
+    var w = Math.round(el.offsetWidth), h = Math.round(el.offsetHeight);
+    var skip = w < 8 || h < 8 || w * h > 700000 || (el.classList.contains('tx-sheet') && !window.matchMedia('(min-width: 761px)').matches);   // phone sheet runs to the screen edge: no rim to bend
+    if(skip){ el.style.removeProperty('--lens'); return; }
+    el.style.setProperty('--lens', 'url(#' + filterFor(w, h, radii(el, w, h)) + ')');
+  }
+  var pending = false, targets = [];
+  function schedule(){ if(pending) return; pending = true; requestAnimationFrame(function(){ pending = false; targets.forEach(apply); purge(); }); }
+  var ro = (typeof ResizeObserver !== 'undefined') ? new ResizeObserver(schedule) : null;
+  function adopt(el){ if(el.classList.contains('lens')) return; el.classList.add('lens'); targets.push(el); if(ro) ro.observe(el); }
+  Array.prototype.forEach.call(document.querySelectorAll(SEL), adopt);
+  window.addEventListener('resize', function(){ clearTimeout(adopt._t); adopt._t = setTimeout(schedule, 120); });
+  schedule();
+  return { on: true, adopt: adopt, refresh: schedule, count: function(){ return defs.children.length; } };
+})();
+window.novaLens = novaLens;
 
 })();
 /* NOVA-SCAN-END */
